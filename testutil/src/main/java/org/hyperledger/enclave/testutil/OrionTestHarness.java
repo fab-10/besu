@@ -31,6 +31,7 @@ import net.consensys.orion.config.Config;
 import okhttp3.HttpUrl;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.apache.tuweni.toml.Toml;
 
 public class OrionTestHarness implements EnclaveTestHarness {
   private static final Logger LOG = LogManager.getLogger();
@@ -142,23 +143,23 @@ public class OrionTestHarness implements EnclaveTestHarness {
             + "tlsclienttrust=\"tofu\"\n"
             + "nodeport=0\n"
             + "nodenetworkinterface = \""
-            + HOST
+            + tomlEscape(HOST)
             + "\"\n"
             + "clientport=0\n"
             + "clientnetworkinterface = \""
-            + HOST
+            + tomlEscape(HOST)
             + "\"\n"
             + "storage = \""
-            + enclaveConfiguration.getStorage()
+            + tomlEscape(enclaveConfiguration.getStorage())
             + "\"\n"
             + "publickeys = ["
-            + joinPathsAsTomlListEntry(enclaveConfiguration.getPublicKeys())
+            + tomlEscape(joinPathsAsTomlListEntry(enclaveConfiguration.getPublicKeys()))
             + "]\n"
             + "privatekeys = ["
-            + joinPathsAsTomlListEntry(enclaveConfiguration.getPrivateKeys())
+            + tomlEscape(joinPathsAsTomlListEntry(enclaveConfiguration.getPrivateKeys()))
             + "]\n"
             + "workdir= \""
-            + enclaveConfiguration.getTempDir().toString()
+            + tomlEscape(enclaveConfiguration.getTempDir().toString())
             + "\"\n";
 
     if (enclaveConfiguration.getOtherNodes().size() != 0) {
@@ -185,8 +186,12 @@ public class OrionTestHarness implements EnclaveTestHarness {
         builder.append(",");
       }
       first = false;
-      builder.append("\"").append(string).append("\"");
+      builder.append("\"").append(tomlEscape(string)).append("\"");
     }
     return builder.toString();
+  }
+
+  private static String tomlEscape(final String text) {
+    return Toml.tomlEscape(text.replace("\\", "\\\\")).toString();
   }
 }
