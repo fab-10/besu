@@ -104,11 +104,13 @@ import com.google.common.collect.Lists;
 import com.google.common.io.Resources;
 import io.vertx.core.json.JsonObject;
 import org.apache.commons.io.FileUtils;
+import org.apache.commons.lang3.SystemUtils;
 import org.apache.commons.text.StringEscapeUtils;
 import org.apache.logging.log4j.Level;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.toml.Toml;
 import org.apache.tuweni.toml.TomlParseResult;
+import org.junit.Assume;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
@@ -1708,6 +1710,9 @@ public class BesuCommandTest extends CommandTestAbstract {
 
   @Test
   public void launcherOptionIsParsedCorrectly() {
+    // skip on Windows, since the there is an exception
+    // thrown by the jline library that needs investigation
+    Assume.assumeFalse(SystemUtils.IS_OS_WINDOWS);
     final TestBesuCommand besuCommand =
         parseCommand("--Xlauncher", "true", "--Xlauncher-force", "true");
 
@@ -4668,6 +4673,9 @@ public class BesuCommandTest extends CommandTestAbstract {
 
   @Test
   public void nativeLibrariesAreEnabledByDefault() {
+    // skip on Windows, since these native library are not yet available
+    // for that os
+    Assume.assumeFalse(SystemUtils.IS_OS_WINDOWS);
     parseCommand();
 
     assertThat(SignatureAlgorithmFactory.getInstance().isNative()).isTrue();
