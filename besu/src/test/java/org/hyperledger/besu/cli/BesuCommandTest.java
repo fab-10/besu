@@ -4307,12 +4307,21 @@ public class BesuCommandTest extends CommandTestAbstract {
 
   @Test
   public void privEnclaveKeyFileDoesNotExist() {
-    parseCommand("--privacy-enabled=true", "--privacy-public-key-file", "/non/existent/file");
+    parseCommand(
+        "--privacy-enabled=true",
+        "--privacy-public-key-file",
+        Path.of("non/existent/file").toString());
 
     assertThat(commandOutput.toString(UTF_8)).isEmpty();
     assertThat(commandErrorOutput.toString(UTF_8))
         .startsWith("Problem with privacy-public-key-file");
-    assertThat(commandErrorOutput.toString(UTF_8)).contains("No such file");
+    assertThat(commandErrorOutput.toString(UTF_8)).startsWith("Problem with privacy-public-key-file");
+    if (SystemUtils.IS_OS_WINDOWS) {
+      assertThat(commandErrorOutput.toString(UTF_8))
+          .contains("The system cannot find the path specified");
+    } else {
+      assertThat(commandErrorOutput.toString(UTF_8)).contains("No such file");
+    }
   }
 
   @Test
