@@ -26,8 +26,10 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
+import org.apache.commons.lang3.SystemUtils;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
+import org.junit.Assume;
 import org.junit.Before;
 import org.junit.BeforeClass;
 import org.junit.Test;
@@ -127,6 +129,9 @@ public class SECP256R1Test {
 
   @Test
   public void recoverPublicKeyFromSignature() {
+    // skip on Windows, since these native library are not yet available
+    // for that os
+    Assume.assumeFalse(SystemUtils.IS_OS_WINDOWS);
     final SECPPrivateKey privateKey =
         secp256R1.createPrivateKey(
             new BigInteger("c85ef7d79691fe79573b1a7064c19c1a9819ebdbd1faaab1a8ec92344438aaf4", 16));
@@ -143,6 +148,9 @@ public class SECP256R1Test {
 
   @Test
   public void signatureGenerationVerificationAndPubKeyRecovery() {
+    // skip on Windows, since these native library are not yet available
+    // for that os
+    Assume.assumeFalse(SystemUtils.IS_OS_WINDOWS);
     signTestVectors.forEach(
         signTestVector -> {
           final SECPPrivateKey privateKey =
