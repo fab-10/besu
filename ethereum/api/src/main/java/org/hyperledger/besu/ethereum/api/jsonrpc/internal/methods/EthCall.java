@@ -89,7 +89,7 @@ public class EthCall extends AbstractBlockParameterOrBlockHashMethod {
                             new JsonRpcErrorResponse(
                                 request.getRequest().getId(),
                                 JsonRpcErrorConverter.convertTransactionInvalidReason(reason))))
-        .orElse(errorResponse(request, INTERNAL_ERROR));
+        .orElseGet(() -> errorResponse(request, INTERNAL_ERROR));
   }
 
   @Override
