@@ -1936,12 +1936,21 @@ public class BesuCommand implements DefaultCommandValues, Runnable {
             "--Xminer-remote-sealers-limit",
             "--Xminer-remote-sealers-hashrate-ttl"));
 
-    CommandLineUtils.checkOptionDependencies(
-        logger,
-        commandLine,
-        "--sync-mode",
-        SyncMode.isFullSync(syncMode),
-        singletonList("--initial-sync-min-peers-pow"));
+    if (initialSyncMinPeerPoWCount != null) {
+      CommandLineUtils.checkOptionDependencies(
+          logger,
+          commandLine,
+          "--sync-mode",
+          SyncMode.isFullSync(syncMode),
+          singletonList("--initial-sync-min-peers-pow"));
+    } else {
+      CommandLineUtils.checkOptionDependencies(
+          logger,
+          commandLine,
+          "--sync-mode",
+          SyncMode.isFullSync(syncMode),
+          singletonList("--fast-sync-min-peers"));
+    }
 
     if (!securityModuleName.equals(DEFAULT_SECURITY_MODULE)
         && nodePrivateKeyFileOption.getNodePrivateKeyFile() != null) {

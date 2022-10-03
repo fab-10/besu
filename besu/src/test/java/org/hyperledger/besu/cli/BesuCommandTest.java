@@ -1702,7 +1702,7 @@ public class BesuCommandTest extends CommandTestAbstract {
 
     Mockito.verifyNoInteractions(mockRunnerBuilder);
 
-    assertThat(commandOutput.toString(UTF_8)).contains("--fast-sync-min-peers");
+    assertThat(commandOutput.toString(UTF_8)).contains("--initial-sync-min-peers-pow");
     // whitelist is now a hidden option
     assertThat(commandOutput.toString(UTF_8)).doesNotContain("whitelist");
     assertThat(commandErrorOutput.toString(UTF_8)).isEmpty();
@@ -1722,7 +1722,7 @@ public class BesuCommandTest extends CommandTestAbstract {
 
   @Test
   public void parsesValidFastSyncMinPeersOption() {
-    parseCommand("--sync-mode", "FAST", "--fast-sync-min-peers", "11");
+    parseCommand("--sync-mode", "FAST", "--initial-sync-min-peers-pow", "11");
     verify(mockControllerBuilder).synchronizerConfiguration(syncConfigurationCaptor.capture());
 
     final SynchronizerConfiguration syncConfig = syncConfigurationCaptor.getValue();
@@ -1735,7 +1735,7 @@ public class BesuCommandTest extends CommandTestAbstract {
   @Test
   public void parsesInvalidFastSyncMinPeersOptionWrongFormatShouldFail() {
 
-    parseCommand("--sync-mode", "FAST", "--fast-sync-min-peers", "ten");
+    parseCommand("--sync-mode", "FAST", "--initial-sync-min-peers-pow", "ten");
     Mockito.verifyNoInteractions(mockRunnerBuilder);
     assertThat(commandOutput.toString(UTF_8)).isEmpty();
     assertThat(commandErrorOutput.toString(UTF_8))

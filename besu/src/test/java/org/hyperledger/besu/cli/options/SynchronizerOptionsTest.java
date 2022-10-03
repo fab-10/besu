@@ -41,7 +41,7 @@ public class SynchronizerOptionsTest
         .fastSyncPivotDistance(SynchronizerConfiguration.DEFAULT_PIVOT_DISTANCE_FROM_HEAD + 10)
         .fastSyncFullValidationRate(SynchronizerConfiguration.DEFAULT_FULL_VALIDATION_RATE / 2)
         .initialSyncMinimumPeerPoWCount(
-            SynchronizerConfiguration.DEFAULT_INITIAL_SYNC_MINIMUM_POW_PEERS + 2)
+            SynchronizerConfiguration.DEFAULT_INITIAL_SYNC_MINIMUM_PEERS_POW + 2)
         .worldStateHashCountPerRequest(
             SynchronizerConfiguration.DEFAULT_WORLD_STATE_HASH_COUNT_PER_REQUEST + 2)
         .worldStateRequestParallelism(

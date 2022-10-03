@@ -54,7 +54,7 @@ discovery-dns-url="enrtree://AM5FCQLWIZX2QFPNJAP7VUERCCRNGRHWZG3YYHIUV7BVDQ5FDPR
 network="MAINNET"
 genesis-file="~/genesis.json"
 sync-mode="fast"
-fast-sync-min-peers=5
+initial-sync-min-peers-pow=5
 network-id=303
 
 # JSON-RPC
