@@ -23,6 +23,7 @@ import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.ethereum.chain.BlockAddedEvent;
 import org.hyperledger.besu.ethereum.core.AccountTransactionOrder;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -34,6 +35,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacement
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionsForSenderInfo;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.account.Account;
+import org.hyperledger.besu.evm.account.AccountState;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
@@ -82,7 +84,7 @@ public abstract class AbstractPendingTransactionsSorter {
   protected final TransactionPoolConfiguration poolConfig;
 
   protected final Object lock = new Object();
-  protected final Map<Hash, TransactionInfo> pendingTransactions = new ConcurrentHashMap<>();
+  protected final Map<Hash, TransactionInfo> pendingTransactions;
 
   protected final Map<Address, TransactionsForSenderInfo> transactionsBySender =
       new ConcurrentHashMap<>();
@@ -110,6 +112,7 @@ public abstract class AbstractPendingTransactionsSorter {
     this.poolConfig = poolConfig;
     this.clock = clock;
     this.chainHeadHeaderSupplier = chainHeadHeaderSupplier;
+    this.pendingTransactions = new ConcurrentHashMap<>(poolConfig.getTxPoolMaxSize());
     this.transactionReplacementHandler =
         new TransactionPoolReplacementHandler(poolConfig.getPriceBump());
     final LabelledMetric<Counter> transactionAddedCounter =
@@ -232,7 +235,8 @@ public abstract class AbstractPendingTransactionsSorter {
           switch (result) {
             case DELETE_TRANSACTION_AND_CONTINUE:
               transactionsToRemove.add(transactionToProcess);
-              signalInvalidTransaction(transactionToProcess).forEach(transactionsToRemove::add);
+              signalInvalidAndGetDependentTransactions(transactionToProcess)
+                  .forEach(transactionsToRemove::add);
               break;
             case CONTINUE:
               break;
@@ -264,11 +268,13 @@ public abstract class AbstractPendingTransactionsSorter {
             transactionInfo.getSender(),
             address -> new TransactionsForSenderInfo(maybeSenderAccount));
 
-    TransactionInfo existingTxInfo =
+    Optional<TransactionInfo> maybeExistingTxInfo =
         txsSenderInfo.getTransactionInfoForNonce(transactionInfo.getNonce());
 
     final Optional<Transaction> maybeReplacedTransaction;
-    if (existingTxInfo != null) {
+
+    if (maybeExistingTxInfo.isPresent()) {
+      var existingTxInfo = maybeExistingTxInfo.get();
       if (!transactionReplacementHandler.shouldReplace(
           existingTxInfo, transactionInfo, chainHeadHeaderSupplier.get())) {
         traceLambda(
@@ -285,20 +291,19 @@ public abstract class AbstractPendingTransactionsSorter {
       maybeReplacedTransaction = Optional.empty();
     }
 
-    txsSenderInfo.updateSenderAccount(maybeSenderAccount);
-    txsSenderInfo.addTransactionToTrack(transactionInfo);
+    txsSenderInfo.addTransactionToTrack(transactionInfo, maybeSenderAccount);
     traceLambda(LOG, "Tracked transaction by sender {}", txsSenderInfo::toTraceLog);
     maybeReplacedTransaction.ifPresent(this::removeTransaction);
     return ADDED;
   }
 
   protected void removeTransactionInfoTrackedBySenderAndNonce(
-      final TransactionInfo transactionInfo) {
+      final TransactionInfo transactionInfo, final boolean addedToBlock) {
     final Transaction transaction = transactionInfo.getTransaction();
     Optional.ofNullable(transactionsBySender.get(transaction.getSender()))
         .ifPresent(
             transactionsForSender -> {
-              transactionsForSender.removeTrackedTransactionInfo(transactionInfo);
+              transactionsForSender.removeTrackedTransactionInfo(transactionInfo, addedToBlock);
               if (transactionsForSender.transactionCount() == 0) {
                 LOG.trace(
                     "Removing sender {} from transactionBySender since no more tracked transactions",
@@ -403,12 +408,10 @@ public abstract class AbstractPendingTransactionsSorter {
                           txInfo -> {
                             TransactionsForSenderInfo txsSenderInfo =
                                 transactionsBySender.get(txInfo.getSender());
-                            long nonceDistance =
-                                txInfo.getNonce() - txsSenderInfo.getSenderAccountNonce();
                             return "nonceDistance: "
-                                + nonceDistance
-                                + ", senderAccount: "
-                                + txsSenderInfo.getSenderAccount()
+                                + txsSenderInfo.getMinNonceDistance()
+                                + ", senderAccountNounce: "
+                                + txsSenderInfo.getSenderAccountNonce()
                                 + ", "
                                 + txInfo.toTraceLog();
                           })
@@ -433,7 +436,7 @@ public abstract class AbstractPendingTransactionsSorter {
     }
   }
 
-  public List<Transaction> signalInvalidTransaction(final Transaction transaction) {
+  public List<Transaction> signalInvalidAndGetDependentTransactions(final Transaction transaction) {
     final long invalidNonce = lowestInvalidKnownNonceCache.registerInvalidTransaction(transaction);
 
     TransactionsForSenderInfo txsForSender = transactionsBySender.get(transaction.getSender());
@@ -445,7 +448,7 @@ public abstract class AbstractPendingTransactionsSorter {
               txInfo ->
                   traceLambda(
                       LOG,
-                      "Transaction {} piked for removal since there is a lowest invalid nonce {} for the sender",
+                      "Transaction {} piked for since there is a lowest invalid nonce {} for the sender",
                       txInfo::toTraceLog,
                       () -> invalidNonce))
           .map(TransactionInfo::getTransaction)

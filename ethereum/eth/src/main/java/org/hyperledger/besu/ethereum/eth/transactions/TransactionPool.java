@@ -155,7 +155,7 @@ public class TransactionPool implements BlockAddedObserver {
             transaction::toTraceLog,
             miningParameters::getMinTransactionGasPrice);
         pendingTransactions
-            .signalInvalidTransaction(transaction)
+            .signalInvalidAndGetDependentTransactions(transaction)
             .forEach(pendingTransactions::removeTransaction);
         continue;
       }
@@ -182,7 +182,7 @@ public class TransactionPool implements BlockAddedObserver {
             transaction::toTraceLog,
             validationResult.result::getInvalidReason);
         pendingTransactions
-            .signalInvalidTransaction(transaction)
+            .signalInvalidAndGetDependentTransactions(transaction)
             .forEach(pendingTransactions::removeTransaction);
       }
     }

@@ -15,6 +15,7 @@
 
 package org.hyperledger.besu.ethereum.eth.transactions;
 
+import java.util.Collection;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionInfo;
 import org.hyperledger.besu.evm.account.Account;
 
@@ -25,55 +26,80 @@ import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import org.hyperledger.besu.evm.account.AccountState;
 
 public class TransactionsForSenderInfo {
   private final NavigableMap<Long, TransactionInfo> transactionsInfos;
-  private OptionalLong nextGap = OptionalLong.empty();
+  private OptionalLong firstNonceGap = OptionalLong.empty();
 
-  private Optional<Account> maybeSenderAccount;
+  private volatile long senderAccountNonce;
 
-  public TransactionsForSenderInfo(final Optional<Account> maybeSenderAccount) {
+  private volatile long minNonceDistance = Long.MAX_VALUE;
+
+  public TransactionsForSenderInfo(final Optional<Account> senderAccountNonce) {
     this.transactionsInfos = new TreeMap<>();
-    this.maybeSenderAccount = maybeSenderAccount;
+    this.senderAccountNonce = senderAccountNonce.map(AccountState::getNonce).orElse(0L);
   }
 
-  public void addTransactionToTrack(final TransactionInfo transactionInfo) {
+  public void addTransactionToTrack(
+      final TransactionInfo transactionInfo, final Optional<Account> maybeSenderAccount) {
     final long nonce = transactionInfo.getNonce();
     synchronized (transactionsInfos) {
       if (!transactionsInfos.isEmpty()) {
         final long expectedNext = transactionsInfos.lastKey() + 1;
-        if (nonce > (expectedNext) && nextGap.isEmpty()) {
-          nextGap = OptionalLong.of(expectedNext);
+        if (nonce > expectedNext && firstNonceGap.isEmpty()) {
+          firstNonceGap = OptionalLong.of(expectedNext);
         }
       }
       transactionsInfos.put(nonce, transactionInfo);
-      if (nonce == nextGap.orElse(-1)) {
+      if (nonce == firstNonceGap.orElse(-1)) {
+        findGap();
+      }
+      maybeSenderAccount.ifPresent(senderAccount -> updateSenderNonce(senderAccount.getNonce()));
+    }
+  }
+
+  public void removeTrackedTransactionInfo(
+      final TransactionInfo txInfo, final boolean addedToBlock) {
+
+    synchronized (transactionsInfos) {
+      final boolean removed;
+      if (addedToBlock) {
+        removed = transactionsInfos.remove(txInfo.getNonce()) != null;
+        updateSenderNonce(txInfo.getNonce());
+      } else {
+        // check the value when removing, because it could have been replaced
+        removed = transactionsInfos.remove(txInfo.getNonce(), txInfo);
+      }
+
+      if (removed && !transactionsInfos.isEmpty()) {
         findGap();
       }
     }
   }
 
-  public void removeTrackedTransactionInfo(final TransactionInfo txInfo) {
-    // check the value when removing, because it could have been replaced
-    if (transactionsInfos.remove(txInfo.getNonce(), txInfo)) {
-      synchronized (transactionsInfos) {
-        if (!transactionsInfos.isEmpty() && txInfo.getNonce() != transactionsInfos.firstKey()) {
-          findGap();
-        }
-      }
+  private void updateSenderNonce(final long nonce) {
+    if (nonce > senderAccountNonce) {
+      senderAccountNonce = nonce;
+      updateMinNonceDistance();
     }
   }
 
-  public void updateSenderAccount(final Optional<Account> maybeSenderAccount) {
-    this.maybeSenderAccount = maybeSenderAccount;
+  private void updateMinNonceDistance() {
+    var firstEntry = transactionsInfos.firstEntry();
+    if (firstEntry != null) {
+      minNonceDistance = firstEntry.getKey() - senderAccountNonce;
+    } else {
+      minNonceDistance = Long.MAX_VALUE;
+    }
   }
 
   public long getSenderAccountNonce() {
-    return maybeSenderAccount.map(Account::getNonce).orElse(0L);
+    return senderAccountNonce;
   }
 
-  public Optional<Account> getSenderAccount() {
-    return maybeSenderAccount;
+  public long getMinNonceDistance() {
+    return minNonceDistance;
   }
 
   private void findGap() {
@@ -84,18 +110,20 @@ public class TransactionsForSenderInfo {
         // no gap, keep moving
         expectedValue++;
       } else {
-        nextGap = OptionalLong.of(expectedValue);
+        firstNonceGap = OptionalLong.of(expectedValue);
         return;
       }
     }
-    nextGap = OptionalLong.empty();
+    firstNonceGap = OptionalLong.empty();
   }
 
   public OptionalLong maybeNextNonce() {
     if (transactionsInfos.isEmpty()) {
       return OptionalLong.empty();
     } else {
-      return nextGap.isEmpty() ? OptionalLong.of(transactionsInfos.lastKey() + 1) : nextGap;
+      return firstNonceGap.isEmpty()
+          ? OptionalLong.of(transactionsInfos.lastKey() + 1)
+          : firstNonceGap;
     }
   }
 
@@ -107,24 +135,33 @@ public class TransactionsForSenderInfo {
     return transactionsInfos.size();
   }
 
+  public Collection<TransactionInfo> getConsecutiveTransactionInfos(final long startingNonce) {
+    if (firstNonceGap.isEmpty()) {
+      return transactionsInfos.tailMap(startingNonce).values();
+    }
+    return transactionsInfos.subMap(startingNonce, firstNonceGap.getAsLong()).values();
+  }
+
   public Stream<TransactionInfo> streamTransactionInfos() {
     return transactionsInfos.values().stream();
   }
 
-  public TransactionInfo getTransactionInfoForNonce(final long nonce) {
-    return transactionsInfos.get(nonce);
+  public Optional<TransactionInfo> getTransactionInfoForNonce(final long nonce) {
+    return Optional.ofNullable(transactionsInfos.get(nonce));
   }
 
   public String toTraceLog() {
     return "{"
-        + "senderAccount "
-        + maybeSenderAccount
+        + "senderAccountNonce "
+        + senderAccountNonce
+        + "minNonceDistance "
+        + minNonceDistance
         + ", transactions "
         + transactionsInfos.entrySet().stream()
             .map(e -> "(" + e.getKey() + ")" + e.getValue().toTraceLog())
             .collect(Collectors.joining("; "))
         + ", nextGap "
-        + nextGap
+        + firstNonceGap
         + '}';
   }
 }
