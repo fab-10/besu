@@ -23,7 +23,6 @@ import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
-import org.hyperledger.besu.ethereum.chain.BlockAddedEvent;
 import org.hyperledger.besu.ethereum.core.AccountTransactionOrder;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -35,7 +34,6 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacement
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionsForSenderInfo;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.account.Account;
-import org.hyperledger.besu.evm.account.AccountState;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
@@ -268,13 +266,11 @@ public abstract class AbstractPendingTransactionsSorter {
             transactionInfo.getSender(),
             address -> new TransactionsForSenderInfo(maybeSenderAccount));
 
-    Optional<TransactionInfo> maybeExistingTxInfo =
+    TransactionInfo existingTxInfo =
         txsSenderInfo.getTransactionInfoForNonce(transactionInfo.getNonce());
 
     final Optional<Transaction> maybeReplacedTransaction;
-
-    if (maybeExistingTxInfo.isPresent()) {
-      var existingTxInfo = maybeExistingTxInfo.get();
+    if (existingTxInfo != null) {
       if (!transactionReplacementHandler.shouldReplace(
           existingTxInfo, transactionInfo, chainHeadHeaderSupplier.get())) {
         traceLambda(
