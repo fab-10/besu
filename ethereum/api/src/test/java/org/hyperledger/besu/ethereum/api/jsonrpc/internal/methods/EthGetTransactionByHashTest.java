@@ -32,8 +32,8 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.TransactionPen
 import org.hyperledger.besu.ethereum.api.query.BlockchainQueries;
 import org.hyperledger.besu.ethereum.api.query.TransactionWithMetadata;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.TransactionInfo;
 import org.hyperledger.besu.plugin.data.Transaction;
 
 import java.time.Instant;
@@ -159,8 +159,7 @@ public class EthGetTransactionByHashTest {
   @Test
   public void validateResultSpec() {
 
-    AbstractPendingTransactionsSorter.TransactionInfo tInfo =
-        getPendingTransactions().stream().findFirst().get();
+    TransactionInfo tInfo = getPendingTransactions().stream().findFirst().get();
     Hash hash = tInfo.getHash();
     when(this.pendingTransactions.getTransactionByHash(hash))
         .thenReturn(Optional.of(tInfo.getTransaction()));
@@ -190,7 +189,7 @@ public class EthGetTransactionByHashTest {
     assertThat(result.getS()).isNotNull();
   }
 
-  private Set<AbstractPendingTransactionsSorter.TransactionInfo> getPendingTransactions() {
+  private Set<TransactionInfo> getPendingTransactions() {
 
     final BlockDataGenerator gen = new BlockDataGenerator();
     Transaction pendingTransaction = gen.transaction();
@@ -198,8 +197,7 @@ public class EthGetTransactionByHashTest {
     return gen.transactionsWithAllTypes(4).stream()
         .map(
             transaction ->
-                new AbstractPendingTransactionsSorter.TransactionInfo(
-                    transaction, true, Instant.ofEpochSecond(Integer.MAX_VALUE)))
+                new TransactionInfo(transaction, true, Instant.ofEpochSecond(Integer.MAX_VALUE)))
         .collect(Collectors.toUnmodifiableSet());
   }
 }

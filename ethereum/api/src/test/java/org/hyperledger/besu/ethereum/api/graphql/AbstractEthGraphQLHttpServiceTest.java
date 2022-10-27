@@ -34,8 +34,8 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.TransactionInfo;
 import org.hyperledger.besu.ethereum.mainnet.HeaderValidationMode;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
@@ -146,7 +146,7 @@ public abstract class AbstractEthGraphQLHttpServiceTest {
     Mockito.when(pendingTransactionsMock.getTransactionInfo())
         .thenReturn(
             Collections.singleton(
-                new AbstractPendingTransactionsSorter.TransactionInfo(
+                new TransactionInfo(
                     Transaction.builder()
                         .type(TransactionType.FRONTIER)
                         .nonce(42)

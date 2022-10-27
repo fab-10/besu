@@ -18,15 +18,12 @@ import static java.util.Comparator.comparing;
 
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
-import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
-import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.time.Clock;
 import java.util.Iterator;
 import java.util.NavigableSet;
-import java.util.Optional;
 import java.util.TreeSet;
 import java.util.function.Supplier;
 
@@ -40,8 +37,8 @@ import org.slf4j.LoggerFactory;
  * <p>This class is safe for use across multiple threads.
  */
 public class GasPricePendingTransactionsSorter extends AbstractPendingTransactionsSorter {
-  private static final Logger LOG =
-      LoggerFactory.getLogger(GasPricePendingTransactionsSorter.class);
+  //private static final Logger LOG =
+    //  LoggerFactory.getLogger(GasPricePendingTransactionsSorter.class);
 
   private final NavigableSet<TransactionInfo> prioritizedTransactions =
       new TreeSet<>(
@@ -64,19 +61,20 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
     // nothing to do
   }
 
-  @Override
-  protected void doRemoveTransaction(final Transaction transaction, final boolean addedToBlock) {
-    synchronized (lock) {
-      final TransactionInfo removedTransactionInfo =
-          pendingTransactions.remove(transaction.getHash());
-      if (removedTransactionInfo != null) {
-        prioritizedTransactions.remove(removedTransactionInfo);
-        removeTransactionInfoTrackedBySenderAndNonce(removedTransactionInfo, addedToBlock);
-        incrementTransactionRemovedCounter(
-            removedTransactionInfo.isReceivedFromLocalSource(), addedToBlock);
-      }
-    }
-  }
+  //  @Override
+  //  protected void doRemoveTransaction(final Transaction transaction, final boolean addedToBlock)
+  // {
+  //    synchronized (lock) {
+  //      final TransactionInfo removedTransactionInfo =
+  //          pendingTransactions.remove(transaction.getHash());
+  //      if (removedTransactionInfo != null) {
+  //        prioritizedTransactions.remove(removedTransactionInfo);
+  //        removeTransactionInfoTrackedBySenderAndNonce(removedTransactionInfo, addedToBlock);
+  //        incrementTransactionRemovedCounter(
+  //            removedTransactionInfo.isReceivedFromLocalSource(), addedToBlock);
+  //      }
+  //    }
+  //  }
 
   @Override
   protected Iterator<TransactionInfo> prioritizedTransactions() {
@@ -84,40 +82,17 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
   }
 
   @Override
-  protected TransactionAddedStatus addTransaction(
-      final TransactionInfo transactionInfo, final Optional<Account> maybeSenderAccount) {
-    Optional<Transaction> droppedTransaction = Optional.empty();
-    synchronized (lock) {
-      if (pendingTransactions.containsKey(transactionInfo.getHash())) {
-        return TransactionAddedStatus.ALREADY_KNOWN;
-      }
+  protected void addPriorityTransaction(final TransactionInfo transactionInfo) {
+    prioritizedTransactions.add(transactionInfo);
+  }
 
-      final TransactionAddedStatus transactionAddedStatus =
-          addTransactionForSenderAndNonce(transactionInfo, maybeSenderAccount);
-      if (!transactionAddedStatus.equals(TransactionAddedStatus.ADDED)) {
-        return transactionAddedStatus;
-      }
-      prioritizedTransactions.add(transactionInfo);
-      pendingTransactions.put(transactionInfo.getHash(), transactionInfo);
+  @Override
+  protected void removePriorityTransaction(final TransactionInfo transactionInfo) {
+    prioritizedTransactions.remove(transactionInfo);
+  }
 
-      // check if this sender exceeds the transactions by sender limit:
-      var senderTxInfos = transactionsBySender.get(transactionInfo.getSender());
-      if (senderTxInfos.transactionCount() > poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
-        droppedTransaction = senderTxInfos.maybeLastTx().map(TransactionInfo::getTransaction);
-        droppedTransaction.ifPresent(
-            tx -> LOG.trace("Evicted {} due to too many transactions from sender", tx));
-      } else {
-        // else if we are over txpool limit, select the lowest value transaction to evict
-        if (pendingTransactions.size() > poolConfig.getTxPoolMaxSize()) {
-          droppedTransaction =
-              lowestValueTxForRemovalBySender(prioritizedTransactions)
-                  .map(TransactionInfo::getTransaction);
-        }
-      }
-      droppedTransaction.ifPresent(tx -> doRemoveTransaction(tx, false));
-    }
-    notifyTransactionAdded(transactionInfo.getTransaction());
-    droppedTransaction.ifPresent(this::notifyTransactionDropped);
-    return TransactionAddedStatus.ADDED;
+  @Override
+  protected TransactionInfo getLeastPriorityTransaction() {
+    return prioritizedTransactions.last();
   }
 }

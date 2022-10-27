@@ -25,8 +25,8 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.PendingTran
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.TransactionPendingResult;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.TransactionInfo;
 
 import java.time.Instant;
 import java.util.HashMap;
@@ -52,7 +52,7 @@ public class TxPoolBesuPendingTransactionsTest {
 
   @Before
   public void setUp() {
-    final Set<AbstractPendingTransactionsSorter.TransactionInfo> listTrx = getPendingTransactions();
+    final Set<TransactionInfo> listTrx = getPendingTransactions();
     method = new TxPoolBesuPendingTransactions(pendingTransactions);
     when(this.pendingTransactions.getTransactionInfo()).thenReturn(listTrx);
   }
@@ -259,14 +259,13 @@ public class TxPoolBesuPendingTransactionsTest {
         .hasMessageContaining("The `to` filter only supports the `eq` or `action` operator");
   }
 
-  private Set<AbstractPendingTransactionsSorter.TransactionInfo> getPendingTransactions() {
+  private Set<TransactionInfo> getPendingTransactions() {
 
     final BlockDataGenerator gen = new BlockDataGenerator();
     return gen.transactionsWithAllTypes(4).stream()
         .map(
             transaction ->
-                new AbstractPendingTransactionsSorter.TransactionInfo(
-                    transaction, true, Instant.ofEpochSecond(Integer.MAX_VALUE)))
+                new TransactionInfo(transaction, true, Instant.ofEpochSecond(Integer.MAX_VALUE)))
         .collect(Collectors.toUnmodifiableSet());
   }
 }

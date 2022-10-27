@@ -16,10 +16,6 @@ package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
 import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.toUnmodifiableList;
-import static org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionAddedStatus.ADDED;
-import static org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionAddedStatus.ALREADY_KNOWN;
-import static org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionAddedStatus.NONCE_TOO_FAR_IN_FUTURE_FOR_SENDER;
-import static org.hyperledger.besu.util.Slf4jLambdaHelper.debugLambda;
 import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
 
 import org.hyperledger.besu.datatypes.Wei;
@@ -27,9 +23,6 @@ import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionsForSenderInfo;
-import org.hyperledger.besu.evm.account.Account;
-import org.hyperledger.besu.evm.account.AccountState;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.time.Clock;
@@ -40,7 +33,6 @@ import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -105,154 +97,178 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
     block.getHeader().getBaseFee().ifPresent(this::updateBaseFee);
   }
 
-  @Override
-  protected void doRemoveTransaction(final Transaction transaction, final boolean addedToBlock) {
-    synchronized (lock) {
-      final TransactionInfo removedTransactionInfo =
-          pendingTransactions.remove(transaction.getHash());
-      if (removedTransactionInfo != null) {
-        if (prioritizedTransactionsDynamicRange.remove(removedTransactionInfo)) {
-          traceLambda(
-              LOG, "Removed dynamic range transaction {}", removedTransactionInfo::toTraceLog);
-        } else {
-          removedTransactionInfo
-              .getTransaction()
-              .getMaxPriorityFeePerGas()
-              .ifPresent(
-                  __ -> {
-                    if (prioritizedTransactionsStaticRange.remove(removedTransactionInfo)) {
-                      traceLambda(
-                          LOG,
-                          "Removed static range transaction {}",
-                          removedTransactionInfo::toTraceLog);
-                    }
-                  });
-        }
-        removeTransactionInfoTrackedBySenderAndNonce(removedTransactionInfo, addedToBlock);
-        incrementTransactionRemovedCounter(
-            removedTransactionInfo.isReceivedFromLocalSource(), addedToBlock);
-      }
-    }
-  }
+  //  @Override
+  //  protected void doRemoveTransaction(final Transaction transaction, final boolean addedToBlock)
+  // {
+  //    synchronized (lock) {
+  //      final TransactionInfo removedTransactionInfo =
+  //          pendingTransactions.remove(transaction.getHash());
+  //      if (removedTransactionInfo != null) {
+  //        if (prioritizedTransactionsDynamicRange.remove(removedTransactionInfo)) {
+  //          traceLambda(
+  //              LOG, "Removed dynamic range transaction {}", removedTransactionInfo::toTraceLog);
+  //        } else {
+  //          removedTransactionInfo
+  //              .getTransaction()
+  //              .getMaxPriorityFeePerGas()
+  //              .ifPresent(
+  //                  __ -> {
+  //                    if (prioritizedTransactionsStaticRange.remove(removedTransactionInfo)) {
+  //                      traceLambda(
+  //                          LOG,
+  //                          "Removed static range transaction {}",
+  //                          removedTransactionInfo::toTraceLog);
+  //                    }
+  //                  });
+  //        }
+  //        removeTransactionInfoTrackedBySenderAndNonce(removedTransactionInfo, addedToBlock);
+  //        incrementTransactionRemovedCounter(
+  //            removedTransactionInfo.isReceivedFromLocalSource(), addedToBlock);
+  //      }
+  //    }
+  //  }
+  //
+  //  @Override
+  //  protected TransactionAddedStatus customAddTransaction(
+  //      final TransactionInfo transactionInfo, final Optional<Account> maybeSenderAccount) {
+  //    final Transaction transaction = transactionInfo.getTransaction();
+  //    synchronized (lock) {
+  //      if (pendingTransactions.containsKey(transactionInfo.getHash())) {
+  //        traceLambda(LOG, "Already known transaction {}", transactionInfo::toTraceLog);
+  //        return ALREADY_KNOWN;
+  //      }
+  //
+  //      if (transaction.getNonce() - maybeSenderAccount.map(AccountState::getNonce).orElse(0L)
+  //          >= poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
+  //        traceLambda(
+  //            LOG,
+  //            "Transaction {} not added because nonce too far in the future for sender {}",
+  //            transaction::toTraceLog,
+  //            maybeSenderAccount::toString);
+  //        return NONCE_TOO_FAR_IN_FUTURE_FOR_SENDER;
+  //      }
+  //
+  //      final TransactionAddedStatus transactionAddedStatus =
+  //          addTransactionForSenderAndNonce(transactionInfo);
+  //
+  //      if (transactionAddedStatus.equals(ADDED)) {
+  //        transactionPrioritization(transactionInfo);
+  //        notifyTransactionAdded(transaction);
+  //        traceLambda(LOG, "Transaction prioritized {}", transactionInfo::toTraceLog);
+  //      } else if (transactionAddedStatus.equals(POSTPONED)) {
+  //        traceLambda(LOG, "Transaction postponed {}", transactionInfo::toTraceLog);
+  //      } else {
+  //        traceLambda(
+  //            LOG,
+  //            "Transaction {}, not added with status {}",
+  //            transactionInfo::toTraceLog,
+  //            transactionAddedStatus::name);
+  //      }
+  //      return transactionAddedStatus;
+  //    }
+  //  }
 
   @Override
-  protected TransactionAddedStatus addTransaction(
-      final TransactionInfo transactionInfo, final Optional<Account> maybeSenderAccount) {
-    final Transaction transaction = transactionInfo.getTransaction();
-    synchronized (lock) {
-      if (pendingTransactions.containsKey(transactionInfo.getHash())) {
-        traceLambda(LOG, "Already known transaction {}", transactionInfo::toTraceLog);
-        return ALREADY_KNOWN;
-      }
-
-      if (transaction.getNonce() - maybeSenderAccount.map(AccountState::getNonce).orElse(0L)
-          >= poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
-        traceLambda(
-            LOG,
-            "Transaction {} not added because nonce too far in the future for sender {}",
-            transaction::toTraceLog,
-            maybeSenderAccount::toString);
-        return NONCE_TOO_FAR_IN_FUTURE_FOR_SENDER;
-      }
-
-      final TransactionAddedStatus transactionAddedStatus =
-          addTransactionForSenderAndNonce(transactionInfo, maybeSenderAccount);
-      if (!transactionAddedStatus.equals(ADDED)) {
-        traceLambda(
-            LOG,
-            "Not added with status {}, transaction {}",
-            transactionAddedStatus::name,
-            transactionInfo::toTraceLog);
-        return transactionAddedStatus;
-      }
-
-      transactionPrioritization(transactionInfo);
-    }
-
-    notifyTransactionAdded(transaction);
-    return ADDED;
-  }
-
-  private void transactionPrioritization(final TransactionInfo transactionInfo) {
-    var txsForSender = transactionsBySender.get(transactionInfo.getSender());
-    // add to prioritized txs only if sender has transactions ready for the next block
-    if (txsForSender.getMinNonceDistance() == 0) {
-      for (var txInfo : txsForSender.getConsecutiveTransactionInfos(transactionInfo.getNonce())) {
-        // some transactions for this sender could be already prioritized
-        if (!pendingTransactions.containsKey(txInfo.getHash())) {
-
-          if (pendingTransactions.size() >= poolConfig.getTxPoolMaxSize()) {
-            // some txs must be de-prioritized
-            final TransactionInfo lowestValueTxInfo = compareWithLowestValueTransactionInfo(txInfo);
-            if (lowestValueTxInfo == txInfo) {
-              debugLambda(
-                  LOG,
-                  "Incoming transaction {} is the lowest value transaction, not prioritizing it",
-                  txInfo::toTraceLog);
-              return;
-            }
-            dePrioritizeTransaction(lowestValueTxInfo);
-          }
-
-          prioritizeTransaction(txInfo);
-        }
-      }
-    }
-  }
-
-  private void prioritizeTransaction(TransactionInfo txInfo) {
+  protected void addPriorityTransaction(final TransactionInfo transactionInfo) {
     // check if it's in static or dynamic range
     final String kind;
-    if (isInStaticRange(txInfo.getTransaction(), baseFee)) {
+    if (isInStaticRange(transactionInfo.getTransaction(), baseFee)) {
       kind = "static";
-      prioritizedTransactionsStaticRange.add(txInfo);
+      prioritizedTransactionsStaticRange.add(transactionInfo);
     } else {
       kind = "dynamic";
-      prioritizedTransactionsDynamicRange.add(txInfo);
+      prioritizedTransactionsDynamicRange.add(transactionInfo);
     }
-    pendingTransactions.put(txInfo.getHash(), txInfo);
     traceLambda(
-        LOG, "Added {} to pending transactions, range type {}", txInfo::toTraceLog, kind::toString);
+        LOG,
+        "Added {} to pending transactions, range type {}",
+        transactionInfo::toTraceLog,
+        kind::toString);
   }
 
-  private void dePrioritizeTransaction(final TransactionInfo transactionInfo) {
-    final TransactionsForSenderInfo transactionsForSenderInfo =
-        transactionsBySender.get(transactionInfo.getSender());
-
-    // de-prioritized the tx and all the following ones for that sender
-    final var dePrioritizedTxs =
-        transactionsForSenderInfo.getConsecutiveTransactionInfos(transactionInfo.getNonce());
-    prioritizedTransactionsDynamicRange.removeAll(dePrioritizedTxs);
-    prioritizedTransactionsStaticRange.removeAll(dePrioritizedTxs);
-    pendingTransactions
-        .entrySet()
-        .removeAll(
-            dePrioritizedTxs.stream().map(TransactionInfo::getHash).collect(toUnmodifiableList()));
-    traceLambda(LOG, "De-prioritized transactions {}", dePrioritizedTxs::toString);
-  }
-
-  private TransactionInfo compareWithLowestValueTransactionInfo(
-      final TransactionInfo incomingTxInfo) {
-    final Stream.Builder<TransactionInfo> removalCandidates = Stream.builder();
-    removalCandidates.add(incomingTxInfo);
-    if (!prioritizedTransactionsDynamicRange.isEmpty()) {
-      removalCandidates.add(prioritizedTransactionsDynamicRange.last());
+  @Override
+  protected void removePriorityTransaction(final TransactionInfo removedTransactionInfo) {
+    if (prioritizedTransactionsDynamicRange.remove(removedTransactionInfo)) {
+      traceLambda(LOG, "Removed dynamic range transaction {}", removedTransactionInfo::toTraceLog);
+    } else if (prioritizedTransactionsStaticRange.remove(removedTransactionInfo)) {
+      traceLambda(LOG, "Removed static range transaction {}", removedTransactionInfo::toTraceLog);
     }
-    if (!prioritizedTransactionsStaticRange.isEmpty()) {
-      removalCandidates.add(prioritizedTransactionsStaticRange.last());
+  }
+
+  @Override
+  protected TransactionInfo getLeastPriorityTransaction() {
+    final var lastStatic = prioritizedTransactionsStaticRange.last();
+    final var lastDynamic = prioritizedTransactionsDynamicRange.last();
+
+    if (lastDynamic == null) {
+      return lastStatic;
+    }
+    if (lastStatic == null) {
+      return lastDynamic;
     }
 
-    return removalCandidates
-        .build()
-        .min(
-            Comparator.comparing(
-                txInfo ->
-                    txInfo
-                        .getTransaction()
-                        .getEffectivePriorityFeePerGas(baseFee)
-                        .getAsBigInteger()))
-        .get();
+    final Comparator<TransactionInfo> compareByValue =
+        Comparator.comparing(
+            txInfo ->
+                txInfo.getTransaction().getEffectivePriorityFeePerGas(baseFee).getAsBigInteger());
+
+    return compareByValue.compare(lastStatic, lastDynamic) < 0 ? lastStatic : lastDynamic;
   }
+
+//  private void prioritizeTransaction(TransactionInfo txInfo) {
+//    // check if it's in static or dynamic range
+//    final String kind;
+//    if (isInStaticRange(txInfo.getTransaction(), baseFee)) {
+//      kind = "static";
+//      prioritizedTransactionsStaticRange.add(txInfo);
+//    } else {
+//      kind = "dynamic";
+//      prioritizedTransactionsDynamicRange.add(txInfo);
+//    }
+//    pendingTransactions.put(txInfo.getHash(), txInfo);
+//    traceLambda(
+//        LOG, "Added {} to pending transactions, range type {}", txInfo::toTraceLog, kind::toString);
+//  }
+
+  //  private void dePrioritizeTransaction(final TransactionInfo transactionInfo) {
+  //    final TransactionsForSenderInfo transactionsForSenderInfo =
+  //        transactionsBySender.get(transactionInfo.getSender());
+  //
+  //    // de-prioritized the tx and all the following ones for that sender
+  //    final var dePrioritizedTxs =
+  //        transactionsForSenderInfo.getConsecutiveTransactionInfos(transactionInfo.getNonce());
+  //    prioritizedTransactionsDynamicRange.removeAll(dePrioritizedTxs);
+  //    prioritizedTransactionsStaticRange.removeAll(dePrioritizedTxs);
+  //    pendingTransactions
+  //        .entrySet()
+  //        .removeAll(
+  //
+  // dePrioritizedTxs.stream().map(TransactionInfo::getHash).collect(toUnmodifiableList()));
+  //    traceLambda(LOG, "De-prioritized transactions {}", dePrioritizedTxs::toString);
+  //  }
+
+  //  private TransactionInfo compareWithLowestValueTransactionInfo(
+  //      final TransactionInfo incomingTxInfo) {
+  //    final Stream.Builder<TransactionInfo> removalCandidates = Stream.builder();
+  //    removalCandidates.add(incomingTxInfo);
+  //    if (!prioritizedTransactionsDynamicRange.isEmpty()) {
+  //      removalCandidates.add(prioritizedTransactionsDynamicRange.last());
+  //    }
+  //    if (!prioritizedTransactionsStaticRange.isEmpty()) {
+  //      removalCandidates.add(prioritizedTransactionsStaticRange.last());
+  //    }
+  //
+  //    return removalCandidates
+  //        .build()
+  //        .min(
+  //            Comparator.comparing(
+  //                txInfo ->
+  //                    txInfo
+  //                        .getTransaction()
+  //                        .getEffectivePriorityFeePerGas(baseFee)
+  //                        .getAsBigInteger()))
+  //        .get();
+  //  }
 
   private boolean isInStaticRange(final Transaction transaction, final Optional<Wei> baseFee) {
     return transaction
