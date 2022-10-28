@@ -14,8 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
-import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
-
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.ethereum.core.Transaction;
 
@@ -48,7 +46,6 @@ class LowestInvalidNonceCache {
     if (currStatus == null) {
       final InvalidNonceStatus newStatus = new InvalidNonceStatus(sender, invalidNonce);
       addInvalidNonceStatus(newStatus);
-
       LOG.trace("Added invalid nonce status {}, cache status {}", newStatus, this);
       return invalidNonce;
     }
@@ -62,7 +59,6 @@ class LowestInvalidNonceCache {
             currStatus.newHit();
           }
         });
-
     LOG.trace("Updated invalid nonce status {}, cache status {}", currStatus, this);
 
     return currStatus.nonce;
@@ -84,11 +80,7 @@ class LowestInvalidNonceCache {
         lowestInvalidKnownNonceBySender.get(transaction.getSender());
     if (currStatus != null && transaction.getNonce() > currStatus.nonce) {
       updateInvalidNonceStatus(currStatus, status -> status.newHit());
-      traceLambda(
-          LOG,
-          "New hit for invalid nonce status {}, cache status {}",
-          currStatus::toString,
-          this::toString);
+      LOG.trace("New hit for invalid nonce status {}, cache status {}", currStatus, this);
       return true;
     }
     return false;

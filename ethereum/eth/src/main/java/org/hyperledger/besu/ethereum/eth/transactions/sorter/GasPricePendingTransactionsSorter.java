@@ -18,6 +18,7 @@ import static java.util.Comparator.comparing;
 
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
@@ -27,9 +28,6 @@ import java.util.NavigableSet;
 import java.util.TreeSet;
 import java.util.function.Supplier;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 /**
  * Holds the current set of pending transactions with the ability to iterate them based on priority
  * for mining or look-up by hash.
@@ -37,15 +35,13 @@ import org.slf4j.LoggerFactory;
  * <p>This class is safe for use across multiple threads.
  */
 public class GasPricePendingTransactionsSorter extends AbstractPendingTransactionsSorter {
-  //private static final Logger LOG =
-    //  LoggerFactory.getLogger(GasPricePendingTransactionsSorter.class);
 
-  private final NavigableSet<TransactionInfo> prioritizedTransactions =
+  private final NavigableSet<PendingTransaction> prioritizedTransactions =
       new TreeSet<>(
-          comparing(TransactionInfo::isReceivedFromLocalSource)
-              .thenComparing(TransactionInfo::getGasPrice)
-              .thenComparing(TransactionInfo::getAddedToPoolAt)
-              .thenComparing(TransactionInfo::getSequence)
+          comparing(PendingTransaction::isReceivedFromLocalSource)
+              .thenComparing(PendingTransaction::getGasPrice)
+              .thenComparing(PendingTransaction::getAddedToPoolAt)
+              .thenComparing(PendingTransaction::getSequence)
               .reversed());
 
   public GasPricePendingTransactionsSorter(
@@ -61,38 +57,23 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
     // nothing to do
   }
 
-  //  @Override
-  //  protected void doRemoveTransaction(final Transaction transaction, final boolean addedToBlock)
-  // {
-  //    synchronized (lock) {
-  //      final TransactionInfo removedTransactionInfo =
-  //          pendingTransactions.remove(transaction.getHash());
-  //      if (removedTransactionInfo != null) {
-  //        prioritizedTransactions.remove(removedTransactionInfo);
-  //        removeTransactionInfoTrackedBySenderAndNonce(removedTransactionInfo, addedToBlock);
-  //        incrementTransactionRemovedCounter(
-  //            removedTransactionInfo.isReceivedFromLocalSource(), addedToBlock);
-  //      }
-  //    }
-  //  }
-
   @Override
-  protected Iterator<TransactionInfo> prioritizedTransactions() {
+  protected Iterator<PendingTransaction> prioritizedTransactions() {
     return prioritizedTransactions.iterator();
   }
 
   @Override
-  protected void addPriorityTransaction(final TransactionInfo transactionInfo) {
-    prioritizedTransactions.add(transactionInfo);
+  protected void prioritizeTransaction(final PendingTransaction pendingTx) {
+    prioritizedTransactions.add(pendingTx);
   }
 
   @Override
-  protected void removePriorityTransaction(final TransactionInfo transactionInfo) {
-    prioritizedTransactions.remove(transactionInfo);
+  protected void removePrioritizedTransaction(final PendingTransaction removedPendingTx) {
+    prioritizedTransactions.remove(removedPendingTx);
   }
 
   @Override
-  protected TransactionInfo getLeastPriorityTransaction() {
+  protected PendingTransaction getLeastPriorityTransaction() {
     return prioritizedTransactions.last();
   }
 }

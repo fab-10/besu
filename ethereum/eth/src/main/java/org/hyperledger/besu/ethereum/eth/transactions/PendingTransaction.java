@@ -1,4 +1,18 @@
-package org.hyperledger.besu.ethereum.eth.transactions.sorter;
+/*
+ * Copyright Besu contributors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ * http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software distributed under the License is distributed on
+ * an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the
+ * specific language governing permissions and limitations under the License.
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+package org.hyperledger.besu.ethereum.eth.transactions;
 
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
@@ -15,7 +29,7 @@ import java.util.stream.Collectors;
  * Tracks the additional metadata associated with transactions to enable prioritization for mining
  * and deciding which transactions to drop when the transaction pool reaches its size limit.
  */
-public class TransactionInfo {
+public class PendingTransaction {
 
   private static final AtomicLong TRANSACTIONS_ADDED = new AtomicLong();
   private final Transaction transaction;
@@ -23,7 +37,7 @@ public class TransactionInfo {
   private final Instant addedToPoolAt;
   private final long sequence; // Allows prioritization based on order transactions are added
 
-  public TransactionInfo(
+  public PendingTransaction(
       final Transaction transaction,
       final boolean receivedFromLocalSource,
       final Instant addedToPoolAt) {
@@ -66,9 +80,9 @@ public class TransactionInfo {
   }
 
   public static List<Transaction> toTransactionList(
-      final Collection<TransactionInfo> transactionsInfo) {
+      final Collection<PendingTransaction> transactionsInfo) {
     return transactionsInfo.stream()
-        .map(TransactionInfo::getTransaction)
+        .map(PendingTransaction::getTransaction)
         .collect(Collectors.toUnmodifiableList());
   }
 
@@ -81,7 +95,7 @@ public class TransactionInfo {
       return false;
     }
 
-    TransactionInfo that = (TransactionInfo) o;
+    PendingTransaction that = (PendingTransaction) o;
 
     return sequence == that.sequence;
   }

@@ -19,6 +19,7 @@ import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedSta
 
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
@@ -28,15 +29,13 @@ import java.util.function.Supplier;
 
 import com.google.common.collect.HashBasedTable;
 import com.google.common.collect.Table;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 class PostponedTransactionsCache {
-  //private static final Logger LOG = LoggerFactory.getLogger(PostponedTransactionsCache.class);
+  // private static final Logger LOG = LoggerFactory.getLogger(PostponedTransactionsCache.class);
 
   private final TransactionPoolReplacementHandler transactionReplacementHandler;
   private final Supplier<BlockHeader> chainHeadHeaderSupplier;
-  private final Table<Address, Long, TransactionInfo> postponedTransactions =
+  private final Table<Address, Long, PendingTransaction> postponedTransactions =
       HashBasedTable.create();
   final LabelledMetric<Counter> transactionReplacedCounter;
 
@@ -49,20 +48,20 @@ class PostponedTransactionsCache {
     this.transactionReplacedCounter = transactionReplacedCounter;
   }
 
-  TransactionAddedStatus add(final TransactionInfo transactionInfo) {
-    final Address sender = transactionInfo.getSender();
-    final long nonce = transactionInfo.getNonce();
+  TransactionAddedStatus add(final PendingTransaction pendingTransaction) {
+    final Address sender = pendingTransaction.getSender();
+    final long nonce = pendingTransaction.getNonce();
 
     final var existingTxInfo = postponedTransactions.get(sender, nonce);
     if (existingTxInfo != null) {
       if (!transactionReplacementHandler.shouldReplace(
-          existingTxInfo, transactionInfo, chainHeadHeaderSupplier.get())) {
+          existingTxInfo, pendingTransaction, chainHeadHeaderSupplier.get())) {
         return REJECTED_UNDERPRICED_REPLACEMENT;
       }
-      incrementTransactionReplacedCounter(transactionInfo.isReceivedFromLocalSource());
+      incrementTransactionReplacedCounter(pendingTransaction.isReceivedFromLocalSource());
     }
 
-    postponedTransactions.put(sender, nonce, transactionInfo);
+    postponedTransactions.put(sender, nonce, pendingTransaction);
     return POSTPONED;
   }
 
