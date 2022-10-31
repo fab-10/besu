@@ -387,8 +387,7 @@ public abstract class AbstractPendingTransactionsSorter {
   public abstract void manageBlockAdded(final Block block);
 
   private void removeTransaction(final Transaction transaction, final boolean addedToBlock) {
-    final PendingTransaction removedPendingTx =
-        pendingTransactions.remove(transaction.getHash());
+    final PendingTransaction removedPendingTx = pendingTransactions.remove(transaction.getHash());
     if (removedPendingTx != null) {
       removePrioritizedTransaction(removedPendingTx);
       removePendingTransactionBySenderAndNonce(removedPendingTx);
