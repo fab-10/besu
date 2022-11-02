@@ -274,17 +274,17 @@ public class BlockTransactionSelector {
       }
     }
 
-//
-//    final Wei transactionGasPrice = minTransactionGasPrice(transaction);
-//    if (transactionGasPrice.compareTo(miningParameters.getMinTransactionGasPrice()) < 0) {
-//      traceLambda(
-//          LOG,
-//          "Discard transaction {} below min gas price {}",
-//          transaction::toTraceLog,
-//          miningParameters::getMinTransactionGasPrice);
-//      continue;
-//    }
-//
+    //
+    //    final Wei transactionGasPrice = minTransactionGasPrice(transaction);
+    //    if (transactionGasPrice.compareTo(miningParameters.getMinTransactionGasPrice()) < 0) {
+    //      traceLambda(
+    //          LOG,
+    //          "Discard transaction {} below min gas price {}",
+    //          transaction::toTraceLog,
+    //          miningParameters::getMinTransactionGasPrice);
+    //      continue;
+    //    }
+    //
     // If the gas price specified by the transaction is less than this node is willing to accept,
     // do not include it in the block.
     // ToDo: why we accept this in the pool in the first place then?

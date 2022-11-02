@@ -17,9 +17,6 @@ package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ADDED;
 import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
 
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
-import java.util.Objects;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.AccountTransactionOrder;
@@ -41,11 +38,14 @@ import org.hyperledger.besu.plugin.services.metrics.LabelledMetric;
 import org.hyperledger.besu.util.Subscribers;
 
 import java.time.Clock;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -210,14 +210,16 @@ public abstract class AbstractPendingTransactionsSorter {
           confirmedTransactions.stream()
               .map(prioritizedPendingTransactions::remove)
               .filter(Objects::nonNull)
-              .peek((PendingTransaction tx) -> {
-                removePrioritizedTransaction(tx);
-                incrementTransactionRemovedCounter(tx.isReceivedFromLocalSource(), true);
-              })
+              .peek(
+                  (PendingTransaction tx) -> {
+                    removePrioritizedTransaction(tx);
+                    incrementTransactionRemovedCounter(tx.isReceivedFromLocalSource(), true);
+                  })
               .count();
 
-      if(prioritizedRemovedCount > 0) {
-        List<PendingTransaction> promoteTransactions = pendingTransactionsCache.promote(confirmedTransactions);
+      if (prioritizedRemovedCount > 0) {
+        List<PendingTransaction> promoteTransactions =
+            pendingTransactionsCache.promote(confirmedTransactions);
       }
     }
   }
