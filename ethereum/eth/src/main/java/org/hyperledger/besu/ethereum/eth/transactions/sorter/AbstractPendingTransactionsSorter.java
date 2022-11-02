@@ -17,6 +17,8 @@ package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ADDED;
 import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
 
+import java.util.Comparator;
+import java.util.function.Predicate;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.AccountTransactionOrder;
@@ -66,7 +68,6 @@ import org.slf4j.LoggerFactory;
  * <p>This class is safe for use across multiple threads.
  */
 public abstract class AbstractPendingTransactionsSorter {
-  //  private static final int DEFAULT_LOWEST_INVALID_KNOWN_NONCE_CACHE = 10_000;
   private static final Logger LOG =
       LoggerFactory.getLogger(AbstractPendingTransactionsSorter.class);
 
@@ -78,8 +79,6 @@ public abstract class AbstractPendingTransactionsSorter {
 
   protected final PendingTransactionsCache pendingTransactionsCache;
 
-  //  protected final LowestInvalidNonceCache lowestInvalidKnownNonceCache =
-  //      new LowestInvalidNonceCache(DEFAULT_LOWEST_INVALID_KNOWN_NONCE_CACHE);
   protected final Subscribers<PendingTransactionListener> pendingTransactionSubscribers =
       Subscribers.create();
 
@@ -105,7 +104,6 @@ public abstract class AbstractPendingTransactionsSorter {
     this.chainHeadHeaderSupplier = chainHeadHeaderSupplier;
     this.transactionReplacementHandler =
         new TransactionPoolReplacementHandler(poolConfig.getPriceBump());
-
     final LabelledMetric<Counter> transactionAddedCounter =
         metricsSystem.createLabelledCounter(
             BesuMetricCategory.TRANSACTION_POOL,
@@ -137,7 +135,10 @@ public abstract class AbstractPendingTransactionsSorter {
 
     this.pendingTransactionsCache =
         new PendingTransactionsCache(
-            poolConfig.getTxPoolMaxSize(), transactionReplacementHandler, chainHeadHeaderSupplier);
+            poolConfig.getTxPoolMaxSize(),
+            poolConfig.getTxPoolMaxFutureTransactionByAccount(),
+            transactionReplacementHandler,
+            chainHeadHeaderSupplier);
   }
 
   public void evictOldTransactions() {
@@ -163,21 +164,11 @@ public abstract class AbstractPendingTransactionsSorter {
   public TransactionAddedResult addRemoteTransaction(
       final Transaction transaction, final Optional<Account> maybeSenderAccount) {
 
-    //    if (lowestInvalidKnownNonceCache.hasInvalidLowerNonce(transaction)) {
-    //      debugLambda(
-    //          LOG,
-    //          "Dropping transaction {} since the sender has an invalid transaction with lower
-    // nonce",
-    //          transaction::toTraceLog);
-    //      return LOWER_NONCE_INVALID_TRANSACTION_KNOWN;
-    //    }
-
     final PendingTransaction pendingTransaction =
         new PendingTransaction(transaction, false, clock.instant());
     final TransactionAddedResult transactionAddedResult =
         addTransaction(pendingTransaction, maybeSenderAccount);
     if (transactionAddedResult.equals(ADDED)) {
-      //      lowestInvalidKnownNonceCache.registerValidTransaction(transaction);
       remoteTransactionAddedCounter.inc();
     }
     return transactionAddedResult;
@@ -194,20 +185,16 @@ public abstract class AbstractPendingTransactionsSorter {
     return transactionAdded;
   }
 
-  public void removeTransaction(final Transaction transaction) {
+  void removeTransaction(final Transaction transaction) {
     removeTransaction(transaction, false);
     notifyTransactionDropped(transaction);
-  }
-
-  public void transactionAddedToBlock(final Transaction transaction) {
-    removeTransaction(transaction, true);
-    //    lowestInvalidKnownNonceCache.registerValidTransaction(transaction);
   }
 
   public void transactionsAddedToBlock(final List<Transaction> confirmedTransactions) {
     synchronized (lock) {
       final long prioritizedRemovedCount =
           confirmedTransactions.stream()
+              .map(Transaction::getHash)
               .map(prioritizedPendingTransactions::remove)
               .filter(Objects::nonNull)
               .peek(
@@ -218,8 +205,17 @@ public abstract class AbstractPendingTransactionsSorter {
               .count();
 
       if (prioritizedRemovedCount > 0) {
-        List<PendingTransaction> promoteTransactions =
-            pendingTransactionsCache.promote(confirmedTransactions);
+        final Predicate<PendingTransaction> promotionFilter =
+            promotableTx ->
+                getComparatorByValue().compare(promotableTx, getLeastPriorityTransaction()) > 0;
+
+        final int maxPromotable =
+            poolConfig.getTxPoolMaxSize() - prioritizedPendingTransactions.size();
+
+        final List<PendingTransaction> promoteTransactions =
+            pendingTransactionsCache.promote(confirmedTransactions, maxPromotable, getComparatorByValue());
+
+        promoteTransactions.forEach(this::addPrioritizedTransaction);
       }
     }
   }
@@ -408,10 +404,16 @@ public abstract class AbstractPendingTransactionsSorter {
               pendingTransaction.getTransaction()::toTraceLog,
               maybeSenderAccount::toString);
         } else {
-          prioritizedPendingTransactions.put(pendingTransaction.getHash(), pendingTransaction);
-          prioritizeTransaction(pendingTransaction);
-          notifyTransactionAdded(pendingTransaction.getTransaction());
-          traceLambda(LOG, "Transaction prioritized {}", pendingTransaction::toTraceLog);
+
+          if (prioritizedPendingTransactions.size() >= poolConfig.getTxPoolMaxSize()) {
+            var currentLeastPriorityTx = getLeastPriorityTransaction();
+            if (getComparatorByValue().compare(pendingTransaction, currentLeastPriorityTx) > 0) {
+              prioritizedPendingTransactions.remove(currentLeastPriorityTx.getHash());
+              removePrioritizedTransaction(currentLeastPriorityTx);
+            }
+          }
+
+          addPrioritizedTransaction(pendingTransaction);
         }
       }
 
@@ -419,20 +421,14 @@ public abstract class AbstractPendingTransactionsSorter {
     }
   }
 
+  private void addPrioritizedTransaction(final PendingTransaction prioritizedTx) {
+    prioritizedPendingTransactions.put(prioritizedTx.getHash(), prioritizedTx);
+    prioritizeTransaction(prioritizedTx);
+  }
+
   protected abstract PendingTransaction getLeastPriorityTransaction();
 
-  //  private void evictLessPriorityTransactions() {
-  //    final PendingTransaction leastPriorityTx = getLeastPriorityTransaction();
-  //    // evict all txs for the sender with nonce >= the least priority one to avoid gaps
-  //    final var pendingTxsForSender = transactionsBySender.get(leastPriorityTx.getSender());
-  //    final var txsToEvict =
-  // pendingTxsForSender.getPendingTransactions(leastPriorityTx.getNonce());
-  //
-  //    // remove backward to avoid gaps
-  //    for (int i = txsToEvict.size() - 1; i >= 0; i--) {
-  //      removeTransaction(txsToEvict.get(i).getTransaction());
-  //    }
-  //  }
+  protected abstract Comparator<PendingTransaction> getComparatorByValue();
 
   public String toTraceLog() {
     synchronized (lock) {
@@ -450,31 +446,6 @@ public abstract class AbstractPendingTransactionsSorter {
       return sb.toString();
     }
   }
-  //
-  //  public List<Transaction> signalInvalidAndGetDependentTransactions(final Transaction
-  // transaction) {
-  //    final long invalidNonce =
-  // lowestInvalidKnownNonceCache.registerInvalidTransaction(transaction);
-  //
-  //    PendingTransactionsCache txsForSender =
-  // pendingTransactionsCache.remove(transaction.getSender());
-  //    if (txsForSender != null) {
-  //      return txsForSender
-  //          .streamPendingTransactions()
-  //          .filter(pendingTx -> pendingTx.getTransaction().getNonce() > invalidNonce)
-  //          .peek(
-  //              pendingTx ->
-  //                  traceLambda(
-  //                      LOG,
-  //                      "Transaction {} piked since there is a lowest invalid nonce {} for the
-  // sender",
-  //                      pendingTx::toTraceLog,
-  //                      () -> invalidNonce))
-  //          .map(PendingTransaction::getTransaction)
-  //          .collect(Collectors.toList());
-  //    }
-  //    return List.of();
-  //  }
 
   public String logStats() {
     return "Ready " + prioritizedPendingTransactions.size();

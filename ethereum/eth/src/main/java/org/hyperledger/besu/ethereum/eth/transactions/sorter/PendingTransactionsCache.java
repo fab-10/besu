@@ -15,10 +15,18 @@
 
 package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.maxBy;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ADDED;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ALREADY_KNOWN;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.POSTPONED;
 
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.NavigableMap;
+import java.util.Set;
+import java.util.function.Predicate;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -33,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.SortedMap;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -45,22 +52,26 @@ public class PendingTransactionsCache {
 
   private static final Long MAX_READY_SIZE_BYTES = 1_000_000_000L;
 
-  private final Map<Hash, PendingTransaction> readyAndPrioritized;
-  private final Map<Address, SortedMap<Long, PendingTransaction>> readyBySender =
+  private final Map<Hash, PendingTransaction> prioritized;
+  private final Map<Address, NavigableMap<Long, PendingTransaction>> readyBySender =
       new ConcurrentHashMap<>();
 
   private final AtomicLong readyTotalSize = new AtomicLong();
 
-  private final Map<Address, SortedMap<Long, PendingTransaction>> postponedBySender =
+  private final Map<Address, NavigableMap<Long, PendingTransaction>> postponedBySender =
       new ConcurrentHashMap<>();
   private final TransactionPoolReplacementHandler transactionReplacementHandler;
   private final Supplier<BlockHeader> chainHeadHeaderSupplier;
 
+  private final int maxPromotablePerSender;
+
   public PendingTransactionsCache(
       final int maxPrioritized,
+      final int maxPromotablePerSender,
       final TransactionPoolReplacementHandler transactionReplacementHandler,
       final Supplier<BlockHeader> chainHeadHeaderSupplier) {
-    this.readyAndPrioritized = new HashMap<>(maxPrioritized);
+    this.prioritized = new HashMap<>(maxPrioritized);
+    this.maxPromotablePerSender = maxPromotablePerSender;
     this.transactionReplacementHandler = transactionReplacementHandler;
     this.chainHeadHeaderSupplier = chainHeadHeaderSupplier;
   }
@@ -156,31 +167,112 @@ public class PendingTransactionsCache {
     return OptionalLong.empty();
   }
 
-  public List<PendingTransaction> promote(final List<Transaction> confirmedTransactions) {
-    final Map<Address, Optional<Transaction>> confirmedBySender =
-        confirmedTransactions.stream()
-            .collect(
-                Collectors.groupingBy(
-                    Transaction::getSender,
-                    Collectors.maxBy(Comparator.comparingLong(Transaction::getNonce))));
+  public List<PendingTransaction> promote(
+      final List<Transaction> confirmedTransactions,
+      final int maxPromotable,
+      final Comparator<PendingTransaction> comparator) {
 
-    for (var entry : confirmedBySender.entrySet()) {
-      var sender = entry.getKey();
+    List<PendingTransaction> promotableTxs = new ArrayList<>(maxPromotable);
+    // get confirmed tx with max nonce by sender
+    final Map<Address, Optional<Long>> confirmedBySender =
+        maxConfirmedNonceBySender(confirmedTransactions);
+
+    for (var senderMaxConfirmedNonce : confirmedBySender.entrySet()) {
+      var sender = senderMaxConfirmedNonce.getKey();
 
       var senderTxs = readyBySender.get(sender);
       if (senderTxs != null) {
-        var maxNonce = entry.getValue().get();
+        // remove all tx <= max confirmed nonce for sender
+        var maxNonce = senderMaxConfirmedNonce.getValue().get();
+        senderTxs.headMap(maxNonce).clear();
+        if (senderTxs.isEmpty()) {
+          // check if some postponed are now ready
+          postponedToReady(sender, senderTxs, maxNonce);
+        }
+        // if there is still space
+        final int maxRemaining = maxPromotable - promotableTxs.size();
+        if (maxRemaining > 0) {
+          // add promotable according to promotion filter and remaining space
+          promotableTxs.addAll(promoteReady(sender, senderTxs, maxRemaining, promotionFilter));
+        }
       }
     }
 
-    for (Transaction confirmedTx : confirmedTransactions) {
-      var senderTxs = readyBySender.get(confirmedTx.getSender());
-      if (senderTxs != null) {
-        // first remove confirmed transaction for this sender
-        senderTxs.headMap(confirmedTx.getNonce()).clear();
-        if (!senderTxs.isEmpty()) {
-          // if the sender has ready transactions
+    // if there is still space pick other ready senders
+    final int maxRemaining = maxPromotable - promotableTxs.size();
+    if (maxRemaining > 0) {
+      promotableTxs.addAll(promoteReady(confirmedBySender.keySet(), maxRemaining, promotionFilter));
+    }
+
+    return promotableTxs;
+  }
+
+  private static Map<Address, Optional<Long>> maxConfirmedNonceBySender(
+      List<Transaction> confirmedTransactions) {
+    return confirmedTransactions.stream()
+        .collect(
+            groupingBy(
+                Transaction::getSender, mapping(Transaction::getNonce, maxBy(Long::compare))));
+  }
+
+  private Collection<PendingTransaction> promoteReady(
+      final Set<Address> skipSenders,
+      final int maxRemaining,
+      final Predicate<PendingTransaction> promotionFilter) {
+    List<PendingTransaction> promotedTxs = new ArrayList<>(maxRemaining);
+    for (var senderEntry : readyBySender.entrySet()) {
+      if (!skipSenders.contains(senderEntry.getKey())) {
+        final int maxForSender = maxRemaining - promotedTxs.size();
+        promotedTxs.addAll(
+            promoteReady(
+                senderEntry.getKey(), senderEntry.getValue(), maxForSender, promotionFilter));
+        if (maxForSender <= 0) {
+          break;
         }
+      }
+    }
+    return promotedTxs;
+  }
+
+  private Collection<PendingTransaction> promoteReady(
+      final Address sender,
+      final NavigableMap<Long, PendingTransaction> senderTxs,
+      final int maxRemaining,
+      final Predicate<PendingTransaction> promotionFilter) {
+
+    final int maxForThisSender = Math.min(maxPromotablePerSender, maxRemaining);
+    List<PendingTransaction> promotableTxs = new ArrayList<>(maxForThisSender);
+    while (!senderTxs.isEmpty() && promotableTxs.size() < maxForThisSender) {
+      var promotableEntry = senderTxs.firstEntry();
+      if (promotionFilter.test(promotableEntry.getValue())) {
+        senderTxs.pollFirstEntry();
+        promotableTxs.add(promotableEntry.getValue());
+      } else {
+        break;
+      }
+    }
+
+    if (senderTxs.isEmpty()) {
+      readyBySender.remove(sender);
+    }
+    return promotableTxs;
+  }
+
+  private void postponedToReady(
+      final Address sender,
+      final NavigableMap<Long, PendingTransaction> senderTxs,
+      final long maxNonce) {
+    var postponedSenderTxs = postponedBySender.get(sender);
+    if (postponedSenderTxs != null) {
+      long expectedNonce = maxNonce + 1;
+      while (!postponedSenderTxs.isEmpty() && postponedSenderTxs.firstKey() == expectedNonce) {
+        var readyTx = postponedSenderTxs.pollFirstEntry();
+        senderTxs.put(readyTx.getKey(), readyTx.getValue());
+        expectedNonce++;
+      }
+
+      if (postponedSenderTxs.isEmpty()) {
+        postponedBySender.remove(sender);
       }
     }
   }

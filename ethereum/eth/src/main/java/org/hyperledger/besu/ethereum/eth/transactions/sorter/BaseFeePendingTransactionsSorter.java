@@ -50,14 +50,10 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
 
   private Optional<Wei> baseFee;
 
-  public BaseFeePendingTransactionsSorter(
-      final TransactionPoolConfiguration poolConfig,
-      final Clock clock,
-      final MetricsSystem metricsSystem,
-      final Supplier<BlockHeader> chainHeadHeaderSupplier) {
-    super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier);
-    this.baseFee = chainHeadHeaderSupplier.get().getBaseFee();
-  }
+  private final Comparator<PendingTransaction> compareByValue =
+      Comparator.comparing(
+          txInfo ->
+              txInfo.getTransaction().getEffectivePriorityFeePerGas(baseFee).getAsBigInteger());
 
   /**
    * See this post for an explainer about these data structures:
@@ -92,6 +88,15 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
               .thenComparing(PendingTransaction::getAddedToPoolAt)
               .thenComparing(PendingTransaction::getSequence)
               .reversed());
+
+  public BaseFeePendingTransactionsSorter(
+      final TransactionPoolConfiguration poolConfig,
+      final Clock clock,
+      final MetricsSystem metricsSystem,
+      final Supplier<BlockHeader> chainHeadHeaderSupplier) {
+    super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier);
+    this.baseFee = chainHeadHeaderSupplier.get().getBaseFee();
+  }
 
   @Override
   public void manageBlockAdded(final Block block) {
@@ -219,12 +224,12 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
       return lastDynamic;
     }
 
-    final Comparator<PendingTransaction> compareByValue =
-        Comparator.comparing(
-            txInfo ->
-                txInfo.getTransaction().getEffectivePriorityFeePerGas(baseFee).getAsBigInteger());
-
     return compareByValue.compare(lastStatic, lastDynamic) < 0 ? lastStatic : lastDynamic;
+  }
+
+  @Override
+  protected Comparator<PendingTransaction> getComparatorByValue() {
+    return compareByValue;
   }
 
   private boolean isInStaticRange(final Transaction transaction, final Optional<Wei> baseFee) {

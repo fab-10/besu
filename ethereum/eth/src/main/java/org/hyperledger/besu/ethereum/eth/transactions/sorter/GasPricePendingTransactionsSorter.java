@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
 import static java.util.Comparator.comparing;
 
+import java.util.Comparator;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
@@ -43,6 +44,9 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
               .thenComparing(PendingTransaction::getAddedToPoolAt)
               .thenComparing(PendingTransaction::getSequence)
               .reversed());
+
+  private final Comparator<PendingTransaction> compareByValue =
+      Comparator.comparing(PendingTransaction::getGasPrice);
 
   public GasPricePendingTransactionsSorter(
       final TransactionPoolConfiguration poolConfig,
@@ -75,5 +79,10 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
   @Override
   protected PendingTransaction getLeastPriorityTransaction() {
     return prioritizedTransactions.last();
+  }
+
+  @Override
+  protected Comparator<PendingTransaction> getComparatorByValue() {
+    return compareByValue;
   }
 }

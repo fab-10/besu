@@ -274,27 +274,15 @@ public class BlockTransactionSelector {
       }
     }
 
-    //
-    //    final Wei transactionGasPrice = minTransactionGasPrice(transaction);
-    //    if (transactionGasPrice.compareTo(miningParameters.getMinTransactionGasPrice()) < 0) {
-    //      traceLambda(
-    //          LOG,
-    //          "Discard transaction {} below min gas price {}",
-    //          transaction::toTraceLog,
-    //          miningParameters::getMinTransactionGasPrice);
-    //      continue;
-    //    }
-    //
     // If the gas price specified by the transaction is less than this node is willing to accept,
     // do not include it in the block.
-    // ToDo: why we accept this in the pool in the first place then?
     final Wei actualMinTransactionGasPriceInBlock =
         feeMarket
             .getTransactionPriceCalculator()
             .price(transaction, processableBlockHeader.getBaseFee());
     if (minTransactionGasPrice.compareTo(actualMinTransactionGasPriceInBlock) > 0) {
       LOG.warn(
-          "Gas fee of {} lower than configured minimum {}, deleting",
+          "Gas fee of {} lower than minimum required for this block {}",
           transaction,
           minTransactionGasPrice);
       return TransactionSelectionResult.DELETE_TRANSACTION_AND_CONTINUE;
