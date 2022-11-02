@@ -247,7 +247,7 @@ public class TransactionBroadcasterTest {
     Set<PendingTransaction> pendingTxs = createPendingTransactionList(numLocalTransactions, true);
     pendingTxs.addAll(createPendingTransactionList(numRemoteTransactions, false));
 
-    when(pendingTransactions.getPendingTransactions()).thenReturn(pendingTxs);
+    when(pendingTransactions.getPrioritizedPendingTransactions()).thenReturn(pendingTxs);
 
     return pendingTxs;
   }

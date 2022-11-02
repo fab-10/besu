@@ -229,8 +229,7 @@ public class BlockTransactionSelector {
    */
   public TransactionSelectionResults buildTransactionListForBlock() {
     LOG.debug("Transaction pool size {}", pendingTransactions.size());
-    traceLambda(
-        LOG, "Transaction pool content {}", () -> pendingTransactions.toTraceLog(false, false));
+    traceLambda(LOG, "Transaction pool content {}", () -> pendingTransactions.toTraceLog());
     pendingTransactions.selectTransactions(
         pendingTransaction -> evaluateTransaction(pendingTransaction, false));
     traceLambda(
@@ -275,6 +274,17 @@ public class BlockTransactionSelector {
       }
     }
 
+//
+//    final Wei transactionGasPrice = minTransactionGasPrice(transaction);
+//    if (transactionGasPrice.compareTo(miningParameters.getMinTransactionGasPrice()) < 0) {
+//      traceLambda(
+//          LOG,
+//          "Discard transaction {} below min gas price {}",
+//          transaction::toTraceLog,
+//          miningParameters::getMinTransactionGasPrice);
+//      continue;
+//    }
+//
     // If the gas price specified by the transaction is less than this node is willing to accept,
     // do not include it in the block.
     // ToDo: why we accept this in the pool in the first place then?

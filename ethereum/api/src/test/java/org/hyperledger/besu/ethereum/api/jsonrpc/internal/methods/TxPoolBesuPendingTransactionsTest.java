@@ -54,7 +54,7 @@ public class TxPoolBesuPendingTransactionsTest {
   public void setUp() {
     final Set<PendingTransaction> listTrx = getPendingTransactions();
     method = new TxPoolBesuPendingTransactions(pendingTransactions);
-    when(this.pendingTransactions.getPendingTransactions()).thenReturn(listTrx);
+    when(this.pendingTransactions.getPrioritizedPendingTransactions()).thenReturn(listTrx);
   }
 
   @Test
@@ -120,7 +120,7 @@ public class TxPoolBesuPendingTransactionsTest {
     final Map<String, String> fromFilter = new HashMap<>();
     fromFilter.put(
         "eq",
-        pendingTransactions.getPendingTransactions().stream()
+        pendingTransactions.getPrioritizedPendingTransactions().stream()
             .findAny()
             .get()
             .getTransaction()

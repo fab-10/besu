@@ -39,7 +39,7 @@ public class TxPoolBesuTransactions implements JsonRpcMethod {
     final JsonRpcSuccessResponse jsonRpcSuccessResponse =
         new JsonRpcSuccessResponse(
             requestContext.getRequest().getId(),
-            new PendingTransactionsResult(pendingTransactions.getPendingTransactions()));
+            new PendingTransactionsResult(pendingTransactions.getPrioritizedPendingTransactions()));
     return jsonRpcSuccessResponse;
   }
 }

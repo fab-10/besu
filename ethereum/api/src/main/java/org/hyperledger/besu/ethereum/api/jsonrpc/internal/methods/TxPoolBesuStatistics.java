@@ -43,7 +43,8 @@ public class TxPoolBesuStatistics implements JsonRpcMethod {
   }
 
   private PendingTransactionsStatisticsResult statistics() {
-    final Set<PendingTransaction> pendingTransaction = pendingTransactions.getPendingTransactions();
+    final Set<PendingTransaction> pendingTransaction =
+        pendingTransactions.getPrioritizedPendingTransactions();
     final long localCount =
         pendingTransaction.stream().filter(PendingTransaction::isReceivedFromLocalSource).count();
     final long remoteCount = pendingTransaction.size() - localCount;

@@ -50,7 +50,7 @@ public class PendingStateAdapter extends AdapterBase {
   }
 
   public List<TransactionAdapter> getTransactions() {
-    return pendingTransactions.getPendingTransactions().stream()
+    return pendingTransactions.getPrioritizedPendingTransactions().stream()
         .map(PendingTransaction::getTransaction)
         .map(TransactionWithMetadata::new)
         .map(TransactionAdapter::new)

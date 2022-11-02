@@ -16,8 +16,9 @@ package org.hyperledger.besu.ethereum.eth.transactions;
 
 import static java.util.Collections.singletonList;
 import static java.util.Optional.ofNullable;
-import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus.ADDED;
-import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus.ALREADY_KNOWN;
+import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ADDED;
+import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ALREADY_KNOWN;
+import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.POSTPONED;
 import static org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason.CHAIN_HEAD_NOT_AVAILABLE;
 import static org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason.CHAIN_HEAD_WORLD_STATE_NOT_AVAILABLE;
 import static org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason.INTERNAL_ERROR;
@@ -116,18 +117,18 @@ public class TransactionPool implements BlockAddedObserver {
           && minTransactionGasPrice(transaction).compareTo(configuration.getTxFeeCap()) > 0) {
         return ValidationResult.invalid(TransactionInvalidReason.TX_FEECAP_EXCEEDED);
       }
-      final TransactionAddedStatus transactionAddedStatus =
+      final TransactionAddedResult transactionAddedResult =
           pendingTransactions.addLocalTransaction(transaction, validationResult.maybeAccount);
-      if (!transactionAddedStatus.equals(ADDED)) {
-        if (transactionAddedStatus.equals(ALREADY_KNOWN)) {
+      if (transactionAddedResult.isInvalid()) {
+        if (transactionAddedResult.equals(ALREADY_KNOWN)) {
           duplicateTransactionCounter.labels(LOCAL).inc();
         }
         return ValidationResult.invalid(
-            transactionAddedStatus
-                .getInvalidReason()
+            transactionAddedResult
+                .maybeInvalidReason()
                 .orElseGet(
                     () -> {
-                      LOG.warn("Missing invalid reason for status {}", transactionAddedStatus);
+                      LOG.warn("Missing invalid reason for status {}", transactionAddedResult);
                       return INTERNAL_ERROR;
                     }));
       }
@@ -164,27 +165,24 @@ public class TransactionPool implements BlockAddedObserver {
             "Discard transaction {} below min gas price {}",
             transaction::toTraceLog,
             miningParameters::getMinTransactionGasPrice);
-        pendingTransactions
-            .signalInvalidAndGetDependentTransactions(transaction)
-            .forEach(pendingTransactions::removeTransaction);
         continue;
       }
       final ValidationResultAndAccount validationResult = validateRemoteTransaction(transaction);
       if (validationResult.result.isValid()) {
-        final TransactionAddedStatus status =
+        final TransactionAddedResult status =
             pendingTransactions.addRemoteTransaction(transaction, validationResult.maybeAccount);
-        switch (status) {
-          case ADDED:
-          case POSTPONED:
-            traceLambda(LOG, "{} remote transaction {}", status::name, transaction::toTraceLog);
-            addedTransactions.add(transaction);
-            break;
-          case ALREADY_KNOWN:
-            traceLambda(LOG, "Duplicate remote transaction {}", transaction::toTraceLog);
-            duplicateTransactionCounter.labels(REMOTE).inc();
-            break;
-          default:
-            traceLambda(LOG, "Transaction added status {}", status::name);
+        if (status.equals(ADDED)) {
+          traceLambda(LOG, "Added remote transaction {}", transaction::toTraceLog);
+          addedTransactions.add(transaction);
+        } else if (status.equals(POSTPONED)) {
+          traceLambda(LOG, "Postponed remote transaction {}", transaction::toTraceLog);
+          addedTransactions.add(transaction);
+        } else if (status.equals(ALREADY_KNOWN)) {
+
+          traceLambda(LOG, "Duplicate remote transaction {}", transaction::toTraceLog);
+          duplicateTransactionCounter.labels(REMOTE).inc();
+        } else {
+          LOG.trace("Transaction added result {}", status);
         }
       } else {
         traceLambda(
@@ -192,9 +190,6 @@ public class TransactionPool implements BlockAddedObserver {
             "Discard invalid transaction {}, reason {}",
             transaction::toTraceLog,
             validationResult.result::getInvalidReason);
-        pendingTransactions
-            .signalInvalidAndGetDependentTransactions(transaction)
-            .forEach(pendingTransactions::removeTransaction);
       }
     }
     if (!addedTransactions.isEmpty()) {
@@ -204,7 +199,7 @@ public class TransactionPool implements BlockAddedObserver {
           "Added {} transactions to the pool, current pool stats {}, content {}",
           addedTransactions::size,
           pendingTransactions::logStats,
-          () -> pendingTransactions.toTraceLog(true, true));
+          () -> pendingTransactions.toTraceLog());
     }
   }
 
@@ -227,7 +222,8 @@ public class TransactionPool implements BlockAddedObserver {
   @Override
   public void onBlockAdded(final BlockAddedEvent event) {
     LOG.trace("Block added event {}", event);
-    event.getAddedTransactions().forEach(pendingTransactions::transactionAddedToBlock);
+//    event.getAddedTransactions().forEach(pendingTransactions::transactionAddedToBlock);
+    pendingTransactions.transactionsAddedToBlock(event.getAddedTransactions());
     pendingTransactions.manageBlockAdded(event.getBlock());
     var readdTransactions = event.getRemovedTransactions();
     if (!readdTransactions.isEmpty()) {

@@ -14,14 +14,12 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
-import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus.ADDED;
-import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus.LOWER_NONCE_INVALID_TRANSACTION_KNOWN;
-import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus.NONCE_TOO_FAR_IN_FUTURE_FOR_SENDER;
-import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus.POSTPONED;
-import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus.REJECTED_UNDERPRICED_REPLACEMENT;
-import static org.hyperledger.besu.util.Slf4jLambdaHelper.debugLambda;
+import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ADDED;
 import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+import java.util.Objects;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.AccountTransactionOrder;
@@ -31,7 +29,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionDroppedListener;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionListener;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.evm.account.Account;
@@ -43,8 +41,6 @@ import org.hyperledger.besu.plugin.services.metrics.LabelledMetric;
 import org.hyperledger.besu.util.Subscribers;
 
 import java.time.Clock;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -70,7 +66,7 @@ import org.slf4j.LoggerFactory;
  * <p>This class is safe for use across multiple threads.
  */
 public abstract class AbstractPendingTransactionsSorter {
-  private static final int DEFAULT_LOWEST_INVALID_KNOWN_NONCE_CACHE = 10_000;
+  //  private static final int DEFAULT_LOWEST_INVALID_KNOWN_NONCE_CACHE = 10_000;
   private static final Logger LOG =
       LoggerFactory.getLogger(AbstractPendingTransactionsSorter.class);
 
@@ -78,14 +74,12 @@ public abstract class AbstractPendingTransactionsSorter {
   protected final TransactionPoolConfiguration poolConfig;
 
   protected final Object lock = new Object();
-  protected final Map<Hash, PendingTransaction> pendingTransactions;
+  protected final Map<Hash, PendingTransaction> prioritizedPendingTransactions;
 
-  protected final Map<Address, PendingTransactionsForSender> transactionsBySender =
-      new ConcurrentHashMap<>();
+  protected final PendingTransactionsCache pendingTransactionsCache;
 
-  protected final LowestInvalidNonceCache lowestInvalidKnownNonceCache =
-      new LowestInvalidNonceCache(DEFAULT_LOWEST_INVALID_KNOWN_NONCE_CACHE);
-  protected final PostponedTransactionsCache postponedTransactionsCache;
+  //  protected final LowestInvalidNonceCache lowestInvalidKnownNonceCache =
+  //      new LowestInvalidNonceCache(DEFAULT_LOWEST_INVALID_KNOWN_NONCE_CACHE);
   protected final Subscribers<PendingTransactionListener> pendingTransactionSubscribers =
       Subscribers.create();
 
@@ -106,7 +100,7 @@ public abstract class AbstractPendingTransactionsSorter {
       final MetricsSystem metricsSystem,
       final Supplier<BlockHeader> chainHeadHeaderSupplier) {
     this.poolConfig = poolConfig;
-    this.pendingTransactions = new ConcurrentHashMap<>(poolConfig.getTxPoolMaxSize());
+    this.prioritizedPendingTransactions = new ConcurrentHashMap<>(poolConfig.getTxPoolMaxSize());
     this.clock = clock;
     this.chainHeadHeaderSupplier = chainHeadHeaderSupplier;
     this.transactionReplacementHandler =
@@ -139,18 +133,18 @@ public abstract class AbstractPendingTransactionsSorter {
         BesuMetricCategory.TRANSACTION_POOL,
         "transactions",
         "Current size of the transaction pool",
-        pendingTransactions::size);
+        prioritizedPendingTransactions::size);
 
-    this.postponedTransactionsCache =
-        new PostponedTransactionsCache(
-            transactionReplacementHandler, chainHeadHeaderSupplier, transactionReplacedCounter);
+    this.pendingTransactionsCache =
+        new PendingTransactionsCache(
+            poolConfig.getTxPoolMaxSize(), transactionReplacementHandler, chainHeadHeaderSupplier);
   }
 
   public void evictOldTransactions() {
     final Instant removeTransactionsBefore =
         clock.instant().minus(poolConfig.getPendingTxRetentionPeriod(), ChronoUnit.HOURS);
 
-    pendingTransactions.values().stream()
+    prioritizedPendingTransactions.values().stream()
         .filter(transaction -> transaction.getAddedToPoolAt().isBefore(removeTransactionsBefore))
         .forEach(
             transactionInfo -> {
@@ -160,37 +154,38 @@ public abstract class AbstractPendingTransactionsSorter {
   }
 
   public List<Transaction> getLocalTransactions() {
-    return pendingTransactions.values().stream()
+    return prioritizedPendingTransactions.values().stream()
         .filter(PendingTransaction::isReceivedFromLocalSource)
         .map(PendingTransaction::getTransaction)
         .collect(Collectors.toList());
   }
 
-  public TransactionAddedStatus addRemoteTransaction(
+  public TransactionAddedResult addRemoteTransaction(
       final Transaction transaction, final Optional<Account> maybeSenderAccount) {
 
-    if (lowestInvalidKnownNonceCache.hasInvalidLowerNonce(transaction)) {
-      debugLambda(
-          LOG,
-          "Dropping transaction {} since the sender has an invalid transaction with lower nonce",
-          transaction::toTraceLog);
-      return LOWER_NONCE_INVALID_TRANSACTION_KNOWN;
-    }
+    //    if (lowestInvalidKnownNonceCache.hasInvalidLowerNonce(transaction)) {
+    //      debugLambda(
+    //          LOG,
+    //          "Dropping transaction {} since the sender has an invalid transaction with lower
+    // nonce",
+    //          transaction::toTraceLog);
+    //      return LOWER_NONCE_INVALID_TRANSACTION_KNOWN;
+    //    }
 
     final PendingTransaction pendingTransaction =
         new PendingTransaction(transaction, false, clock.instant());
-    final TransactionAddedStatus transactionAddedStatus =
+    final TransactionAddedResult transactionAddedResult =
         addTransaction(pendingTransaction, maybeSenderAccount);
-    if (transactionAddedStatus.equals(ADDED)) {
-      lowestInvalidKnownNonceCache.registerValidTransaction(transaction);
+    if (transactionAddedResult.equals(ADDED)) {
+      //      lowestInvalidKnownNonceCache.registerValidTransaction(transaction);
       remoteTransactionAddedCounter.inc();
     }
-    return transactionAddedStatus;
+    return transactionAddedResult;
   }
 
-  public TransactionAddedStatus addLocalTransaction(
+  public TransactionAddedResult addLocalTransaction(
       final Transaction transaction, final Optional<Account> maybeSenderAccount) {
-    final TransactionAddedStatus transactionAdded =
+    final TransactionAddedResult transactionAdded =
         addTransaction(
             new PendingTransaction(transaction, true, clock.instant()), maybeSenderAccount);
     if (transactionAdded.equals(ADDED)) {
@@ -206,7 +201,25 @@ public abstract class AbstractPendingTransactionsSorter {
 
   public void transactionAddedToBlock(final Transaction transaction) {
     removeTransaction(transaction, true);
-    lowestInvalidKnownNonceCache.registerValidTransaction(transaction);
+    //    lowestInvalidKnownNonceCache.registerValidTransaction(transaction);
+  }
+
+  public void transactionsAddedToBlock(final List<Transaction> confirmedTransactions) {
+    synchronized (lock) {
+      final long prioritizedRemovedCount =
+          confirmedTransactions.stream()
+              .map(prioritizedPendingTransactions::remove)
+              .filter(Objects::nonNull)
+              .peek((PendingTransaction tx) -> {
+                removePrioritizedTransaction(tx);
+                incrementTransactionRemovedCounter(tx.isReceivedFromLocalSource(), true);
+              })
+              .count();
+
+      if(prioritizedRemovedCount > 0) {
+        List<PendingTransaction> promoteTransactions = pendingTransactionsCache.promote(confirmedTransactions);
+      }
+    }
   }
 
   private void incrementTransactionRemovedCounter(
@@ -247,8 +260,6 @@ public abstract class AbstractPendingTransactionsSorter {
           switch (result) {
             case DELETE_TRANSACTION_AND_CONTINUE:
               transactionsToRemove.add(transactionToProcess);
-              signalInvalidAndGetDependentTransactions(transactionToProcess)
-                  .forEach(transactionsToRemove::add);
               break;
             case CONTINUE:
               break;
@@ -266,69 +277,27 @@ public abstract class AbstractPendingTransactionsSorter {
 
   private AccountTransactionOrder createSenderTransactionOrder(final Address address) {
     return new AccountTransactionOrder(
-        transactionsBySender
-            .get(address)
-            .streamPendingTransactions()
+        pendingTransactionsCache
+            .streamReadyTransactions(address)
             .map(PendingTransaction::getTransaction));
   }
 
-  private TransactionAddedStatus addTransactionForSenderAndNonce(
-      final PendingTransaction pendingTransaction) {
+  private TransactionAddedResult addToCache(
+      final PendingTransaction pendingTransaction, final long senderNonce) {
 
-    PendingTransactionsForSender pendingTxsForSender =
-        transactionsBySender.computeIfAbsent(
-            pendingTransaction.getSender(), address -> new PendingTransactionsForSender());
+    var addResult = pendingTransactionsCache.add(pendingTransaction, senderNonce);
 
-    if (pendingTxsForSender.shouldPostpone(pendingTransaction)) {
-      traceLambda(LOG, "Postponing transaction {}", pendingTransaction::toTraceLog);
-      return postponedTransactionsCache.add(pendingTransaction);
-    }
-
-    Optional<PendingTransaction> maybeExistingPendingTx =
-        pendingTxsForSender.getPendingTransactionForNonce(pendingTransaction.getNonce());
-
-    if (maybeExistingPendingTx.isPresent()) {
-      final var existingPendingTx = maybeExistingPendingTx.get();
-      if (!transactionReplacementHandler.shouldReplace(
-          existingPendingTx, pendingTransaction, chainHeadHeaderSupplier.get())) {
-        traceLambda(
-            LOG, "Reject underpriced transaction replacement {}", pendingTransaction::toTraceLog);
-        return REJECTED_UNDERPRICED_REPLACEMENT;
-      }
+    if (addResult.isReplacement()) {
+      final var existingPendingTx = addResult.maybeReplacedTransaction().get();
       traceLambda(
           LOG,
           "Replace existing transaction {}, with new transaction {}",
           existingPendingTx::toTraceLog,
           pendingTransaction::toTraceLog);
-      pendingTxsForSender.replaceTrackedTransactionInfo(pendingTransaction);
       removeReplacedTransaction(existingPendingTx);
-    } else {
-      pendingTxsForSender.addTransactionToTrack(pendingTransaction);
-      traceLambda(LOG, "Tracked transaction by sender {}", pendingTxsForSender::toTraceLog);
     }
-    return ADDED;
-  }
 
-  private void removePendingTransactionBySenderAndNonce(
-      final PendingTransaction pendingTransaction) {
-    final Transaction transaction = pendingTransaction.getTransaction();
-    Optional.ofNullable(transactionsBySender.get(transaction.getSender()))
-        .ifPresent(
-            pendingTxsForSender -> {
-              pendingTxsForSender.removeTrackedPendingTransaction(pendingTransaction);
-              if (pendingTxsForSender.transactionCount() == 0) {
-                LOG.trace(
-                    "Removing sender {} from transactionBySender since no more tracked transactions",
-                    transaction.getSender());
-                transactionsBySender.remove(transaction.getSender());
-              } else {
-                traceLambda(
-                    LOG,
-                    "Tracked transaction by sender {} after the removal of {}",
-                    pendingTxsForSender::toTraceLog,
-                    transaction::toTraceLog);
-              }
-            });
+    return addResult;
   }
 
   private void notifyTransactionAdded(final Transaction transaction) {
@@ -344,20 +313,20 @@ public abstract class AbstractPendingTransactionsSorter {
   }
 
   public int size() {
-    return pendingTransactions.size();
+    return prioritizedPendingTransactions.size();
   }
 
   public boolean containsTransaction(final Hash transactionHash) {
-    return pendingTransactions.containsKey(transactionHash);
+    return prioritizedPendingTransactions.containsKey(transactionHash);
   }
 
   public Optional<Transaction> getTransactionByHash(final Hash transactionHash) {
-    return Optional.ofNullable(pendingTransactions.get(transactionHash))
+    return Optional.ofNullable(prioritizedPendingTransactions.get(transactionHash))
         .map(PendingTransaction::getTransaction);
   }
 
-  public Set<PendingTransaction> getPendingTransactions() {
-    return new HashSet<>(pendingTransactions.values());
+  public Set<PendingTransaction> getPrioritizedPendingTransactions() {
+    return new HashSet<>(prioritizedPendingTransactions.values());
   }
 
   public long subscribePendingTransactions(final PendingTransactionListener listener) {
@@ -377,28 +346,25 @@ public abstract class AbstractPendingTransactionsSorter {
   }
 
   public OptionalLong getNextNonceForSender(final Address sender) {
-    final PendingTransactionsForSender pendingTransactionsForSender =
-        transactionsBySender.get(sender);
-    return pendingTransactionsForSender == null
-        ? OptionalLong.empty()
-        : pendingTransactionsForSender.maybeNextNonce();
+    return pendingTransactionsCache.getNextReadyNonce(sender);
   }
 
   public abstract void manageBlockAdded(final Block block);
 
   private void removeTransaction(final Transaction transaction, final boolean addedToBlock) {
-    final PendingTransaction removedPendingTx = pendingTransactions.remove(transaction.getHash());
+    final PendingTransaction removedPendingTx =
+        prioritizedPendingTransactions.remove(transaction.getHash());
     if (removedPendingTx != null) {
       removePrioritizedTransaction(removedPendingTx);
-      removePendingTransactionBySenderAndNonce(removedPendingTx);
       incrementTransactionRemovedCounter(
           removedPendingTx.isReceivedFromLocalSource(), addedToBlock);
     }
+    pendingTransactionsCache.remove(transaction);
   }
 
   private void removeReplacedTransaction(final PendingTransaction pendingTransaction) {
     final PendingTransaction removedPendingTransaction =
-        pendingTransactions.remove(pendingTransaction.getHash());
+        prioritizedPendingTransactions.remove(pendingTransaction.getHash());
     if (removedPendingTransaction != null) {
       removePrioritizedTransaction(removedPendingTransaction);
     }
@@ -411,65 +377,47 @@ public abstract class AbstractPendingTransactionsSorter {
 
   protected abstract void prioritizeTransaction(final PendingTransaction pendingTransaction);
 
-  private TransactionAddedStatus addTransaction(
+  private TransactionAddedResult addTransaction(
       final PendingTransaction pendingTransaction, final Optional<Account> maybeSenderAccount) {
-    final Transaction transaction = pendingTransaction.getTransaction();
     synchronized (lock) {
-      if (pendingTransactions.containsKey(pendingTransaction.getHash())) {
-        traceLambda(LOG, "Already known transaction {}", pendingTransaction::toTraceLog);
-        return TransactionAddedStatus.ALREADY_KNOWN;
-      }
+      final long senderNonce = maybeSenderAccount.map(AccountState::getNonce).orElse(0L);
 
-      if (transaction.getNonce() - maybeSenderAccount.map(AccountState::getNonce).orElse(0L)
-          >= poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
-        traceLambda(
-            LOG,
-            "Transaction {} not added because nonce too far in the future for sender {}",
-            transaction::toTraceLog,
-            maybeSenderAccount::toString);
-        return NONCE_TOO_FAR_IN_FUTURE_FOR_SENDER;
-      }
+      var addResult = pendingTransactionsCache.add(pendingTransaction, senderNonce);
 
-      final TransactionAddedStatus transactionAddedStatus =
-          addTransactionForSenderAndNonce(pendingTransaction);
+      if (addResult.equals(ADDED) || addResult.isReplacement()) {
+        addResult
+            .maybeReplacedTransaction()
+            .ifPresent(
+                replacedTx -> {
+                  traceLambda(
+                      LOG,
+                      "Replace existing transaction {}, with new transaction {}",
+                      replacedTx::toTraceLog,
+                      pendingTransaction::toTraceLog);
+                  removeReplacedTransaction(replacedTx);
+                });
 
-      if (transactionAddedStatus.equals(ADDED)) {
+        var nonceDistance = pendingTransaction.getNonce() - senderNonce;
 
-        pendingTransactions.put(pendingTransaction.getHash(), pendingTransaction);
-        prioritizeTransaction(pendingTransaction);
-        notifyTransactionAdded(transaction);
-        traceLambda(LOG, "Transaction prioritized {}", pendingTransaction::toTraceLog);
-
-        if (pendingTransactions.size() > poolConfig.getTxPoolMaxSize()) {
-          demoteTransactions(getLeastPriorityTransaction());
+        if (nonceDistance >= poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
+          traceLambda(
+              LOG,
+              "Transaction {} not prioritized now because nonce too far in the future for sender {}",
+              pendingTransaction.getTransaction()::toTraceLog,
+              maybeSenderAccount::toString);
+        } else {
+          prioritizedPendingTransactions.put(pendingTransaction.getHash(), pendingTransaction);
+          prioritizeTransaction(pendingTransaction);
+          notifyTransactionAdded(pendingTransaction.getTransaction());
+          traceLambda(LOG, "Transaction prioritized {}", pendingTransaction::toTraceLog);
         }
-      } else if (transactionAddedStatus.equals(POSTPONED)) {
-        notifyTransactionAdded(transaction);
-        traceLambda(LOG, "Transaction postponed {}", pendingTransaction::toTraceLog);
-      } else {
-        traceLambda(
-            LOG,
-            "Transaction {}, not added with status {}",
-            pendingTransaction::toTraceLog,
-            transactionAddedStatus::name);
       }
-      return transactionAddedStatus;
+
+      return addResult;
     }
   }
 
   protected abstract PendingTransaction getLeastPriorityTransaction();
-
-  private void demoteTransactions(final PendingTransaction leastPriorityTx) {
-    // postpone all txs for this sender with nonce >= the least priority one to avoid gaps
-    final var txForSender = transactionsBySender.get(leastPriorityTx.getSender());
-    final var txToDemote = txForSender.getPendingTransactions(leastPriorityTx.getNonce());
-
-    // remove backward to avoid gaps
-    for (int i = txToDemote.size() - 1; i >= 0; i--) {
-      removeTransaction(txToDemote.get(i).getTransaction());
-    }
-    txToDemote.forEach(postponedTransactionsCache::add);
-  }
 
   //  private void evictLessPriorityTransactions() {
   //    final PendingTransaction leastPriorityTx = getLeastPriorityTransaction();
@@ -484,12 +432,11 @@ public abstract class AbstractPendingTransactionsSorter {
   //    }
   //  }
 
-  public String toTraceLog(
-      final boolean withTransactionsBySender, final boolean withLowestInvalidNonce) {
+  public String toTraceLog() {
     synchronized (lock) {
       StringBuilder sb =
           new StringBuilder(
-              "Transactions in order { "
+              "Prioritized transactions { "
                   + StreamSupport.stream(
                           Spliterators.spliteratorUnknownSize(
                               prioritizedTransactions(), Spliterator.ORDERED),
@@ -498,50 +445,37 @@ public abstract class AbstractPendingTransactionsSorter {
                       .collect(Collectors.joining("; "))
                   + " }");
 
-      if (withTransactionsBySender) {
-        sb.append(
-            ", Transactions by sender { "
-                + transactionsBySender.entrySet().stream()
-                    .map(e -> "(" + e.getKey() + ") " + e.getValue().toTraceLog())
-                    .collect(Collectors.joining("; "))
-                + " }");
-      }
-      if (withLowestInvalidNonce) {
-        sb.append(
-            ", Lowest invalid nonce by sender cache {"
-                + lowestInvalidKnownNonceCache.toTraceLog()
-                + "}");
-      }
       return sb.toString();
     }
   }
-
-  public List<Transaction> signalInvalidAndGetDependentTransactions(final Transaction transaction) {
-    final long invalidNonce = lowestInvalidKnownNonceCache.registerInvalidTransaction(transaction);
-
-    PendingTransactionsForSender txsForSender = transactionsBySender.get(transaction.getSender());
-    if (txsForSender != null) {
-      return txsForSender
-          .streamPendingTransactions()
-          .filter(pendingTx -> pendingTx.getTransaction().getNonce() > invalidNonce)
-          .peek(
-              pendingTx ->
-                  traceLambda(
-                      LOG,
-                      "Transaction {} piked since there is a lowest invalid nonce {} for the sender",
-                      pendingTx::toTraceLog,
-                      () -> invalidNonce))
-          .map(PendingTransaction::getTransaction)
-          .collect(Collectors.toList());
-    }
-    return List.of();
-  }
+  //
+  //  public List<Transaction> signalInvalidAndGetDependentTransactions(final Transaction
+  // transaction) {
+  //    final long invalidNonce =
+  // lowestInvalidKnownNonceCache.registerInvalidTransaction(transaction);
+  //
+  //    PendingTransactionsCache txsForSender =
+  // pendingTransactionsCache.remove(transaction.getSender());
+  //    if (txsForSender != null) {
+  //      return txsForSender
+  //          .streamPendingTransactions()
+  //          .filter(pendingTx -> pendingTx.getTransaction().getNonce() > invalidNonce)
+  //          .peek(
+  //              pendingTx ->
+  //                  traceLambda(
+  //                      LOG,
+  //                      "Transaction {} piked since there is a lowest invalid nonce {} for the
+  // sender",
+  //                      pendingTx::toTraceLog,
+  //                      () -> invalidNonce))
+  //          .map(PendingTransaction::getTransaction)
+  //          .collect(Collectors.toList());
+  //    }
+  //    return List.of();
+  //  }
 
   public String logStats() {
-    return "Ready "
-        + pendingTransactions.size()
-        + ", Postponed "
-        + postponedTransactionsCache.size();
+    return "Ready " + prioritizedPendingTransactions.size();
   }
 
   public enum TransactionSelectionResult {

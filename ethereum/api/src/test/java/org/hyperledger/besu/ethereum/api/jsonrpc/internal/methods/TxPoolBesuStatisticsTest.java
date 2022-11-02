@@ -61,7 +61,7 @@ public class TxPoolBesuStatisticsTest {
     final PendingTransaction secondLocal = createTransactionInfo(true);
     final PendingTransaction remote = createTransactionInfo(false);
     when(pendingTransactions.maxSize()).thenReturn(123L);
-    when(pendingTransactions.getPendingTransactions())
+    when(pendingTransactions.getPrioritizedPendingTransactions())
         .thenReturn(Sets.newHashSet(local, secondLocal, remote));
 
     final JsonRpcSuccessResponse actualResponse = (JsonRpcSuccessResponse) method.response(request);

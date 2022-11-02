@@ -59,7 +59,7 @@ public class TransactionBroadcaster implements TransactionBatchAddedListener {
 
   public void relayTransactionPoolTo(final EthPeer peer) {
     Set<PendingTransaction> pendingPendingTransaction =
-        pendingTransactions.getPendingTransactions();
+        pendingTransactions.getPrioritizedPendingTransactions();
     if (!pendingPendingTransaction.isEmpty()) {
       if (peer.hasSupportForMessage(EthPV65.NEW_POOLED_TRANSACTION_HASHES)) {
         sendTransactionHashes(toTransactionList(pendingPendingTransaction), List.of(peer));

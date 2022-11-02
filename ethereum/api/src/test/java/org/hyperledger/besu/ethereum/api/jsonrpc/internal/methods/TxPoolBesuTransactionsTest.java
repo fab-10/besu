@@ -68,7 +68,7 @@ public class TxPoolBesuTransactionsTest {
     when(pendingTransaction.getHash()).thenReturn(Hash.fromHexString(TRANSACTION_HASH));
     when(pendingTransaction.isReceivedFromLocalSource()).thenReturn(true);
     when(pendingTransaction.getAddedToPoolAt()).thenReturn(addedAt);
-    when(pendingTransactions.getPendingTransactions())
+    when(pendingTransactions.getPrioritizedPendingTransactions())
         .thenReturn(Sets.newHashSet(pendingTransaction));
 
     final JsonRpcSuccessResponse actualResponse = (JsonRpcSuccessResponse) method.response(request);

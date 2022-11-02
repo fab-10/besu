@@ -14,17 +14,19 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
-import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus.POSTPONED;
-import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus.REJECTED_UNDERPRICED_REPLACEMENT;
+import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.POSTPONED;
+import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.REJECTED_UNDERPRICED_REPLACEMENT;
 
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedStatus;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
 import org.hyperledger.besu.plugin.services.metrics.LabelledMetric;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.function.Supplier;
 
 import com.google.common.collect.HashBasedTable;
@@ -37,6 +39,7 @@ class PostponedTransactionsCache {
   private final Supplier<BlockHeader> chainHeadHeaderSupplier;
   private final Table<Address, Long, PendingTransaction> postponedTransactions =
       HashBasedTable.create();
+  private final Map<Address, Long> nonceGap = new HashMap<>();
   final LabelledMetric<Counter> transactionReplacedCounter;
 
   public PostponedTransactionsCache(
@@ -48,7 +51,8 @@ class PostponedTransactionsCache {
     this.transactionReplacedCounter = transactionReplacedCounter;
   }
 
-  TransactionAddedStatus add(final PendingTransaction pendingTransaction) {
+  TransactionAddedResult add(
+      final PendingTransaction pendingTransaction, final long nonceDistance) {
     final Address sender = pendingTransaction.getSender();
     final long nonce = pendingTransaction.getNonce();
 
@@ -62,6 +66,8 @@ class PostponedTransactionsCache {
     }
 
     postponedTransactions.put(sender, nonce, pendingTransaction);
+    nonceGap.merge(
+        sender, nonceDistance, (prevDistance, newDistance) -> Math.min(prevDistance, newDistance));
     return POSTPONED;
   }
 

@@ -143,7 +143,7 @@ public abstract class AbstractEthGraphQLHttpServiceTest {
     final GasPricePendingTransactionsSorter pendingTransactionsMock =
         Mockito.mock(GasPricePendingTransactionsSorter.class);
     Mockito.when(transactionPoolMock.getPendingTransactions()).thenReturn(pendingTransactionsMock);
-    Mockito.when(pendingTransactionsMock.getPendingTransactions())
+    Mockito.when(pendingTransactionsMock.getPrioritizedPendingTransactions())
         .thenReturn(
             Collections.singleton(
                 new PendingTransaction(
