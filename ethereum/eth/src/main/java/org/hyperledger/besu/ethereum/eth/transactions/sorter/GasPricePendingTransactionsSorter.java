@@ -16,14 +16,17 @@ package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
 import static java.util.Comparator.comparing;
 
-import java.util.Comparator;
+import java.util.function.Predicate;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
+import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.time.Clock;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.NavigableSet;
 import java.util.TreeSet;
@@ -57,7 +60,7 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
   }
 
   @Override
-  public void manageBlockAdded(final Block block) {
+  public void manageBlockAdded(final Block block, final FeeMarket feeMarket) {
     // nothing to do
   }
 
@@ -84,5 +87,10 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
   @Override
   protected Comparator<PendingTransaction> getComparatorByValue() {
     return compareByValue;
+  }
+
+  @Override
+  protected Predicate<PendingTransaction> getPromotionFilter() {
+    return pt -> true;
   }
 }

@@ -17,8 +17,6 @@ package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ADDED;
 import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
 
-import java.util.Comparator;
-import java.util.function.Predicate;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.AccountTransactionOrder;
@@ -31,6 +29,8 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionListener
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
+import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.evm.account.AccountState;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
@@ -42,6 +42,7 @@ import org.hyperledger.besu.util.Subscribers;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -54,6 +55,7 @@ import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
@@ -92,6 +94,8 @@ public abstract class AbstractPendingTransactionsSorter {
 
   protected final TransactionPoolReplacementHandler transactionReplacementHandler;
   protected final Supplier<BlockHeader> chainHeadHeaderSupplier;
+
+  private final Set<Address> localSenders = ConcurrentHashMap.newKeySet();
 
   public AbstractPendingTransactionsSorter(
       final TransactionPoolConfiguration poolConfig,
@@ -180,6 +184,7 @@ public abstract class AbstractPendingTransactionsSorter {
         addTransaction(
             new PendingTransaction(transaction, true, clock.instant()), maybeSenderAccount);
     if (transactionAdded.equals(ADDED)) {
+      localSenders.add(transaction.getSender());
       localTransactionAddedCounter.inc();
     }
     return transactionAdded;
@@ -205,15 +210,12 @@ public abstract class AbstractPendingTransactionsSorter {
               .count();
 
       if (prioritizedRemovedCount > 0) {
-        final Predicate<PendingTransaction> promotionFilter =
-            promotableTx ->
-                getComparatorByValue().compare(promotableTx, getLeastPriorityTransaction()) > 0;
-
         final int maxPromotable =
             poolConfig.getTxPoolMaxSize() - prioritizedPendingTransactions.size();
 
         final List<PendingTransaction> promoteTransactions =
-            pendingTransactionsCache.promote(confirmedTransactions, maxPromotable, getComparatorByValue());
+            pendingTransactionsCache.promote(
+                confirmedTransactions, maxPromotable, getPromotionFilter());
 
         promoteTransactions.forEach(this::addPrioritizedTransaction);
       }
@@ -347,7 +349,7 @@ public abstract class AbstractPendingTransactionsSorter {
     return pendingTransactionsCache.getNextReadyNonce(sender);
   }
 
-  public abstract void manageBlockAdded(final Block block);
+  public abstract void manageBlockAdded(final Block block, final FeeMarket feeMarket);
 
   private void removeTransaction(final Transaction transaction, final boolean addedToBlock) {
     final PendingTransaction removedPendingTx =
@@ -430,6 +432,8 @@ public abstract class AbstractPendingTransactionsSorter {
 
   protected abstract Comparator<PendingTransaction> getComparatorByValue();
 
+  protected abstract Predicate<PendingTransaction> getPromotionFilter();
+
   public String toTraceLog() {
     synchronized (lock) {
       StringBuilder sb =
@@ -449,6 +453,10 @@ public abstract class AbstractPendingTransactionsSorter {
 
   public String logStats() {
     return "Ready " + prioritizedPendingTransactions.size();
+  }
+
+  public boolean isLocalSender(final Address sender) {
+    return localSenders.contains(sender);
   }
 
   public enum TransactionSelectionResult {

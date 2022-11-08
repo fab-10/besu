@@ -101,7 +101,7 @@ public class EthGetFilterChangesIntegrationTest {
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(MAX_TRANSACTIONS).build(),
             TestClock.fixed(),
             metricsSystem,
-            blockchain::getChainHeadHeader);
+            blockchain::getChainHeadHeader, baseFeeMarket);
     final ProtocolContext protocolContext = executionContext.getProtocolContext();
 
     EthContext ethContext = mock(EthContext.class);

@@ -18,12 +18,15 @@ import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.toUnmodifiableList;
 import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
 
+import java.util.function.Predicate;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.mainnet.feemarket.BaseFeeMarket;
+import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.time.Clock;
@@ -48,12 +51,15 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseFeePendingTransactionsSorter.class);
 
-  private Optional<Wei> baseFee;
+  private Optional<Wei> nextBlockBaseFee;
 
   private final Comparator<PendingTransaction> compareByValue =
       Comparator.comparing(
           txInfo ->
-              txInfo.getTransaction().getEffectivePriorityFeePerGas(baseFee).getAsBigInteger());
+              txInfo
+                  .getTransaction()
+                  .getEffectivePriorityFeePerGas(nextBlockBaseFee)
+                  .getAsBigInteger());
 
   /**
    * See this post for an explainer about these data structures:
@@ -93,14 +99,28 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
-      final Supplier<BlockHeader> chainHeadHeaderSupplier) {
+      final Supplier<BlockHeader> chainHeadHeaderSupplier,
+      BaseFeeMarket baseFeeMarket) {
     super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier);
-    this.baseFee = chainHeadHeaderSupplier.get().getBaseFee();
+    this.nextBlockBaseFee =
+        Optional.of(calculateNextBlockBaseFee(baseFeeMarket, chainHeadHeaderSupplier.get()));
   }
 
   @Override
-  public void manageBlockAdded(final Block block) {
-    block.getHeader().getBaseFee().ifPresent(this::updateBaseFee);
+  public void manageBlockAdded(final Block block, final FeeMarket feeMarket) {
+    final BlockHeader blockHeader = block.getHeader();
+    final BaseFeeMarket baseFeeMarket = (BaseFeeMarket) feeMarket;
+    final Wei newNextBlockBaseFee = calculateNextBlockBaseFee(baseFeeMarket, blockHeader);
+    updateBaseFee(newNextBlockBaseFee);
+  }
+
+  private Wei calculateNextBlockBaseFee(
+      final BaseFeeMarket baseFeeMarket, final BlockHeader blockHeader) {
+    return baseFeeMarket.computeBaseFee(
+        blockHeader.getNumber() + 1,
+        blockHeader.getBaseFee().orElse(Wei.ZERO),
+        blockHeader.getGasUsed(),
+        baseFeeMarket.targetGasUsed(blockHeader));
   }
 
   @Override
@@ -161,12 +181,12 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
               currentDynamicRangeTransaction
                   .get()
                   .getTransaction()
-                  .getEffectivePriorityFeePerGas(baseFee);
+                  .getEffectivePriorityFeePerGas(nextBlockBaseFee);
           final Wei staticRangeEffectivePriorityFee =
               currentStaticRangeTransaction
                   .get()
                   .getTransaction()
-                  .getEffectivePriorityFeePerGas(baseFee);
+                  .getEffectivePriorityFeePerGas(nextBlockBaseFee);
           final PendingTransaction best;
           if (dynamicRangeEffectivePriorityFee.compareTo(staticRangeEffectivePriorityFee) > 0) {
             best = currentDynamicRangeTransaction.get();
@@ -192,7 +212,7 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
   protected void prioritizeTransaction(final PendingTransaction pendingTransaction) {
     // check if it's in static or dynamic range
     final String kind;
-    if (isInStaticRange(pendingTransaction.getTransaction(), baseFee)) {
+    if (isInStaticRange(pendingTransaction.getTransaction(), nextBlockBaseFee)) {
       kind = "static";
       prioritizedTransactionsStaticRange.add(pendingTransaction);
     } else {
@@ -232,6 +252,19 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
     return compareByValue;
   }
 
+  @Override
+  protected Predicate<PendingTransaction> getPromotionFilter() {
+    return pendingTransaction ->
+        nextBlockBaseFee
+            .map(
+                baseFee ->
+                    pendingTransaction
+                        .getTransaction()
+                        .getEffectiveGasPrice(nextBlockBaseFee)
+                        .greaterOrEqualThan(baseFee))
+            .orElse(false);
+  }
+
   private boolean isInStaticRange(final Transaction transaction, final Optional<Wei> baseFee) {
     return transaction
         .getMaxPriorityFeePerGas()
@@ -248,21 +281,22 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
     traceLambda(
         LOG,
         "Updating base fee from {} to {}",
-        this.baseFee::toString,
+        this.nextBlockBaseFee::toString,
         newBaseFee::toShortHexString);
-    if (this.baseFee.orElse(Wei.ZERO).equals(newBaseFee)) {
+    if (this.nextBlockBaseFee.orElse(Wei.ZERO).equals(newBaseFee)) {
       return;
     }
     synchronized (lock) {
-      final boolean baseFeeIncreased = newBaseFee.compareTo(this.baseFee.orElse(Wei.ZERO)) > 0;
-      this.baseFee = Optional.of(newBaseFee);
+      final boolean baseFeeIncreased =
+          newBaseFee.compareTo(this.nextBlockBaseFee.orElse(Wei.ZERO)) > 0;
+      this.nextBlockBaseFee = Optional.of(newBaseFee);
       if (baseFeeIncreased) {
         // base fee increases can only cause transactions to go from static to dynamic range
         prioritizedTransactionsStaticRange.stream()
             .filter(
                 // these are the transactions whose effective priority fee have now dropped
                 // below their max priority fee
-                pendingTx -> !isInStaticRange(pendingTx.getTransaction(), baseFee))
+                pendingTx -> !isInStaticRange(pendingTx.getTransaction(), nextBlockBaseFee))
             .collect(toUnmodifiableList())
             .forEach(
                 pendingTx -> {
@@ -279,7 +313,7 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
             .filter(
                 // these are the transactions whose effective priority fee are now above their
                 // max priority fee
-                pendingTx -> isInStaticRange(pendingTx.getTransaction(), baseFee))
+                pendingTx -> isInStaticRange(pendingTx.getTransaction(), nextBlockBaseFee))
             .collect(toUnmodifiableList())
             .forEach(
                 pendingTx -> {

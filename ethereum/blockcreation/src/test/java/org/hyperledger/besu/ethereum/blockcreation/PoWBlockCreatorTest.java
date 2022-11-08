@@ -99,7 +99,8 @@ public class PoWBlockCreatorTest {
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
             TestClock.fixed(),
             metricsSystem,
-            executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader);
+            executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader,
+            baseFeeMarket);
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(
@@ -161,7 +162,8 @@ public class PoWBlockCreatorTest {
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
             TestClock.fixed(),
             metricsSystem,
-            executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader);
+            executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader,
+            baseFeeMarket);
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(
@@ -215,7 +217,8 @@ public class PoWBlockCreatorTest {
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
             TestClock.fixed(),
             metricsSystem,
-            executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader);
+            executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader,
+            baseFeeMarket);
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(
@@ -285,7 +288,8 @@ public class PoWBlockCreatorTest {
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
             TestClock.fixed(),
             metricsSystem,
-            executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader);
+            executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader,
+            baseFeeMarket);
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(

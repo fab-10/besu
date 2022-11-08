@@ -41,7 +41,6 @@ import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolCo
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionDroppedListener;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionListener;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.metrics.StubMetricsSystem;
 import org.hyperledger.besu.testutil.TestClock;
@@ -300,7 +299,7 @@ public abstract class AbstractPendingTransactionsTestBase {
 
     transactions.subscribeDroppedTransactions(droppedListener);
 
-    transactions.transactionAddedToBlock(transaction1);
+    transactions.transactionsAddedToBlock(List.of(transaction1));
 
     verifyNoInteractions(droppedListener);
   }

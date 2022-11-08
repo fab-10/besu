@@ -22,11 +22,6 @@ import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedRes
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ALREADY_KNOWN;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.POSTPONED;
 
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.NavigableMap;
-import java.util.Set;
-import java.util.function.Predicate;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -35,17 +30,21 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.NavigableMap;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 public class PendingTransactionsCache {
@@ -170,7 +169,7 @@ public class PendingTransactionsCache {
   public List<PendingTransaction> promote(
       final List<Transaction> confirmedTransactions,
       final int maxPromotable,
-      final Comparator<PendingTransaction> comparator) {
+      final Predicate<PendingTransaction> promotionFilter) {
 
     List<PendingTransaction> promotableTxs = new ArrayList<>(maxPromotable);
     // get confirmed tx with max nonce by sender
@@ -198,7 +197,7 @@ public class PendingTransactionsCache {
       }
     }
 
-    // if there is still space pick other ready senders
+    // if there is still space pick other ready transactions
     final int maxRemaining = maxPromotable - promotableTxs.size();
     if (maxRemaining > 0) {
       promotableTxs.addAll(promoteReady(confirmedBySender.keySet(), maxRemaining, promotionFilter));
@@ -207,7 +206,7 @@ public class PendingTransactionsCache {
     return promotableTxs;
   }
 
-  private static Map<Address, Optional<Long>> maxConfirmedNonceBySender(
+  private Map<Address, Optional<Long>> maxConfirmedNonceBySender(
       List<Transaction> confirmedTransactions) {
     return confirmedTransactions.stream()
         .collect(
@@ -219,7 +218,9 @@ public class PendingTransactionsCache {
       final Set<Address> skipSenders,
       final int maxRemaining,
       final Predicate<PendingTransaction> promotionFilter) {
+
     List<PendingTransaction> promotedTxs = new ArrayList<>(maxRemaining);
+
     for (var senderEntry : readyBySender.entrySet()) {
       if (!skipSenders.contains(senderEntry.getKey())) {
         final int maxForSender = maxRemaining - promotedTxs.size();
@@ -242,6 +243,7 @@ public class PendingTransactionsCache {
 
     final int maxForThisSender = Math.min(maxPromotablePerSender, maxRemaining);
     List<PendingTransaction> promotableTxs = new ArrayList<>(maxForThisSender);
+
     while (!senderTxs.isEmpty() && promotableTxs.size() < maxForThisSender) {
       var promotableEntry = senderTxs.firstEntry();
       if (promotionFilter.test(promotableEntry.getValue())) {
@@ -262,7 +264,9 @@ public class PendingTransactionsCache {
       final Address sender,
       final NavigableMap<Long, PendingTransaction> senderTxs,
       final long maxNonce) {
+
     var postponedSenderTxs = postponedBySender.get(sender);
+
     if (postponedSenderTxs != null) {
       long expectedNonce = maxNonce + 1;
       while (!postponedSenderTxs.isEmpty() && postponedSenderTxs.firstKey() == expectedNonce) {

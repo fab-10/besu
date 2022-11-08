@@ -68,7 +68,7 @@ public class PendingMultiTypesTransactionsTest {
               .build(),
           TestClock.system(ZoneId.systemDefault()),
           metricsSystem,
-          () -> mockBlockHeader(Wei.of(7L)));
+          () -> mockBlockHeader(Wei.of(7L)), baseFeeMarket);
 
   @Test
   public void shouldReturnExclusivelyLocal1559TransactionsWhenAppropriate() {

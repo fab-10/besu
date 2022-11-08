@@ -14,6 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions;
 
+import java.util.stream.Collectors;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
@@ -25,6 +26,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTrans
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
+import org.hyperledger.besu.ethereum.mainnet.feemarket.BaseFeeMarket;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
@@ -169,11 +171,22 @@ public class TransactionPoolFactory {
             .map(ProtocolSpec::getFeeMarket)
             .anyMatch(FeeMarket::implementsBaseFee);
     if (isFeeMarketImplementBaseFee) {
+      final BaseFeeMarket baseFeeMarket =
+          protocolSchedule
+              .streamMilestoneBlocks()
+              .map(protocolSchedule::getByBlockNumber)
+              .map(ProtocolSpec::getFeeMarket)
+              .filter(FeeMarket::implementsBaseFee)
+              .map(BaseFeeMarket.class::cast)
+              .reduce((a, b) -> b)
+              .get();
+
       return new BaseFeePendingTransactionsSorter(
           transactionPoolConfiguration,
           clock,
           metricsSystem,
-          protocolContext.getBlockchain()::getChainHeadHeader);
+          protocolContext.getBlockchain()::getChainHeadHeader,
+          baseFeeMarket);
     } else {
       return new GasPricePendingTransactionsSorter(
           transactionPoolConfiguration,

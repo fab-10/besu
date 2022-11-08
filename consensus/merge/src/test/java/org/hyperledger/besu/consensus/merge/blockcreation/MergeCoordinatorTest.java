@@ -142,7 +142,7 @@ public class MergeCoordinatorTest implements MergeGenesisConfigHelper {
               .build(),
           TestClock.system(ZoneId.systemDefault()),
           metricsSystem,
-          MergeCoordinatorTest::mockBlockHeader);
+          MergeCoordinatorTest::mockBlockHeader, baseFeeMarket);
 
   CompletableFuture<Void> blockCreationTask = CompletableFuture.completedFuture(null);
 
