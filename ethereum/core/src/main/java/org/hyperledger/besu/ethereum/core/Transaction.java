@@ -630,13 +630,15 @@ public class Transaction
    * @return the up-front cost for the gas the transaction can use.
    */
   public Wei getUpfrontGasCost() {
-    return getUpfrontGasCost(
-        Stream.concat(maxFeePerGas.stream(), gasPrice.stream())
-            .findFirst()
-            .orElseThrow(
-                () ->
-                    new IllegalStateException(
-                        String.format("Transaction requires either gasPrice or maxFeePerGas"))));
+    return getUpfrontGasCost(getMaxGasFee());
+  }
+
+  public Wei getMaxGasFee() {
+    return maxFeePerGas.orElse(
+        gasPrice.orElseThrow(
+            () ->
+                new IllegalStateException(
+                    String.format("Transaction requires either gasPrice or maxFeePerGas"))));
   }
 
   /**

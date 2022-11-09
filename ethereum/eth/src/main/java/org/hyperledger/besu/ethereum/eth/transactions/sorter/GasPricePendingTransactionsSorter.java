@@ -39,6 +39,8 @@ import java.util.function.Supplier;
  * <p>This class is safe for use across multiple threads.
  */
 public class GasPricePendingTransactionsSorter extends AbstractPendingTransactionsSorter {
+  private final static Comparator<PendingTransaction> compareByValue =
+      Comparator.comparing(PendingTransaction::getGasPrice);
 
   private final NavigableSet<PendingTransaction> prioritizedTransactions =
       new TreeSet<>(
@@ -47,9 +49,6 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
               .thenComparing(PendingTransaction::getAddedToPoolAt)
               .thenComparing(PendingTransaction::getSequence)
               .reversed());
-
-  private final Comparator<PendingTransaction> compareByValue =
-      Comparator.comparing(PendingTransaction::getGasPrice);
 
   public GasPricePendingTransactionsSorter(
       final TransactionPoolConfiguration poolConfig,

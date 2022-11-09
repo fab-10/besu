@@ -29,7 +29,6 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionListener
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.evm.account.AccountState;
@@ -139,10 +138,7 @@ public abstract class AbstractPendingTransactionsSorter {
 
     this.pendingTransactionsCache =
         new PendingTransactionsCache(
-            poolConfig.getTxPoolMaxSize(),
-            poolConfig.getTxPoolMaxFutureTransactionByAccount(),
-            transactionReplacementHandler,
-            chainHeadHeaderSupplier);
+            poolConfig, transactionReplacementHandler, chainHeadHeaderSupplier);
   }
 
   public void evictOldTransactions() {
@@ -282,23 +278,23 @@ public abstract class AbstractPendingTransactionsSorter {
             .map(PendingTransaction::getTransaction));
   }
 
-  private TransactionAddedResult addToCache(
-      final PendingTransaction pendingTransaction, final long senderNonce) {
-
-    var addResult = pendingTransactionsCache.add(pendingTransaction, senderNonce);
-
-    if (addResult.isReplacement()) {
-      final var existingPendingTx = addResult.maybeReplacedTransaction().get();
-      traceLambda(
-          LOG,
-          "Replace existing transaction {}, with new transaction {}",
-          existingPendingTx::toTraceLog,
-          pendingTransaction::toTraceLog);
-      removeReplacedTransaction(existingPendingTx);
-    }
-
-    return addResult;
-  }
+  //  private TransactionAddedResult addToCache(
+  //      final PendingTransaction pendingTransaction, final long senderNonce) {
+  //
+  //    var addResult = pendingTransactionsCache.add(pendingTransaction, senderNonce);
+  //
+  //    if (addResult.isReplacement()) {
+  //      final var existingPendingTx = addResult.maybeReplacedTransaction().get();
+  //      traceLambda(
+  //          LOG,
+  //          "Replace existing transaction {}, with new transaction {}",
+  //          existingPendingTx::toTraceLog,
+  //          pendingTransaction::toTraceLog);
+  //      removeReplacedTransaction(existingPendingTx);
+  //    }
+  //
+  //    return addResult;
+  //  }
 
   private void notifyTransactionAdded(final Transaction transaction) {
     pendingTransactionSubscribers.forEach(listener -> listener.onTransactionAdded(transaction));
@@ -362,7 +358,7 @@ public abstract class AbstractPendingTransactionsSorter {
     pendingTransactionsCache.remove(transaction);
   }
 
-  private void removeReplacedTransaction(final PendingTransaction pendingTransaction) {
+  private void removeReplacedPrioritizedTransaction(final PendingTransaction pendingTransaction) {
     final PendingTransaction removedPendingTransaction =
         prioritizedPendingTransactions.remove(pendingTransaction.getHash());
     if (removedPendingTransaction != null) {
@@ -394,29 +390,19 @@ public abstract class AbstractPendingTransactionsSorter {
                       "Replace existing transaction {}, with new transaction {}",
                       replacedTx::toTraceLog,
                       pendingTransaction::toTraceLog);
-                  removeReplacedTransaction(replacedTx);
+                  removeReplacedPrioritizedTransaction(replacedTx);
                 });
 
-        var nonceDistance = pendingTransaction.getNonce() - senderNonce;
-
-        if (nonceDistance >= poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
-          traceLambda(
-              LOG,
-              "Transaction {} not prioritized now because nonce too far in the future for sender {}",
-              pendingTransaction.getTransaction()::toTraceLog,
-              maybeSenderAccount::toString);
-        } else {
-
-          if (prioritizedPendingTransactions.size() >= poolConfig.getTxPoolMaxSize()) {
-            var currentLeastPriorityTx = getLeastPriorityTransaction();
-            if (getComparatorByValue().compare(pendingTransaction, currentLeastPriorityTx) > 0) {
-              prioritizedPendingTransactions.remove(currentLeastPriorityTx.getHash());
-              removePrioritizedTransaction(currentLeastPriorityTx);
-            }
+        if (prioritizedPendingTransactions.size() >= poolConfig.getTxPoolMaxSize()) {
+          var currentLeastPriorityTx = getLeastPriorityTransaction();
+          if (getComparatorByValue().compare(pendingTransaction, currentLeastPriorityTx) > 0) {
+            prioritizedPendingTransactions.remove(currentLeastPriorityTx.getHash());
+            removePrioritizedTransaction(currentLeastPriorityTx);
           }
-
-          addPrioritizedTransaction(pendingTransaction);
         }
+
+        addPrioritizedTransaction(pendingTransaction);
+        notifyTransactionAdded(pendingTransaction.getTransaction());
       }
 
       return addResult;
