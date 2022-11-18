@@ -361,7 +361,7 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
     final var maybeHeadHeader = chain.getBlockHeader(headHash);
 
     if (maybeHeadHeader.isPresent()) {
-      debugLambda(LOG, "BlockHeader {} is already present", maybeHeadHeader.get()::toLogString);
+      debugLambda(LOG, "Block {} is already present", maybeHeadHeader.get()::toLogString);
     } else {
       debugLambda(LOG, "Appending new head block hash {} to backward sync", headHash::toHexString);
       backwardSyncContext.updateHead(headHash);
@@ -372,15 +372,6 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
 
   @Override
   public BlockProcessingResult validateBlock(final Block block) {
-
-    final var chain = protocolContext.getBlockchain();
-    chain
-        .getBlockHeader(block.getHeader().getParentHash())
-        .ifPresentOrElse(
-            blockHeader ->
-                debugLambda(LOG, "Parent of block {} is already present", block::toLogString),
-            () -> backwardSyncContext.syncBackwardsUntil(block));
-
     final var validationResult =
         protocolSchedule
             .getByBlockNumber(block.getHeader().getNumber())
