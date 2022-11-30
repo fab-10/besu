@@ -928,6 +928,14 @@ public class Transaction
     return Optional.empty();
   }
 
+  private Bytes toRlp() {
+    return RLP.encode(this::writeTo);
+  }
+
+  public int calculateSize() {
+    return toRlp().size();
+  }
+
   public static class Builder {
 
     protected TransactionType transactionType;
