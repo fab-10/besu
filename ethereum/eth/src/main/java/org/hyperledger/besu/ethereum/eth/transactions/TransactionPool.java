@@ -114,15 +114,14 @@ public class TransactionPool implements BlockAddedObserver {
   public ValidationResult<TransactionInvalidReason> addLocalTransaction(
       final Transaction transaction) {
     final ValidationResultAndAccount validationResult = validateLocalTransaction(transaction);
+
     if (validationResult.result.isValid()) {
-      if (!configuration.getTxFeeCap().isZero()
-          && minTransactionGasPrice(transaction).compareTo(configuration.getTxFeeCap()) > 0) {
-        return ValidationResult.invalid(TransactionInvalidReason.TX_FEECAP_EXCEEDED);
-      }
+
       final TransactionAddedResult transactionAddedResult =
           pendingTransactions.addLocalTransaction(transaction, validationResult.maybeAccount);
+
       if (transactionAddedResult.isInvalid()) {
-        if (transactionAddedResult.equals(ALREADY_KNOWN)) {
+        if (transactionAddedResult.equals(TransactionAddedResult.ALREADY_KNOWN)) {
           duplicateTransactionCounter.labels(LOCAL).inc();
         }
         return ValidationResult.invalid(
@@ -134,6 +133,7 @@ public class TransactionPool implements BlockAddedObserver {
                       return INTERNAL_ERROR;
                     }));
       }
+
       final Collection<Transaction> txs = singletonList(transaction);
       transactionBroadcaster.onTransactionsAdded(txs);
     }
@@ -141,35 +141,31 @@ public class TransactionPool implements BlockAddedObserver {
     return validationResult.result;
   }
 
-  private boolean effectiveGasPriceIsAboveConfiguredMinGasPrice(final Transaction transaction) {
-    return transaction
-        .getGasPrice()
-        .map(Optional::of)
-        .orElse(transaction.getMaxFeePerGas())
-        .map(g -> g.greaterOrEqualThan(miningParameters.getMinTransactionGasPrice()))
-        .orElse(false);
+  private Optional<Wei> getMaxGasPrice(final Transaction transaction) {
+    return transaction.getGasPrice().map(Optional::of).orElse(transaction.getMaxFeePerGas());
+  }
+
+  private boolean isMaxGasPriceBelowConfiguredMinGasPrice(final Transaction transaction) {
+    return getMaxGasPrice(transaction)
+        .map(g -> g.lessThan(miningParameters.getMinTransactionGasPrice()))
+        .orElse(true);
   }
 
   public void addRemoteTransactions(final Collection<Transaction> transactions) {
     final List<Transaction> addedTransactions = new ArrayList<>(transactions.size());
     LOG.trace("Adding {} remote transactions", transactions.size());
+
     for (final Transaction transaction : transactions) {
+
       if (pendingTransactions.containsTransaction(transaction.getHash())) {
         traceLambda(LOG, "Discard already present transaction {}", transaction::toTraceLog);
         // We already have this transaction, don't even validate it.
         duplicateTransactionCounter.labels(REMOTE).inc();
         continue;
       }
-      final Wei transactionGasPrice = minTransactionGasPrice(transaction);
-      if (transactionGasPrice.compareTo(miningParameters.getMinTransactionGasPrice()) < 0) {
-        traceLambda(
-            LOG,
-            "Discard transaction {} below min gas price {}",
-            transaction::toTraceLog,
-            miningParameters::getMinTransactionGasPrice);
-        continue;
-      }
+
       final ValidationResultAndAccount validationResult = validateRemoteTransaction(transaction);
+
       if (validationResult.result.isValid()) {
         final TransactionAddedResult status =
             pendingTransactions.addRemoteTransaction(transaction, validationResult.maybeAccount);
@@ -194,6 +190,7 @@ public class TransactionPool implements BlockAddedObserver {
             validationResult.result::getInvalidReason);
       }
     }
+
     if (!addedTransactions.isEmpty()) {
       transactionBroadcaster.onTransactionsAdded(addedTransactions);
       traceLambda(
@@ -287,22 +284,10 @@ public class TransactionPool implements BlockAddedObserver {
     final FeeMarket feeMarket =
         protocolSchedule.getByBlockNumber(chainHeadBlockHeader.getNumber()).getFeeMarket();
 
-    // Check whether it's a GoQuorum transaction
-    boolean goQuorumCompatibilityMode = getTransactionValidator().getGoQuorumCompatibilityMode();
-    if (transaction.isGoQuorumPrivateTransaction(goQuorumCompatibilityMode)) {
-      final Optional<Wei> weiValue = ofNullable(transaction.getValue());
-      if (weiValue.isPresent() && !weiValue.get().isZero()) {
-        return ValidationResultAndAccount.invalid(
-            TransactionInvalidReason.ETHER_VALUE_NOT_SUPPORTED);
-      }
-    }
-
-    // allow local transactions to be below minGas as long as we are mining and the transaction is
-    // executable:
-    if ((!effectiveGasPriceIsAboveConfiguredMinGasPrice(transaction)
-            && !miningParameters.isMiningEnabled())
-        || (!feeMarket.satisfiesFloorTxCost(transaction))) {
-      return ValidationResultAndAccount.invalid(TransactionInvalidReason.GAS_PRICE_TOO_LOW);
+    final TransactionInvalidReason priceInvalidReason =
+        validatePrice(transaction, isLocal, feeMarket);
+    if (priceInvalidReason != null) {
+      return ValidationResultAndAccount.invalid(priceInvalidReason);
     }
 
     final ValidationResult<TransactionInvalidReason> basicValidationResult =
@@ -356,6 +341,43 @@ public class TransactionPool implements BlockAddedObserver {
     }
   }
 
+  private TransactionInvalidReason validatePrice(
+      final Transaction transaction, final boolean isLocal, final FeeMarket feeMarket) {
+
+    // Check whether it's a GoQuorum transaction
+    boolean goQuorumCompatibilityMode = getTransactionValidator().getGoQuorumCompatibilityMode();
+    if (transaction.isGoQuorumPrivateTransaction(goQuorumCompatibilityMode)) {
+      final Optional<Wei> weiValue = ofNullable(transaction.getValue());
+      if (weiValue.isPresent() && !weiValue.get().isZero()) {
+        return TransactionInvalidReason.ETHER_VALUE_NOT_SUPPORTED;
+      }
+    }
+
+    if (isLocal) {
+      if (!configuration.getTxFeeCap().isZero()
+          && getMaxGasPrice(transaction).get().greaterThan(configuration.getTxFeeCap())) {
+        return TransactionInvalidReason.TX_FEECAP_EXCEEDED;
+      }
+      // allow local transactions to be below minGas as long as we are mining
+      // or at least gas price is above the configured floor
+      if ((!miningParameters.isMiningEnabled()
+              && isMaxGasPriceBelowConfiguredMinGasPrice(transaction))
+          || !feeMarket.satisfiesFloorTxFee(transaction)) {
+        return TransactionInvalidReason.GAS_PRICE_TOO_LOW;
+      }
+    } else {
+      if (isMaxGasPriceBelowConfiguredMinGasPrice(transaction)) {
+        traceLambda(
+            LOG,
+            "Discard transaction {} below min gas price {}",
+            transaction::toTraceLog,
+            miningParameters::getMinTransactionGasPrice);
+        return TransactionInvalidReason.GAS_PRICE_TOO_LOW;
+      }
+    }
+    return null;
+  }
+
   private boolean strictReplayProtectionShouldBeEnforceLocally(
       final BlockHeader chainHeadBlockHeader) {
     return configuration.getStrictTransactionReplayProtectionEnabled()
@@ -374,17 +396,6 @@ public class TransactionPool implements BlockAddedObserver {
   private Optional<BlockHeader> getChainHeadBlockHeader() {
     final MutableBlockchain blockchain = protocolContext.getBlockchain();
     return blockchain.getBlockHeader(blockchain.getChainHeadHash());
-  }
-
-  private Wei minTransactionGasPrice(final Transaction transaction) {
-    return getChainHeadBlockHeader()
-        .map(
-            chainHeadBlockHeader ->
-                protocolSchedule
-                    .getByBlockNumber(chainHeadBlockHeader.getNumber())
-                    .getFeeMarket()
-                    .minTransactionPriceInNextBlock(transaction, chainHeadBlockHeader::getBaseFee))
-        .orElse(Wei.ZERO);
   }
 
   public interface TransactionBatchAddedListener {
