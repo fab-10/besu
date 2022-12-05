@@ -1,13 +1,23 @@
 # Changelog
-## 22.10.2
+## 22.10.3
 
 ### Breaking Changes
-
-### Additions and Improvements
+- Added `--rpc-max-logs-range` CLI option to allow limiting the number of blocks queried by `eth_getLogs` RPC API. Default value: 1000 [#4597](https://github.com/hyperledger/besu/pull/4597)
 
 ### Bug Fixes
 
 ### Download Links
+
+## 22.10.2
+This is a hotfix release to resolve a race condition that results in segfaults, introduced in 22.10.1 release.
+
+### Bug Fixes
+- bugfix for async operations on Snashot worldstates [#4767](https://github.com/hyperledger/besu/pull/4767)
+
+### Download Links
+https://hyperledger.jfrog.io/hyperledger/besu-binaries/besu/22.10.2/besu-22.10.2.tar.gz  / sha256: TBA
+https://hyperledger.jfrog.io/hyperledger/besu-binaries/besu/22.10.2/besu-22.10.2.zip / sha256: TBA
+
 
 ## 22.10.1
 
