@@ -50,7 +50,8 @@ public class LondonFeeMarketBlockTransactionSelectorTest
             .build(),
         TestClock.system(ZoneId.systemDefault()),
         metricsSystem,
-        LondonFeeMarketBlockTransactionSelectorTest::mockBlockHeader, baseFeeMarket);
+        LondonFeeMarketBlockTransactionSelectorTest::mockBlockHeader,
+        FeeMarket.london(0L));
   }
 
   private static BlockHeader mockBlockHeader() {

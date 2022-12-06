@@ -14,7 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions;
 
-import java.util.stream.Collectors;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;

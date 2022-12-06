@@ -221,10 +221,9 @@ public class TransactionPool implements BlockAddedObserver {
   @Override
   public void onBlockAdded(final BlockAddedEvent event) {
     LOG.trace("Block added event {}", event);
-    //    event.getAddedTransactions().forEach(pendingTransactions::transactionAddedToBlock);
-    pendingTransactions.transactionsAddedToBlock(event.getAddedTransactions());
     pendingTransactions.manageBlockAdded(
         event.getBlock(),
+        event.getAddedTransactions(),
         protocolSchedule
             .getByBlockNumber(event.getBlock().getHeader().getNumber() + 1)
             .getFeeMarket());

@@ -16,20 +16,21 @@ package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
 import static java.util.Comparator.comparing;
 
-import java.util.function.Predicate;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NavigableSet;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 /**
@@ -39,7 +40,7 @@ import java.util.function.Supplier;
  * <p>This class is safe for use across multiple threads.
  */
 public class GasPricePendingTransactionsSorter extends AbstractPendingTransactionsSorter {
-  private final static Comparator<PendingTransaction> compareByValue =
+  private static final Comparator<PendingTransaction> compareByValue =
       Comparator.comparing(PendingTransaction::getGasPrice);
 
   private final NavigableSet<PendingTransaction> prioritizedTransactions =
@@ -59,8 +60,9 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
   }
 
   @Override
-  public void manageBlockAdded(final Block block, final FeeMarket feeMarket) {
-    // nothing to do
+  public void manageBlockAdded(
+      final Block block, final List<Transaction> confirmedTransactions, final FeeMarket feeMarket) {
+    transactionsAddedToBlock(confirmedTransactions);
   }
 
   @Override

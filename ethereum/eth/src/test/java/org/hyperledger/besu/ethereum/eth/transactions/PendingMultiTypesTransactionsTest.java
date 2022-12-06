@@ -28,6 +28,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionSelectionResult;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.metrics.StubMetricsSystem;
 import org.hyperledger.besu.plugin.data.TransactionType;
 import org.hyperledger.besu.testutil.TestClock;
@@ -68,7 +69,8 @@ public class PendingMultiTypesTransactionsTest {
               .build(),
           TestClock.system(ZoneId.systemDefault()),
           metricsSystem,
-          () -> mockBlockHeader(Wei.of(7L)), baseFeeMarket);
+          () -> mockBlockHeader(Wei.of(7L)),
+          FeeMarket.london(0L));
 
   @Test
   public void shouldReturnExclusivelyLocal1559TransactionsWhenAppropriate() {

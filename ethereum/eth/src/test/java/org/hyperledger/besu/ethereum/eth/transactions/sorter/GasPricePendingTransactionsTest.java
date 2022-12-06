@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.testutil.TestClock;
 
 import java.time.Clock;
@@ -30,6 +31,7 @@ public class GasPricePendingTransactionsTest extends AbstractPendingTransactions
         poolConfig,
         clock.orElse(TestClock.system(ZoneId.systemDefault())),
         metricsSystem,
-        AbstractPendingTransactionsTestBase::mockBlockHeader, baseFeeMarket);
+        AbstractPendingTransactionsTestBase::mockBlockHeader,
+        FeeMarket.london(0L));
   }
 }

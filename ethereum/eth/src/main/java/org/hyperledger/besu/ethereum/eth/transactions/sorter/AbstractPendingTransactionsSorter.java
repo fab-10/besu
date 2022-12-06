@@ -29,6 +29,8 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionListener
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.DummyPostponedTransactionsCache;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.PendingTransactionsCache;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.evm.account.AccountState;
@@ -54,6 +56,7 @@ import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiFunction;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -136,9 +139,13 @@ public abstract class AbstractPendingTransactionsSorter {
         "Current size of the transaction pool",
         prioritizedPendingTransactions::size);
 
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) ->
+            transactionReplacementHandler.shouldReplace(t1, t2, chainHeadHeaderSupplier.get());
+
     this.pendingTransactionsCache =
         new PendingTransactionsCache(
-            poolConfig, transactionReplacementHandler, chainHeadHeaderSupplier);
+            poolConfig, new DummyPostponedTransactionsCache(), transactionReplacementTester);
   }
 
   public void evictOldTransactions() {
@@ -210,7 +217,7 @@ public abstract class AbstractPendingTransactionsSorter {
             poolConfig.getTxPoolMaxSize() - prioritizedPendingTransactions.size();
 
         final List<PendingTransaction> promoteTransactions =
-            pendingTransactionsCache.promote(
+            pendingTransactionsCache.getPromotableTransactions(
                 confirmedTransactions, maxPromotable, getPromotionFilter());
 
         promoteTransactions.forEach(this::addPrioritizedTransaction);
@@ -345,7 +352,8 @@ public abstract class AbstractPendingTransactionsSorter {
     return pendingTransactionsCache.getNextReadyNonce(sender);
   }
 
-  public abstract void manageBlockAdded(final Block block, final FeeMarket feeMarket);
+  public abstract void manageBlockAdded(
+      final Block block, final List<Transaction> confirmedTransactions, final FeeMarket feeMarket);
 
   private void removeTransaction(final Transaction transaction, final boolean addedToBlock) {
     final PendingTransaction removedPendingTx =

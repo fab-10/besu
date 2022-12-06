@@ -38,6 +38,7 @@ import org.hyperledger.besu.ethereum.mainnet.PoWSolver;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.ethereum.mainnet.ValidationTestUtils;
+import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -100,7 +101,7 @@ public class PoWBlockCreatorTest {
             TestClock.fixed(),
             metricsSystem,
             executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader,
-            baseFeeMarket);
+            FeeMarket.london(0L));
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(
@@ -163,7 +164,7 @@ public class PoWBlockCreatorTest {
             TestClock.fixed(),
             metricsSystem,
             executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader,
-            baseFeeMarket);
+            FeeMarket.london(0L));
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(
@@ -218,7 +219,7 @@ public class PoWBlockCreatorTest {
             TestClock.fixed(),
             metricsSystem,
             executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader,
-            baseFeeMarket);
+            FeeMarket.london(0L));
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(
@@ -289,7 +290,7 @@ public class PoWBlockCreatorTest {
             TestClock.fixed(),
             metricsSystem,
             executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader,
-            baseFeeMarket);
+            FeeMarket.london(0L));
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(

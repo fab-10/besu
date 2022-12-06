@@ -67,7 +67,8 @@ public class TransactionPoolLondonTest extends AbstractTransactionPoolTest {
             .build(),
         TestClock.system(ZoneId.systemDefault()),
         metricsSystem,
-        protocolContext.getBlockchain()::getChainHeadHeader);
+        protocolContext.getBlockchain()::getChainHeadHeader,
+        FeeMarket.london(0L));
   }
 
   @Override

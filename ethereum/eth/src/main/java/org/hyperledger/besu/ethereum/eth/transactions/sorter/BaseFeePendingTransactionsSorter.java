@@ -18,7 +18,6 @@ import static java.util.Comparator.comparing;
 import static java.util.stream.Collectors.toUnmodifiableList;
 import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
 
-import java.util.function.Predicate;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -32,10 +31,12 @@ import org.hyperledger.besu.plugin.services.MetricsSystem;
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.Iterator;
+import java.util.List;
 import java.util.NavigableSet;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeSet;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -100,18 +101,20 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
       final Clock clock,
       final MetricsSystem metricsSystem,
       final Supplier<BlockHeader> chainHeadHeaderSupplier,
-      BaseFeeMarket baseFeeMarket) {
+      final BaseFeeMarket baseFeeMarket) {
     super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier);
     this.nextBlockBaseFee =
         Optional.of(calculateNextBlockBaseFee(baseFeeMarket, chainHeadHeaderSupplier.get()));
   }
 
   @Override
-  public void manageBlockAdded(final Block block, final FeeMarket feeMarket) {
+  public void manageBlockAdded(
+      final Block block, final List<Transaction> confirmedTransactions, final FeeMarket feeMarket) {
     final BlockHeader blockHeader = block.getHeader();
     final BaseFeeMarket baseFeeMarket = (BaseFeeMarket) feeMarket;
     final Wei newNextBlockBaseFee = calculateNextBlockBaseFee(baseFeeMarket, blockHeader);
     updateBaseFee(newNextBlockBaseFee);
+    transactionsAddedToBlock(confirmedTransactions);
   }
 
   private Wei calculateNextBlockBaseFee(

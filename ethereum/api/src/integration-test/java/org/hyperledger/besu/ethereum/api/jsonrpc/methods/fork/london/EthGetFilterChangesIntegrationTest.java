@@ -53,6 +53,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.plugin.data.TransactionType;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -101,7 +102,8 @@ public class EthGetFilterChangesIntegrationTest {
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(MAX_TRANSACTIONS).build(),
             TestClock.fixed(),
             metricsSystem,
-            blockchain::getChainHeadHeader, baseFeeMarket);
+            blockchain::getChainHeadHeader,
+            FeeMarket.london(0L));
     final ProtocolContext protocolContext = executionContext.getProtocolContext();
 
     EthContext ethContext = mock(EthContext.class);

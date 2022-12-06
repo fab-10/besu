@@ -242,7 +242,8 @@ public abstract class AbstractBlockTransactionSelectorTest {
               final BlockHeader mockBlockHeader = mock(BlockHeader.class);
               when(mockBlockHeader.getBaseFee()).thenReturn(Optional.of(Wei.ONE));
               return mockBlockHeader;
-            }, baseFeeMarket);
+            },
+            FeeMarket.london(0L));
     final BlockTransactionSelector selector =
         new BlockTransactionSelector(
             transactionProcessor,
