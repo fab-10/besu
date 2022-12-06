@@ -285,24 +285,6 @@ public abstract class AbstractPendingTransactionsSorter {
             .map(PendingTransaction::getTransaction));
   }
 
-  //  private TransactionAddedResult addToCache(
-  //      final PendingTransaction pendingTransaction, final long senderNonce) {
-  //
-  //    var addResult = pendingTransactionsCache.add(pendingTransaction, senderNonce);
-  //
-  //    if (addResult.isReplacement()) {
-  //      final var existingPendingTx = addResult.maybeReplacedTransaction().get();
-  //      traceLambda(
-  //          LOG,
-  //          "Replace existing transaction {}, with new transaction {}",
-  //          existingPendingTx::toTraceLog,
-  //          pendingTransaction::toTraceLog);
-  //      removeReplacedTransaction(existingPendingTx);
-  //    }
-  //
-  //    return addResult;
-  //  }
-
   private void notifyTransactionAdded(final Transaction transaction) {
     pendingTransactionSubscribers.forEach(listener -> listener.onTransactionAdded(transaction));
   }
