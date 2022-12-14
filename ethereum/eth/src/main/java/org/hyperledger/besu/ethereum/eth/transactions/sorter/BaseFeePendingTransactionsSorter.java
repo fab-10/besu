@@ -56,11 +56,13 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
 
   private final Comparator<PendingTransaction> compareByValue =
       Comparator.comparing(
-          txInfo ->
-              txInfo
-                  .getTransaction()
-                  .getEffectivePriorityFeePerGas(nextBlockBaseFee)
-                  .getAsBigInteger());
+              (PendingTransaction pendingTransaction) ->
+                  pendingTransaction
+                      .getTransaction()
+                      .getEffectivePriorityFeePerGas(nextBlockBaseFee)
+                      .getAsBigInteger())
+          .thenComparing(PendingTransaction::getAddedToPoolAt)
+          .thenComparing(PendingTransaction::getSequence);
 
   /**
    * See this post for an explainer about these data structures:
@@ -127,9 +129,12 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
   }
 
   @Override
-  protected void removePrioritizedTransaction(final PendingTransaction removedPendingTx) {
+  protected void removePrioritizedTransaction(
+      final PendingTransaction removedPendingTx, final boolean addedToBlock) {
     if (prioritizedTransactionsDynamicRange.remove(removedPendingTx)) {
       traceLambda(LOG, "Removed dynamic range transaction {}", removedPendingTx::toTraceLog);
+      incrementTransactionRemovedCounter(
+          removedPendingTx.isReceivedFromLocalSource(), addedToBlock);
     } else {
       removedPendingTx
           .getTransaction()
@@ -139,6 +144,8 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
                 if (prioritizedTransactionsStaticRange.remove(removedPendingTx)) {
                   traceLambda(
                       LOG, "Removed static range transaction {}", removedPendingTx::toTraceLog);
+                  incrementTransactionRemovedCounter(
+                      removedPendingTx.isReceivedFromLocalSource(), addedToBlock);
                 }
               });
     }

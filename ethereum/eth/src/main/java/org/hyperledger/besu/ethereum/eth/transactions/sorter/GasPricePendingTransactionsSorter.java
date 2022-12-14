@@ -76,8 +76,12 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
   }
 
   @Override
-  protected void removePrioritizedTransaction(final PendingTransaction removedPendingTx) {
-    prioritizedTransactions.remove(removedPendingTx);
+  protected void removePrioritizedTransaction(
+      final PendingTransaction removedPendingTx, final boolean addedToBlock) {
+    if (prioritizedTransactions.remove(removedPendingTx)) {
+      incrementTransactionRemovedCounter(
+          removedPendingTx.isReceivedFromLocalSource(), addedToBlock);
+    }
   }
 
   @Override

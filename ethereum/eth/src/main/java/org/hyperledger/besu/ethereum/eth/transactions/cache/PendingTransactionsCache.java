@@ -83,7 +83,7 @@ public class PendingTransactionsCache {
 
     // if transaction too much in the future postpone
     if (pendingTransaction.getNonce() - senderNonce
-        > poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
+        >= poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
       postponedCache.add(pendingTransaction);
       return POSTPONED;
     }
@@ -109,9 +109,14 @@ public class PendingTransactionsCache {
   }
 
   public Stream<PendingTransaction> streamReadyTransactions(final Address sender) {
+    return streamReadyTransactions(sender, -1);
+  }
+
+  public Stream<PendingTransaction> streamReadyTransactions(
+      final Address sender, final long afterNonce) {
     var senderTxs = readyBySender.get(sender);
     if (senderTxs != null) {
-      return senderTxs.values().stream();
+      return senderTxs.tailMap(afterNonce, false).values().stream();
     }
     return Stream.empty();
   }
@@ -120,11 +125,16 @@ public class PendingTransactionsCache {
       final Address sender,
       final Function<NavigableMap<Long, PendingTransaction>, R> modifySenderTxs) {
 
-    final var senderTxs = readyBySender.get(sender);
+    var senderTxs = readyBySender.get(sender);
     final Optional<Transaction> prevFirstTx = getFirstReadyTransaction(senderTxs);
     final long prevLastNonce = getLastReadyNonce(senderTxs);
 
     final var result = modifySenderTxs.apply(senderTxs);
+
+    if (senderTxs == null) {
+      // it could have been created
+      senderTxs = readyBySender.get(sender);
+    }
 
     final Optional<Transaction> currFirstTx = getFirstReadyTransaction(senderTxs);
     final long currLastNonce = getLastReadyNonce(senderTxs);
@@ -147,7 +157,7 @@ public class PendingTransactionsCache {
       }
     }
 
-    if (senderTxs.isEmpty()) {
+    if (senderTxs != null && senderTxs.isEmpty()) {
       readyBySender.remove(sender);
     }
 
@@ -166,7 +176,7 @@ public class PendingTransactionsCache {
       lastTx = lessReadySenderTxs.pollLastEntry().getValue();
       toPostponed.add(lastTx);
       decreaseTotalSize(lastTx);
-      postponedSize += lastTx.getTransaction().calculateSize();
+      postponedSize += lastTx.getTransaction().getSize();
     }
 
     if (lessReadySenderTxs.isEmpty()) {
@@ -239,18 +249,17 @@ public class PendingTransactionsCache {
     return senderTxs.lastEntry().getKey();
   }
 
-  @SuppressWarnings("MethodInputParametersMustBeFinal")
   private TransactionAddedResult tryAddToReady(
-      NavigableMap<Long, PendingTransaction> senderTxs,
+      final NavigableMap<Long, PendingTransaction> senderTxs,
       final PendingTransaction pendingTransaction,
       final long senderNonce) {
 
     if (senderTxs == null) {
       // add to ready only if the tx is the next for the sender
       if (pendingTransaction.getNonce() == senderNonce) {
-        senderTxs = new TreeMap<>();
-        senderTxs.put(pendingTransaction.getNonce(), pendingTransaction);
-        readyBySender.put(pendingTransaction.getSender(), senderTxs);
+        var newSenderTxs = new TreeMap<Long, PendingTransaction>();
+        newSenderTxs.put(pendingTransaction.getNonce(), pendingTransaction);
+        readyBySender.put(pendingTransaction.getSender(), newSenderTxs);
         increaseTotalSize(pendingTransaction);
         return ADDED;
       }
@@ -284,11 +293,11 @@ public class PendingTransactionsCache {
   }
 
   private void increaseTotalSize(final PendingTransaction pendingTransaction) {
-    readyTotalSize.addAndGet(pendingTransaction.getTransaction().calculateSize());
+    readyTotalSize.addAndGet(pendingTransaction.getTransaction().getSize());
   }
 
   private boolean fitsInCache(final PendingTransaction pendingTransaction) {
-    return readyTotalSize.get() + pendingTransaction.getTransaction().calculateSize()
+    return readyTotalSize.get() + pendingTransaction.getTransaction().getSize()
         <= MAX_READY_SIZE_BYTES;
   }
 
@@ -297,7 +306,7 @@ public class PendingTransactionsCache {
   }
 
   private void decreaseTotalSize(final Transaction transaction) {
-    readyTotalSize.addAndGet(-transaction.calculateSize());
+    readyTotalSize.addAndGet(-transaction.getSize());
   }
 
   public void remove(final Transaction transaction) {
@@ -307,7 +316,7 @@ public class PendingTransactionsCache {
 
   private Void remove(
       final NavigableMap<Long, PendingTransaction> senderTxs, final Transaction transaction) {
-    if (senderTxs.remove(transaction.getNonce()) != null) {
+    if (senderTxs != null && senderTxs.remove(transaction.getNonce()) != null) {
       decreaseTotalSize(transaction);
     }
     // handle the possible async status of postponed in progress

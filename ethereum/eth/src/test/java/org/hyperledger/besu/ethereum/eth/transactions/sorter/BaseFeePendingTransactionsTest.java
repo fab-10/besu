@@ -14,20 +14,33 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import org.hyperledger.besu.crypto.KeyPair;
 import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.data.TransactionType;
 import org.hyperledger.besu.testutil.TestClock;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.ZoneId;
+import java.util.Comparator;
 import java.util.Optional;
 import java.util.Random;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
+
+import org.junit.Test;
 
 public class BaseFeePendingTransactionsTest extends AbstractPendingTransactionsTestBase {
+  private static final Random randomizeTxType = new Random();
 
   @Override
   AbstractPendingTransactionsSorter getSorter(
@@ -36,20 +49,119 @@ public class BaseFeePendingTransactionsTest extends AbstractPendingTransactionsT
         poolConfig,
         clock.orElse(TestClock.system(ZoneId.systemDefault())),
         metricsSystem,
-        AbstractPendingTransactionsTestBase::mockBlockHeader,
+        BaseFeePendingTransactionsTest::mockBlockHeader,
         FeeMarket.london(0L));
   }
 
-  private static final Random randomizeTxType = new Random();
+  private static BlockHeader mockBlockHeader() {
+    final BlockHeader blockHeader = mock(BlockHeader.class);
+    when(blockHeader.getBaseFee()).thenReturn(Optional.of(Wei.ONE));
+    return blockHeader;
+  }
 
   @Override
-  protected Transaction createTransaction(final long transactionNumber) {
-    var tx = new TransactionTestFixture().value(Wei.of(transactionNumber)).nonce(transactionNumber);
-    if (randomizeTxType.nextBoolean()) {
-      tx.type(TransactionType.EIP1559)
-          .maxFeePerGas(Optional.of(Wei.of(5000L)))
-          .maxPriorityFeePerGas(Optional.of(Wei.of(50L)));
+  protected Transaction createTransaction(
+      final long nonce, final Wei maxGasPrice, final KeyPair keys) {
+
+    return createTransaction(
+        randomizeTxType.nextBoolean() ? TransactionType.EIP1559 : TransactionType.FRONTIER,
+        nonce,
+        maxGasPrice,
+        keys);
+  }
+
+  protected Transaction createTransaction(
+      final TransactionType type, final long nonce, final Wei maxGasPrice, final KeyPair keys) {
+
+    var tx = new TransactionTestFixture().value(Wei.of(nonce)).nonce(nonce).type(type);
+    if (type.supports1559FeeMarket()) {
+      tx.maxFeePerGas(Optional.of(maxGasPrice))
+          .maxPriorityFeePerGas(Optional.of(maxGasPrice.divide(10)));
+    } else {
+      tx.gasPrice(maxGasPrice);
     }
-    return tx.createTransaction(KEYS1);
+    return tx.createTransaction(keys);
+  }
+
+  @Override
+  protected Transaction createTransactionReplacement(
+      final Transaction originalTransaction, final KeyPair keys) {
+    return createTransaction(
+        originalTransaction.getType(),
+        originalTransaction.getNonce(),
+        originalTransaction.getMaxGasFee().multiply(2),
+        keys);
+  }
+
+  @Test
+  public void shouldPrioritizePriorityFeeThenTimeAddedToPoolOnlyEIP1559Txs() {
+    shouldPrioritizePriorityFeeThenTimeAddedToPoolSameTypeTxs(TransactionType.EIP1559);
+  }
+
+  @Test
+  public void shouldPrioritizeGasPriceThenTimeAddedToPoolOnlyFrontierTxs() {
+    shouldPrioritizePriorityFeeThenTimeAddedToPoolSameTypeTxs(TransactionType.FRONTIER);
+  }
+
+  @Test
+  public void shouldPrioritizeEffectivePriorityFeeThenTimeAddedToPoolOnMixedTypes() {
+    final var nextBlockBaseFee = Optional.of(Wei.ONE);
+
+    final Transaction highGasPriceTransaction = createTransaction(0, Wei.of(100), KEYS1);
+
+    final var lowValueTxs =
+        IntStream.range(0, MAX_TRANSACTIONS)
+            .mapToObj(
+                i ->
+                    new PendingTransaction(
+                        createTransaction(
+                            0, Wei.of(10), SIGNATURE_ALGORITHM.get().generateKeyPair()),
+                        false,
+                        Instant.now()))
+            .collect(Collectors.toUnmodifiableList());
+
+    final var lowestPriorityFee =
+        lowValueTxs.stream()
+            .sorted(
+                Comparator.comparing(
+                    pt -> pt.getTransaction().getEffectivePriorityFeePerGas(nextBlockBaseFee)))
+            .findFirst()
+            .get()
+            .getTransaction()
+            .getEffectivePriorityFeePerGas(nextBlockBaseFee);
+
+    final var firstLowValueTx =
+        lowValueTxs.stream()
+            .filter(
+                pt ->
+                    pt.getTransaction()
+                        .getEffectivePriorityFeePerGas(nextBlockBaseFee)
+                        .equals(lowestPriorityFee))
+            .findFirst()
+            .get();
+
+    shouldPrioritizeValueThenTimeAddedToPool(
+        lowValueTxs.stream().map(PendingTransaction::getTransaction).iterator(),
+        highGasPriceTransaction,
+        firstLowValueTx.getTransaction());
+  }
+
+  private void shouldPrioritizePriorityFeeThenTimeAddedToPoolSameTypeTxs(
+      final TransactionType transactionType) {
+    final Transaction highGasPriceTransaction = createTransaction(0, Wei.of(100), KEYS1);
+
+    final var lowValueTxs =
+        IntStream.range(0, MAX_TRANSACTIONS)
+            .mapToObj(
+                i ->
+                    createTransaction(
+                        transactionType,
+                        0,
+                        Wei.of(10),
+                        SIGNATURE_ALGORITHM.get().generateKeyPair()))
+            .collect(Collectors.toUnmodifiableList());
+
+    shouldPrioritizeValueThenTimeAddedToPool(
+        lowValueTxs.iterator(), highGasPriceTransaction, lowValueTxs.get(0));
   }
 }
