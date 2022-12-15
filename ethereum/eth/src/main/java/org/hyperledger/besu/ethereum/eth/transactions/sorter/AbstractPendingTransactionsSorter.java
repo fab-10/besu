@@ -209,9 +209,14 @@ public abstract class AbstractPendingTransactionsSorter {
         final int maxPromotable =
             poolConfig.getTxPoolMaxSize() - prioritizedPendingTransactions.size();
 
+        final Predicate<PendingTransaction> notAlreadyPrioritized =
+            pt -> prioritizedPendingTransactions.containsKey(pt.getHash());
+
         final List<PendingTransaction> promoteTransactions =
             pendingTransactionsCache.getPromotableTransactions(
-                confirmedTransactions, maxPromotable, getPromotionFilter());
+                confirmedTransactions,
+                maxPromotable,
+                notAlreadyPrioritized.and(getPromotionFilter()));
 
         promoteTransactions.forEach(this::addPrioritizedTransaction);
       }
