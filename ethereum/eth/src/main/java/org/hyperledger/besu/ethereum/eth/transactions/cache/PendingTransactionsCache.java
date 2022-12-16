@@ -37,7 +37,6 @@ import java.util.NavigableMap;
 import java.util.NavigableSet;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
@@ -61,8 +60,9 @@ public class PendingTransactionsCache {
   private final Map<Address, NavigableMap<Long, PendingTransaction>> readyBySender =
       new ConcurrentHashMap<>();
 
-  private final NavigableSet<Transaction> readyEvictionOrder =
-      new TreeSet<>(Comparator.comparing(Transaction::getMaxGasFee));
+  private final NavigableSet<Transaction> orderByMaxFee =
+      new TreeSet<>(
+          Comparator.comparing(Transaction::getMaxGasFee).thenComparing(Transaction::getSender));
 
   private final AtomicLong readyTotalSize = new AtomicLong();
   private final int maxPromotablePerSender;
@@ -81,7 +81,7 @@ public class PendingTransactionsCache {
   public TransactionAddedResult add(
       final PendingTransaction pendingTransaction, final long senderNonce) {
 
-    // if transaction too much in the future postpone
+    // if too much pending transactions for the sender then postpone
     if (pendingTransaction.getNonce() - senderNonce
         >= poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
       postponedCache.add(pendingTransaction);
@@ -133,21 +133,16 @@ public class PendingTransactionsCache {
         maxConfirmedNonceBySender(confirmedTransactions);
 
     for (var senderMaxConfirmedNonce : confirmedBySender.entrySet()) {
-      var maxConfirmedNonce = senderMaxConfirmedNonce.getValue().get();
-      final int maxRemaining = maxPromotable - promotableTxs.size();
+      final var maxConfirmedNonce = senderMaxConfirmedNonce.getValue().get();
       final var sender = senderMaxConfirmedNonce.getKey();
-      promotableTxs.addAll(
-          modifySenderReadyTxsWrapper(
-              sender,
-              senderTxs ->
-                  removeConfirmedAndPromoteReadyTxs(
-                      sender, senderTxs, maxConfirmedNonce, maxRemaining, promotionFilter)));
+
+      modifySenderReadyTxsWrapper(
+          sender, senderTxs -> removeConfirmed(sender, senderTxs, maxConfirmedNonce));
     }
 
     // if there is still space pick other ready transactions
-    final int maxRemaining = maxPromotable - promotableTxs.size();
-    if (maxRemaining > 0) {
-      promotableTxs.addAll(promoteReady(confirmedBySender.keySet(), maxRemaining, promotionFilter));
+    if (maxPromotable > 0) {
+      promotableTxs.addAll(promoteReady(maxPromotable, promotionFilter));
     }
 
     return promotableTxs;
@@ -185,8 +180,8 @@ public class PendingTransactionsCache {
     final long currLastNonce = getLastReadyNonce(senderTxs);
 
     if (!prevFirstTx.equals(currFirstTx)) {
-      prevFirstTx.ifPresent(readyEvictionOrder::remove);
-      currFirstTx.ifPresent(readyEvictionOrder::add);
+      prevFirstTx.ifPresent(orderByMaxFee::remove);
+      currFirstTx.ifPresent(orderByMaxFee::add);
     }
 
     final var cacheFreeSpace = cacheFreeSpace();
@@ -210,7 +205,7 @@ public class PendingTransactionsCache {
   }
 
   private List<PendingTransaction> evictReadyTransactions(final long evictSize) {
-    final var lessReadySender = readyEvictionOrder.first().getSender();
+    final var lessReadySender = orderByMaxFee.first().getSender();
     final var lessReadySenderTxs = readyBySender.get(lessReadySender);
 
     final List<PendingTransaction> toPostponed = new ArrayList<>();
@@ -227,7 +222,7 @@ public class PendingTransactionsCache {
     if (lessReadySenderTxs.isEmpty()) {
       readyBySender.remove(lessReadySender);
       // at this point lastTx was the first for the sender, then remove it from eviction order too
-      readyEvictionOrder.remove(lastTx.getTransaction());
+      orderByMaxFee.remove(lastTx.getTransaction());
       // try next less valuable sender
       toPostponed.addAll(evictReadyTransactions(evictSize - postponedSize));
     }
@@ -365,24 +360,17 @@ public class PendingTransactionsCache {
     return null;
   }
 
-  private Collection<PendingTransaction> removeConfirmedAndPromoteReadyTxs(
+  private Void removeConfirmed(
       final Address sender,
       final NavigableMap<Long, PendingTransaction> senderTxs,
-      final long maxConfirmedNonce,
-      final int maxPromotable,
-      final Predicate<PendingTransaction> promotionFilter) {
+      final long maxConfirmedNonce) {
+    if (senderTxs != null) {
+      var confirmedTxsToRemove = senderTxs.headMap(maxConfirmedNonce, true);
+      confirmedTxsToRemove.clear();
 
-    var confirmedTxsToRemove = senderTxs.headMap(maxConfirmedNonce, true);
-    confirmedTxsToRemove.clear();
-
-    postponedCache.removeForSenderBelowNonce(sender, maxConfirmedNonce);
-
-    // if there is still space, promote some ready txs
-    if (maxPromotable > 0) {
-      // add promotable according to promotion filter and remaining space
-      return promoteReady(senderTxs, maxPromotable, promotionFilter);
+      postponedCache.removeForSenderBelowNonce(sender, maxConfirmedNonce);
     }
-    return List.of();
+    return null;
   }
 
   private Map<Address, Optional<Long>> maxConfirmedNonceBySender(
@@ -394,23 +382,19 @@ public class PendingTransactionsCache {
   }
 
   private Collection<PendingTransaction> promoteReady(
-      final Set<Address> skipSenders,
-      final int maxRemaining,
-      final Predicate<PendingTransaction> promotionFilter) {
+      final int maxRemaining, final Predicate<PendingTransaction> promotionFilter) {
 
     final List<PendingTransaction> promotedTxs = new ArrayList<>(maxRemaining);
 
-    for (var senderEntry : readyBySender.entrySet()) {
-      if (!skipSenders.contains(senderEntry.getKey())) {
-        final int maxForThisSender = maxRemaining - promotedTxs.size();
-        if (maxForThisSender <= 0) {
-          break;
-        }
-        promotedTxs.addAll(
-            modifySenderReadyTxsWrapper(
-                senderEntry.getKey(),
-                senderTxs -> promoteReady(senderTxs, maxForThisSender, promotionFilter)));
+    for (var senderEntry : orderByMaxFee.descendingSet()) {
+      final int maxForThisSender = maxRemaining - promotedTxs.size();
+      if (maxForThisSender <= 0) {
+        break;
       }
+      promotedTxs.addAll(
+          modifySenderReadyTxsWrapper(
+              senderEntry.getSender(),
+              senderTxs -> promoteReady(senderTxs, maxForThisSender, promotionFilter)));
     }
     return promotedTxs;
   }
