@@ -21,11 +21,14 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 
-public class DummyPostponedTransactionsCache implements PostponedTransactionsCache {
+public class NoOpPostponedTransactionsCache implements PostponedTransactionsCache {
 
   @Override
   public CompletableFuture<List<PendingTransaction>> promoteForSender(
-      final Address sender, final long lastReadyNonce, final int maxPromotable) {
+      final Address sender,
+      final long lastReadyNonce,
+      final int maxPromotable,
+      final long maxSize) {
     return CompletableFuture.completedFuture(List.of());
   }
 

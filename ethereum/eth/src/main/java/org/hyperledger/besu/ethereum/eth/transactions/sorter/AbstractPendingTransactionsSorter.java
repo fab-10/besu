@@ -30,7 +30,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionListener
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
-import org.hyperledger.besu.ethereum.eth.transactions.cache.DummyPostponedTransactionsCache;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.NoOpPostponedTransactionsCache;
 import org.hyperledger.besu.ethereum.eth.transactions.cache.PendingTransactionsCache;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.account.Account;
@@ -143,7 +143,7 @@ public abstract class AbstractPendingTransactionsSorter {
 
     this.pendingTransactionsCache =
         new PendingTransactionsCache(
-            poolConfig, new DummyPostponedTransactionsCache(), transactionReplacementTester);
+            poolConfig, new NoOpPostponedTransactionsCache(), transactionReplacementTester);
   }
 
   public void evictOldTransactions() {

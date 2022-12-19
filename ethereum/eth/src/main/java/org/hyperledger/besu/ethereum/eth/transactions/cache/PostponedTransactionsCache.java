@@ -24,7 +24,7 @@ import java.util.concurrent.CompletableFuture;
 public interface PostponedTransactionsCache {
 
   CompletableFuture<List<PendingTransaction>> promoteForSender(
-      Address sender, long lastReadyNonce, int maxPromotable);
+      Address sender, long lastReadyNonce, int maxPromotable, long maxSize);
 
   void add(PendingTransaction pendingTransaction);
 

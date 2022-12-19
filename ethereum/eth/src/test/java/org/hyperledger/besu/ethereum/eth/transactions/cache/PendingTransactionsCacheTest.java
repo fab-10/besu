@@ -47,11 +47,14 @@ import java.util.function.BiFunction;
 
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
+import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mock;
 
 public class PendingTransactionsCacheTest {
   protected static final int MAX_TRANSACTIONS = 5;
+  protected static final int CACHE_CAPACITY_BYTES = 1024;
   protected static final Supplier<SignatureAlgorithm> SIGNATURE_ALGORITHM =
       Suppliers.memoize(SignatureAlgorithmFactory::getInstance);
   protected static final KeyPair KEYS1 = SIGNATURE_ALGORITHM.get().generateKeyPair();
@@ -63,9 +66,12 @@ public class PendingTransactionsCacheTest {
       ImmutableTransactionPoolConfiguration.builder()
           .txPoolMaxSize(MAX_TRANSACTIONS)
           .txPoolLimitByAccountPercentage(1.0f)
+          .pendingTransactionsCacheSizeBytes(CACHE_CAPACITY_BYTES)
           .build();
 
   private PendingTransactionsCache pendingTransactionsCache;
+
+  @Mock private PostponedTransactionsCache postponedTransactionsCache;
 
   private static BlockHeader mockBlockHeader() {
     final BlockHeader blockHeader = mock(BlockHeader.class);
@@ -81,7 +87,7 @@ public class PendingTransactionsCacheTest {
                 .shouldReplace(t1, t2, mockBlockHeader());
     pendingTransactionsCache =
         new PendingTransactionsCache(
-            poolConf, new DummyPostponedTransactionsCache(), transactionReplacementTester);
+            poolConf, postponedTransactionsCache, transactionReplacementTester);
   }
 
   @Test
@@ -402,6 +408,48 @@ public class PendingTransactionsCacheTest {
     assertSenderHasExactlyTransactions(readyTxs[2]);
   }
 
+  @Test
+  public void postponeTransactionIfNotFitsInCache() {
+    final var largeTransaction = createTransaction(0, CACHE_CAPACITY_BYTES);
+    assertThat(pendingTransactionsCache.add(createPendingTransaction(largeTransaction), 0))
+        .isEqualTo(POSTPONED);
+    assertTransactionNotPresent(largeTransaction);
+  }
+
+  @Test
+  public void postponeTransactionWithHigherNonceFirstForSenderWhenCacheIsFull() {
+    final var lowFeeTransaction = createTransaction(0, Wei.of(10), 100, KEYS1);
+    final var largeTransaction = createTransaction(1, Wei.of(20), CACHE_CAPACITY_BYTES - 50, KEYS1);
+    populateCache(lowFeeTransaction);
+    // largeTransaction is postponed even if of higher fee than the first one, to avoid gaps
+    assertThat(pendingTransactionsCache.add(createPendingTransaction(largeTransaction), 0))
+        .isEqualTo(POSTPONED);
+    assertSenderHasExactlyTransactions(lowFeeTransaction);
+  }
+
+  @Test
+  public void postponeLessFeeTransactionForOtherSendersWhenCacheIsFull() {
+    final var lowFeeTransactionSenderA =
+        createTransaction(0, Wei.of(10), 100, SIGNATURE_ALGORITHM.get().generateKeyPair());
+    final var lowFeeTransactionSenderB =
+        createTransaction(0, Wei.of(10), 100, SIGNATURE_ALGORITHM.get().generateKeyPair());
+    final var largeHighFeeTransactionSenderC =
+        createTransaction(
+            0, Wei.of(20), CACHE_CAPACITY_BYTES - lowFeeTransactionSenderB.getSize() + 1, KEYS2);
+
+    populateCache(lowFeeTransactionSenderA, lowFeeTransactionSenderB);
+
+    // to make space for the large transaction both previous transactions are postponed
+    assertThat(
+            pendingTransactionsCache.add(
+                createPendingTransaction(largeHighFeeTransactionSenderC), 0))
+        .isEqualTo(ADDED);
+
+    assertNoTransactionsForSender(lowFeeTransactionSenderA.getSender());
+    assertNoTransactionsForSender(lowFeeTransactionSenderB.getSender());
+    assertSenderHasExactlyTransactions(largeHighFeeTransactionSenderC);
+  }
+
   private Transaction[] populateCache(final int numTxs, final KeyPair keys) {
     return populateCache(numTxs, keys, 0, OptionalLong.empty());
   }
@@ -460,32 +508,52 @@ public class PendingTransactionsCacheTest {
     return new PendingTransaction(transaction, false, Instant.now());
   }
 
-  private Transaction createTransaction(final long transactionNumber) {
-    return createTransaction(transactionNumber, Wei.of(5000L), KEYS1);
+  private Transaction createTransaction(final long nonce) {
+    return createTransaction(nonce, Wei.of(5000L), KEYS1);
   }
 
-  private Transaction createTransaction(final long transactionNumber, final KeyPair keys) {
-    return createTransaction(transactionNumber, Wei.of(5000L), keys);
+  private Transaction createTransaction(final long nonce, final KeyPair keys) {
+    return createTransaction(nonce, Wei.of(5000L), keys);
   }
 
-  private Transaction createTransaction(final long transactionNumber, final Wei maxGasPrice) {
-    return createTransaction(transactionNumber, maxGasPrice, KEYS1);
+  private Transaction createTransaction(final long nonce, final Wei maxGasPrice) {
+    return createTransaction(nonce, maxGasPrice, KEYS1);
+  }
+
+  private Transaction createTransaction(final long nonce, final int payloadSize) {
+    return createTransaction(nonce, Wei.of(5000L), payloadSize, KEYS1);
   }
 
   private Transaction createTransaction(
       final long nonce, final Wei maxGasPrice, final KeyPair keys) {
+    return createTransaction(nonce, maxGasPrice, 0, keys);
+  }
+
+  private Transaction createTransaction(
+      final long nonce, final Wei maxGasPrice, final int payloadSize, final KeyPair keys) {
 
     return createTransaction(
         randomizeTxType.nextBoolean() ? TransactionType.EIP1559 : TransactionType.FRONTIER,
         nonce,
         maxGasPrice,
+        payloadSize,
         keys);
   }
 
   private Transaction createTransaction(
-      final TransactionType type, final long nonce, final Wei maxGasPrice, final KeyPair keys) {
+      final TransactionType type,
+      final long nonce,
+      final Wei maxGasPrice,
+      final int payloadSize,
+      final KeyPair keys) {
 
-    var tx = new TransactionTestFixture().value(Wei.of(nonce)).nonce(nonce).type(type);
+    var payloadBytes = Bytes.repeat((byte) 1, payloadSize);
+    var tx =
+        new TransactionTestFixture()
+            .value(Wei.of(nonce))
+            .nonce(nonce)
+            .type(type)
+            .payload(payloadBytes);
     if (type.supports1559FeeMarket()) {
       tx.maxFeePerGas(Optional.of(maxGasPrice))
           .maxPriorityFeePerGas(Optional.of(maxGasPrice.divide(10)));
@@ -501,6 +569,7 @@ public class PendingTransactionsCacheTest {
         originalTransaction.getType(),
         originalTransaction.getNonce(),
         originalTransaction.getMaxGasFee().multiply(2),
+        originalTransaction.getPayload().size(),
         keys);
   }
 

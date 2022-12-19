@@ -51,10 +51,9 @@ import org.slf4j.LoggerFactory;
 
 public class PendingTransactionsCache {
   private static final Logger LOG = LoggerFactory.getLogger(PendingTransactionsCache.class);
-  private static final Long MAX_READY_SIZE_BYTES = 100_000_000L;
 
   private final TransactionPoolConfiguration poolConfig;
-  private final DummyPostponedTransactionsCache postponedCache;
+  private final PostponedTransactionsCache postponedCache;
   private final BiFunction<PendingTransaction, PendingTransaction, Boolean>
       transactionReplacementTester;
   private final Map<Address, NavigableMap<Long, PendingTransaction>> readyBySender =
@@ -69,7 +68,7 @@ public class PendingTransactionsCache {
 
   public PendingTransactionsCache(
       final TransactionPoolConfiguration poolConfig,
-      final DummyPostponedTransactionsCache postponedCache,
+      final PostponedTransactionsCache postponedCache,
       final BiFunction<PendingTransaction, PendingTransaction, Boolean>
           transactionReplacementTester) {
     this.poolConfig = poolConfig;
@@ -96,6 +95,21 @@ public class PendingTransactionsCache {
 
     if (addToReadyStatus.equals(POSTPONED)) {
       postponedCache.add(pendingTransaction);
+    }
+
+    if (addToReadyStatus.equals(ADDED) || addToReadyStatus.isReplacement()) {
+      final var cacheFreeSpace = cacheFreeSpace();
+      if (cacheFreeSpace < 0) {
+        // free some space moving less valuable ready to postponed
+        final var evictedTransactions = evictReadyTransactions(-cacheFreeSpace);
+        postponedCache.addAll(evictedTransactions);
+
+        if (evictedTransactions.contains(pendingTransaction)) {
+          // in case the just added transaction is postponed to free space change the returned
+          // result
+          return POSTPONED;
+        }
+      }
     }
 
     return addToReadyStatus;
@@ -184,16 +198,10 @@ public class PendingTransactionsCache {
       currFirstTx.ifPresent(orderByMaxFee::add);
     }
 
-    final var cacheFreeSpace = cacheFreeSpace();
-    if (cacheFreeSpace < 0) {
-      // free some space moving less valuable ready to postponed
-      postponedCache.addAll((evictReadyTransactions(-cacheFreeSpace)));
-    } else {
-      if (prevLastNonce != currLastNonce) {
-        final int maxPromotable = maxPromotablePerSender - senderTxs.size();
-        if (maxPromotable > 0) {
-          postponedToReady(sender, currLastNonce, maxPromotable);
-        }
+    if (prevLastNonce != currLastNonce) {
+      final int maxPromotable = maxPromotablePerSender - senderTxs.size();
+      if (maxPromotable > 0) {
+        promoteFromPostponed(sender, currLastNonce, maxPromotable);
       }
     }
 
@@ -223,21 +231,24 @@ public class PendingTransactionsCache {
       readyBySender.remove(lessReadySender);
       // at this point lastTx was the first for the sender, then remove it from eviction order too
       orderByMaxFee.remove(lastTx.getTransaction());
-      // try next less valuable sender
-      toPostponed.addAll(evictReadyTransactions(evictSize - postponedSize));
+      if (!readyBySender.isEmpty()) {
+        // try next less valuable sender
+        toPostponed.addAll(evictReadyTransactions(evictSize - postponedSize));
+      }
     }
     return toPostponed;
   }
 
   private long cacheFreeSpace() {
-    return MAX_READY_SIZE_BYTES - readyTotalSize.get();
+    return poolConfig.getPendingTransactionsCacheSizeBytes() - readyTotalSize.get();
   }
 
-  private void postponedToReady(
+  private void promoteFromPostponed(
       final Address sender, final long currLastNonce, final int maxPromotable) {
 
+    final long maxSize = cacheFreeSpace();
     postponedCache
-        .promoteForSender(sender, currLastNonce, maxPromotable)
+        .promoteForSender(sender, currLastNonce, maxPromotable, maxSize)
         .thenAccept(
             toReadyTxs -> {
               modifySenderReadyTxsWrapper(
@@ -246,10 +257,11 @@ public class PendingTransactionsCache {
         .exceptionally(
             throwable -> {
               LOG.debug(
-                  "Error moving from postponed to ready for sender {}, last nonce {}, max promotable {}, cause {}",
+                  "Error moving from postponed to ready for sender {}, last nonce {}, max promotable {}, max size {} bytes, cause {}",
                   sender,
                   currLastNonce,
                   maxPromotable,
+                  maxSize,
                   throwable.getMessage());
               return null;
             });
@@ -338,7 +350,7 @@ public class PendingTransactionsCache {
 
   private boolean fitsInCache(final PendingTransaction pendingTransaction) {
     return readyTotalSize.get() + pendingTransaction.getTransaction().getSize()
-        <= MAX_READY_SIZE_BYTES;
+        <= poolConfig.getPendingTransactionsCacheSizeBytes();
   }
 
   private void decreaseTotalSize(final PendingTransaction pendingTransaction) {
