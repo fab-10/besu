@@ -180,7 +180,7 @@ public class PendingTransactionsCacheTest {
   }
 
   @Test
-  public void shouldDoNothingIfTransactionAlreadyPresent() {
+  public void doNothingIfTransactionAlreadyPresent() {
     final var addedTxs = populateCache(1, 0);
     assertThat(pendingTransactionsCache.add(createPendingTransaction(addedTxs[0]), 0))
         .isEqualTo(ALREADY_KNOWN);
@@ -188,21 +188,21 @@ public class PendingTransactionsCacheTest {
   }
 
   @Test
-  public void shouldReturnEmptyWhenGettingNotPresentTransaction() {
+  public void returnsEmptyWhenGettingNotPresentTransaction() {
     final var transaction = createTransaction(0);
     assertTransactionNotPresent(transaction);
     assertThat(pendingTransactionsCache.get(transaction.getSender(), 0)).isEmpty();
   }
 
   @Test
-  public void shouldRemoveAddedTransaction() {
+  public void removePreviouslyAddedTransaction() {
     final var addedTxs = populateCache(1, 0);
     pendingTransactionsCache.remove(addedTxs[0]);
     assertTransactionNotPresent(addedTxs[0]);
   }
 
   @Test
-  public void shouldDoNothingWhenRemovingNotPresentTransaction() {
+  public void doNothingWhenRemovingNotPresentTransaction() {
     final var transaction = createTransaction(0);
     assertTransactionNotPresent(transaction);
     pendingTransactionsCache.remove(transaction);
@@ -210,7 +210,7 @@ public class PendingTransactionsCacheTest {
   }
 
   @Test
-  public void shouldReturnNextReadyNonceForSenderWithOneReadyTransaction() {
+  public void returnsNextReadyNonceForSenderWithOneReadyTransaction() {
     final var addedTxs = populateCache(1, 0);
     assertThat(pendingTransactionsCache.getNextReadyNonce(addedTxs[0].getSender()))
         .isPresent()
@@ -218,7 +218,7 @@ public class PendingTransactionsCacheTest {
   }
 
   @Test
-  public void shouldReturnNextReadyNonceForSenderWithMultipleReadyTransactions() {
+  public void returnsNextReadyNonceForSenderWithMultipleReadyTransactions() {
     final var addedTxs = populateCache(2, 0);
     assertThat(pendingTransactionsCache.getNextReadyNonce(addedTxs[0].getSender()))
         .isPresent()
@@ -226,7 +226,7 @@ public class PendingTransactionsCacheTest {
   }
 
   @Test
-  public void shouldReturnCorrectNextReadyWhenAddedTransactionsHaveGaps() {
+  public void returnsCorrectNextReadyWhenAddedTransactionsHaveGaps() {
     final var addedTxs = populateCache(3, 0, 1);
     assertThat(pendingTransactionsCache.getNextReadyNonce(addedTxs[0].getSender()))
         .isPresent()
@@ -234,7 +234,7 @@ public class PendingTransactionsCacheTest {
   }
 
   @Test
-  public void shouldReturnEmptyHasNextReadyNonceForSenderWithoutReadyTransactions() {
+  public void returnsEmptyHasNextReadyNonceForSenderWithoutReadyTransactions() {
     final var transaction = createTransaction(0);
     assertTransactionNotPresent(transaction);
     assertThat(pendingTransactionsCache.getNextReadyNonce(transaction.getSender())).isEmpty();
@@ -388,6 +388,11 @@ public class PendingTransactionsCacheTest {
     final var transaction1SenderB = createTransaction(1, Wei.of(100), KEYS2);
     populateCache(transaction0SenderB, transaction1SenderB);
     assertSenderHasExactlyTransactions(transaction0SenderB, transaction1SenderB);
+
+    final var transaction0SenderC =
+        createTransaction(1, Wei.of(80), SIGNATURE_ALGORITHM.get().generateKeyPair());
+    populateCache(transaction0SenderC);
+    assertSenderHasExactlyTransactions(transaction0SenderC);
 
     final var confirmedTransaction = transaction0SenderA;
 
