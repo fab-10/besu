@@ -19,6 +19,10 @@ import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedRes
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ALREADY_KNOWN;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.POSTPONED;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.REJECTED_UNDERPRICED_REPLACEMENT;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -43,6 +47,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Random;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiFunction;
 
 import com.google.common.base.Supplier;
@@ -50,7 +55,6 @@ import com.google.common.base.Suppliers;
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.Mock;
 
 public class PendingTransactionsCacheTest {
   protected static final int MAX_TRANSACTIONS = 5;
@@ -71,7 +75,7 @@ public class PendingTransactionsCacheTest {
 
   private PendingTransactionsCache pendingTransactionsCache;
 
-  @Mock private PostponedTransactionsCache postponedTransactionsCache;
+  private PostponedTransactionsCache postponedTransactionsCache;
 
   private static BlockHeader mockBlockHeader() {
     final BlockHeader blockHeader = mock(BlockHeader.class);
@@ -85,13 +89,17 @@ public class PendingTransactionsCacheTest {
         (t1, t2) ->
             new TransactionPoolReplacementHandler(poolConf.getPriceBump())
                 .shouldReplace(t1, t2, mockBlockHeader());
+
+    postponedTransactionsCache = mock(PostponedTransactionsCache.class);
+    when(postponedTransactionsCache.promoteForSender(any(), anyLong(), anyInt(), anyLong()))
+        .thenReturn(CompletableFuture.completedFuture(List.of()));
     pendingTransactionsCache =
         new PendingTransactionsCache(
             poolConf, postponedTransactionsCache, transactionReplacementTester);
   }
 
   @Test
-  public void shouldAddFirstTransaction() {
+  public void addFirstTransaction() {
     final var firstTransaction = createTransaction(0);
     assertThat(pendingTransactionsCache.add(createPendingTransaction(firstTransaction), 0))
         .isEqualTo(ADDED);
@@ -448,6 +456,40 @@ public class PendingTransactionsCacheTest {
     assertNoTransactionsForSender(lowFeeTransactionSenderA.getSender());
     assertNoTransactionsForSender(lowFeeTransactionSenderB.getSender());
     assertSenderHasExactlyTransactions(largeHighFeeTransactionSenderC);
+  }
+
+  @Test
+  void postponedToReadyWhenFillingNonceGap() {
+    final var postponedTransaction = createTransaction(1);
+    when(postponedTransactionsCache.promoteForSender(
+            eq(postponedTransaction.getSender()), eq(0L), anyInt(), anyLong()))
+        .thenReturn(
+            CompletableFuture.completedFuture(
+                List.of(createPendingTransaction(postponedTransaction))));
+
+    assertTransactionNotPresent(postponedTransaction);
+
+    final var previousTransaction = createTransaction(0);
+    populateCache(previousTransaction);
+    assertSenderHasExactlyTransactions(previousTransaction, postponedTransaction);
+  }
+
+  @Test
+  void noPostponedToReadyWhenPostponedDoesNotFitInCache() {
+    final var arrivesLateTransaction = createTransaction(0);
+    final var postponedTransaction =
+        createTransaction(
+            1, Wei.of(10), CACHE_CAPACITY_BYTES - arrivesLateTransaction.getSize() + 1, KEYS1);
+    when(postponedTransactionsCache.promoteForSender(
+            eq(postponedTransaction.getSender()), eq(0L), anyInt(), anyLong()))
+        .thenReturn(
+            CompletableFuture.completedFuture(
+                List.of(createPendingTransaction(postponedTransaction))));
+
+    assertTransactionNotPresent(postponedTransaction);
+
+    populateCache(arrivesLateTransaction);
+    assertSenderHasExactlyTransactions(arrivesLateTransaction);
   }
 
   private Transaction[] populateCache(final int numTxs, final KeyPair keys) {
