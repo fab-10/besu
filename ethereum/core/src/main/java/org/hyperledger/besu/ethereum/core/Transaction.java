@@ -657,11 +657,12 @@ public class Transaction
   }
 
   public Wei getMaxGasFee() {
-    return maxFeePerGas.orElse(
-        gasPrice.orElseThrow(
-            () ->
-                new IllegalStateException(
-                    String.format("Transaction requires either gasPrice or maxFeePerGas"))));
+    return maxFeePerGas.orElseGet(
+        () ->
+            gasPrice.orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        String.format("Transaction requires either gasPrice or maxFeePerGas"))));
   }
 
   /**
