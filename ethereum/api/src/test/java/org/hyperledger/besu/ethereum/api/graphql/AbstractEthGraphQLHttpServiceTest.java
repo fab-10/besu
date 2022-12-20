@@ -146,13 +146,12 @@ public abstract class AbstractEthGraphQLHttpServiceTest {
     Mockito.when(pendingTransactionsMock.getPrioritizedPendingTransactions())
         .thenReturn(
             Collections.singleton(
-                new PendingTransaction(
+                new PendingTransaction.Local(
                     Transaction.builder()
                         .type(TransactionType.FRONTIER)
                         .nonce(42)
                         .gasLimit(654321)
                         .build(),
-                    true,
                     Instant.ofEpochSecond(Integer.MAX_VALUE))));
 
     final WorldStateArchive stateArchive = createInMemoryWorldStateArchive();

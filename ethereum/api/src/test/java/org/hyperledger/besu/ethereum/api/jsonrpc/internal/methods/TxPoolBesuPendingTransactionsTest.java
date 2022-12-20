@@ -265,7 +265,7 @@ public class TxPoolBesuPendingTransactionsTest {
     return gen.transactionsWithAllTypes(4).stream()
         .map(
             transaction ->
-                new PendingTransaction(transaction, true, Instant.ofEpochSecond(Integer.MAX_VALUE)))
+                new PendingTransaction.Local(transaction, Instant.ofEpochSecond(Integer.MAX_VALUE)))
         .collect(Collectors.toUnmodifiableSet());
   }
 }

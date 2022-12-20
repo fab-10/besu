@@ -113,10 +113,9 @@ public class BaseFeePendingTransactionsTest extends AbstractPendingTransactionsT
         IntStream.range(0, MAX_TRANSACTIONS)
             .mapToObj(
                 i ->
-                    new PendingTransaction(
+                    new PendingTransaction.Remote(
                         createTransaction(
                             0, Wei.of(10), SIGNATURE_ALGORITHM.get().generateKeyPair()),
-                        false,
                         Instant.now()))
             .collect(Collectors.toUnmodifiableList());
 

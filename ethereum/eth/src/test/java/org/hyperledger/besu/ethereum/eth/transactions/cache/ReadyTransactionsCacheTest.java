@@ -54,11 +54,8 @@ import com.google.common.base.Suppliers;
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class ReadyTransactionsCacheTest {
-  private static final Logger LOG = LoggerFactory.getLogger(ReadyTransactionsCacheTest.class);
   protected static final int MAX_TRANSACTIONS = 5;
   protected static final int CACHE_CAPACITY_BYTES = 1024;
   protected static final Supplier<SignatureAlgorithm> SIGNATURE_ALGORITHM =
@@ -539,7 +536,7 @@ public class ReadyTransactionsCacheTest {
   }
 
   private PendingTransaction createPendingTransaction(final Transaction transaction) {
-    return new PendingTransaction(transaction, false, Instant.now());
+    return new PendingTransaction.Remote(transaction, Instant.now());
   }
 
   private Transaction createTransaction(final long nonce) {

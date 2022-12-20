@@ -255,7 +255,11 @@ public class TransactionBroadcasterTest {
   private Set<PendingTransaction> createPendingTransactionList(final int num, final boolean local) {
     return IntStream.range(0, num)
         .mapToObj(unused -> generator.transaction())
-        .map(tx -> new PendingTransaction(tx, local, Instant.now()))
+        .map(
+            tx ->
+                local
+                    ? new PendingTransaction.Local(tx, Instant.now())
+                    : new PendingTransaction.Remote(tx, Instant.now()))
         .collect(Collectors.toSet());
   }
 

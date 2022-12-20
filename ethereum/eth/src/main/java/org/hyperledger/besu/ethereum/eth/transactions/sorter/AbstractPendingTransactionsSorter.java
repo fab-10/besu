@@ -174,7 +174,7 @@ public abstract class AbstractPendingTransactionsSorter {
       final Transaction transaction, final Optional<Account> maybeSenderAccount) {
 
     final PendingTransaction pendingTransaction =
-        new PendingTransaction(transaction, false, clock.instant());
+        new PendingTransaction.Remote(transaction, clock.instant());
     final TransactionAddedResult transactionAddedResult =
         addTransaction(pendingTransaction, maybeSenderAccount);
     return transactionAddedResult;
@@ -184,7 +184,7 @@ public abstract class AbstractPendingTransactionsSorter {
       final Transaction transaction, final Optional<Account> maybeSenderAccount) {
     final TransactionAddedResult transactionAdded =
         addTransaction(
-            new PendingTransaction(transaction, true, clock.instant()), maybeSenderAccount);
+            new PendingTransaction.Local(transaction, clock.instant()), maybeSenderAccount);
     if (transactionAdded.equals(ADDED)) {
       localSenders.add(transaction.getSender());
     }
