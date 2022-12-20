@@ -49,8 +49,8 @@ import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PendingTransactionsCache {
-  private static final Logger LOG = LoggerFactory.getLogger(PendingTransactionsCache.class);
+public class ReadyTransactionsCache {
+  private static final Logger LOG = LoggerFactory.getLogger(ReadyTransactionsCache.class);
 
   private final TransactionPoolConfiguration poolConfig;
   private final PostponedTransactionsCache postponedCache;
@@ -64,16 +64,14 @@ public class PendingTransactionsCache {
           Comparator.comparing(Transaction::getMaxGasFee).thenComparing(Transaction::getSender));
 
   private final AtomicLong readyTotalSize = new AtomicLong();
-  private final int maxPromotablePerSender;
 
-  public PendingTransactionsCache(
+  public ReadyTransactionsCache(
       final TransactionPoolConfiguration poolConfig,
       final PostponedTransactionsCache postponedCache,
       final BiFunction<PendingTransaction, PendingTransaction, Boolean>
           transactionReplacementTester) {
     this.poolConfig = poolConfig;
     this.postponedCache = postponedCache;
-    this.maxPromotablePerSender = poolConfig.getTxPoolMaxFutureTransactionByAccount();
     this.transactionReplacementTester = transactionReplacementTester;
   }
 
@@ -136,12 +134,7 @@ public class PendingTransactionsCache {
     return OptionalLong.empty();
   }
 
-  public List<PendingTransaction> getPromotableTransactions(
-      final List<Transaction> confirmedTransactions,
-      final int maxPromotable,
-      final Predicate<PendingTransaction> promotionFilter) {
-
-    List<PendingTransaction> promotableTxs = new ArrayList<>(maxPromotable);
+  public void removeConfirmedTransactions(final List<Transaction> confirmedTransactions) {
 
     final Map<Address, Optional<Long>> confirmedBySender =
         maxConfirmedNonceBySender(confirmedTransactions);
@@ -153,8 +146,14 @@ public class PendingTransactionsCache {
       modifySenderReadyTxsWrapper(
           sender, senderTxs -> removeConfirmed(sender, senderTxs, maxConfirmedNonce));
     }
+  }
 
-    // if there is still space pick other ready transactions
+  public List<PendingTransaction> getPromotableTransactions(
+      final int maxPromotable, final Predicate<PendingTransaction> promotionFilter) {
+
+    List<PendingTransaction> promotableTxs = new ArrayList<>(maxPromotable);
+
+    // if there is space pick other ready transactions
     if (maxPromotable > 0) {
       promotableTxs.addAll(promoteReady(maxPromotable, promotionFilter));
     }
@@ -199,10 +198,7 @@ public class PendingTransactionsCache {
     }
 
     if (prevLastNonce != currLastNonce) {
-      final int maxPromotable = maxPromotablePerSender - senderTxs.size();
-      if (maxPromotable > 0) {
-        promoteFromPostponed(sender, currLastNonce, maxPromotable);
-      }
+      promoteFromPostponed(sender, currLastNonce);
     }
 
     if (senderTxs != null && senderTxs.isEmpty()) {
@@ -243,28 +239,28 @@ public class PendingTransactionsCache {
     return poolConfig.getPendingTransactionsCacheSizeBytes() - readyTotalSize.get();
   }
 
-  private void promoteFromPostponed(
-      final Address sender, final long currLastNonce, final int maxPromotable) {
+  private void promoteFromPostponed(final Address sender, final long currLastNonce) {
 
     final long maxSize = cacheFreeSpace();
-    postponedCache
-        .promoteForSender(sender, currLastNonce, maxPromotable, maxSize)
-        .thenAccept(
-            toReadyTxs -> {
-              modifySenderReadyTxsWrapper(
-                  sender, senderTxs -> postponedToReady(senderTxs, toReadyTxs));
-            })
-        .exceptionally(
-            throwable -> {
-              LOG.debug(
-                  "Error moving from postponed to ready for sender {}, last nonce {}, max promotable {}, max size {} bytes, cause {}",
-                  sender,
-                  currLastNonce,
-                  maxPromotable,
-                  maxSize,
-                  throwable.getMessage());
-              return null;
-            });
+    if (maxSize > 0) {
+      postponedCache
+          .promoteForSender(sender, currLastNonce, maxSize)
+          .thenAccept(
+              toReadyTxs -> {
+                modifySenderReadyTxsWrapper(
+                    sender, senderTxs -> postponedToReady(senderTxs, toReadyTxs));
+              })
+          .exceptionally(
+              throwable -> {
+                LOG.debug(
+                    "Error moving from postponed to ready for sender {}, last nonce {}, max size {} bytes, cause {}",
+                    sender,
+                    currLastNonce,
+                    maxSize,
+                    throwable.getMessage());
+                return null;
+              });
+    }
   }
 
   private Void postponedToReady(
@@ -416,12 +412,11 @@ public class PendingTransactionsCache {
       final int maxRemaining,
       final Predicate<PendingTransaction> promotionFilter) {
 
-    final int maxForThisSender = Math.min(maxPromotablePerSender, maxRemaining);
-    final List<PendingTransaction> promotableTxs = new ArrayList<>(maxForThisSender);
+    final List<PendingTransaction> promotableTxs = new ArrayList<>(maxRemaining);
 
     final var itSenderTxs = senderTxs.entrySet().iterator();
 
-    while (itSenderTxs.hasNext() && promotableTxs.size() < maxForThisSender) {
+    while (itSenderTxs.hasNext() && promotableTxs.size() < maxRemaining) {
       var promotableEntry = itSenderTxs.next();
       if (promotionFilter.test(promotableEntry.getValue())) {
         promotableTxs.add(promotableEntry.getValue());

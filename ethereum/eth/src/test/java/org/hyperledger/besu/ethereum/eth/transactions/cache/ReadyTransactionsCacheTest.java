@@ -20,7 +20,6 @@ import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedRes
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.POSTPONED;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.REJECTED_UNDERPRICED_REPLACEMENT;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -55,8 +54,11 @@ import com.google.common.base.Suppliers;
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-public class PendingTransactionsCacheTest {
+public class ReadyTransactionsCacheTest {
+  private static final Logger LOG = LoggerFactory.getLogger(ReadyTransactionsCacheTest.class);
   protected static final int MAX_TRANSACTIONS = 5;
   protected static final int CACHE_CAPACITY_BYTES = 1024;
   protected static final Supplier<SignatureAlgorithm> SIGNATURE_ALGORITHM =
@@ -73,7 +75,7 @@ public class PendingTransactionsCacheTest {
           .pendingTransactionsCacheSizeBytes(CACHE_CAPACITY_BYTES)
           .build();
 
-  private PendingTransactionsCache pendingTransactionsCache;
+  private ReadyTransactionsCache readyTransactionsCache;
 
   private PostponedTransactionsCache postponedTransactionsCache;
 
@@ -91,17 +93,17 @@ public class PendingTransactionsCacheTest {
                 .shouldReplace(t1, t2, mockBlockHeader());
 
     postponedTransactionsCache = mock(PostponedTransactionsCache.class);
-    when(postponedTransactionsCache.promoteForSender(any(), anyLong(), anyInt(), anyLong()))
+    when(postponedTransactionsCache.promoteForSender(any(), anyLong(), anyLong()))
         .thenReturn(CompletableFuture.completedFuture(List.of()));
-    pendingTransactionsCache =
-        new PendingTransactionsCache(
+    readyTransactionsCache =
+        new ReadyTransactionsCache(
             poolConf, postponedTransactionsCache, transactionReplacementTester);
   }
 
   @Test
   public void addFirstTransaction() {
     final var firstTransaction = createTransaction(0);
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(firstTransaction), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(firstTransaction), 0))
         .isEqualTo(ADDED);
     assertTransactionPresent(firstTransaction);
   }
@@ -110,10 +112,10 @@ public class PendingTransactionsCacheTest {
   public void addTransactionForMultipleSenders() {
     final var transactionSenderA = createTransaction(0, KEYS1);
     final var transactionSenderB = createTransaction(0, KEYS2);
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(transactionSenderA), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(transactionSenderA), 0))
         .isEqualTo(ADDED);
     assertTransactionPresent(transactionSenderA);
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(transactionSenderB), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(transactionSenderB), 0))
         .isEqualTo(ADDED);
     assertTransactionPresent(transactionSenderB);
   }
@@ -121,7 +123,7 @@ public class PendingTransactionsCacheTest {
   @Test
   public void shouldPostponeFirstTransactionWithNonceGap() {
     final var firstTransaction = createTransaction(1);
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(firstTransaction), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(firstTransaction), 0))
         .isEqualTo(POSTPONED);
     assertTransactionNotPresent(firstTransaction);
   }
@@ -130,10 +132,10 @@ public class PendingTransactionsCacheTest {
   public void shouldPostponeNextTransactionWithNonceGap() {
     final var transaction0 = createTransaction(0);
     final var transaction2 = createTransaction(2);
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(transaction0), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(transaction0), 0))
         .isEqualTo(ADDED);
     assertTransactionPresent(transaction0);
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(transaction2), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(transaction2), 0))
         .isEqualTo(POSTPONED);
     assertTransactionNotPresent(transaction2);
   }
@@ -142,7 +144,7 @@ public class PendingTransactionsCacheTest {
   public void shouldPostponeIfTooMuchPendingTransactionForTheSender() {
     final var futureTransaction =
         createTransaction(poolConf.getTxPoolMaxFutureTransactionByAccount() + 1);
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(futureTransaction), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(futureTransaction), 0))
         .isEqualTo(POSTPONED);
     assertTransactionNotPresent(futureTransaction);
   }
@@ -151,11 +153,11 @@ public class PendingTransactionsCacheTest {
   public void shouldReplaceTransaction() {
     final var lowValueTransaction = createTransaction(0, KEYS1);
     final var highValueTransaction = createTransactionReplacement(lowValueTransaction, KEYS1);
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(lowValueTransaction), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(lowValueTransaction), 0))
         .isEqualTo(ADDED);
     assertTransactionPresent(lowValueTransaction);
     final var txAddResult =
-        pendingTransactionsCache.add(createPendingTransaction(highValueTransaction), 0);
+        readyTransactionsCache.add(createPendingTransaction(highValueTransaction), 0);
     assertThat(txAddResult.isReplacement()).isTrue();
     assertThat(txAddResult.maybeReplacedTransaction())
         .isPresent()
@@ -170,10 +172,10 @@ public class PendingTransactionsCacheTest {
     final var highValueTransaction = createTransaction(0, Wei.of(101));
     final var lowValueTransaction = createTransaction(0, Wei.of(100));
 
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(highValueTransaction), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(highValueTransaction), 0))
         .isEqualTo(ADDED);
     assertTransactionPresent(highValueTransaction);
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(lowValueTransaction), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(lowValueTransaction), 0))
         .isEqualTo(REJECTED_UNDERPRICED_REPLACEMENT);
     assertTransactionNotPresent(lowValueTransaction);
     assertTransactionPresent(highValueTransaction);
@@ -182,7 +184,7 @@ public class PendingTransactionsCacheTest {
   @Test
   public void doNothingIfTransactionAlreadyPresent() {
     final var addedTxs = populateCache(1, 0);
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(addedTxs[0]), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(addedTxs[0]), 0))
         .isEqualTo(ALREADY_KNOWN);
     assertTransactionPresent(addedTxs[0]);
   }
@@ -191,13 +193,13 @@ public class PendingTransactionsCacheTest {
   public void returnsEmptyWhenGettingNotPresentTransaction() {
     final var transaction = createTransaction(0);
     assertTransactionNotPresent(transaction);
-    assertThat(pendingTransactionsCache.get(transaction.getSender(), 0)).isEmpty();
+    assertThat(readyTransactionsCache.get(transaction.getSender(), 0)).isEmpty();
   }
 
   @Test
   public void removePreviouslyAddedTransaction() {
     final var addedTxs = populateCache(1, 0);
-    pendingTransactionsCache.remove(addedTxs[0]);
+    readyTransactionsCache.remove(addedTxs[0]);
     assertTransactionNotPresent(addedTxs[0]);
   }
 
@@ -205,14 +207,14 @@ public class PendingTransactionsCacheTest {
   public void doNothingWhenRemovingNotPresentTransaction() {
     final var transaction = createTransaction(0);
     assertTransactionNotPresent(transaction);
-    pendingTransactionsCache.remove(transaction);
+    readyTransactionsCache.remove(transaction);
     assertTransactionNotPresent(transaction);
   }
 
   @Test
   public void returnsNextReadyNonceForSenderWithOneReadyTransaction() {
     final var addedTxs = populateCache(1, 0);
-    assertThat(pendingTransactionsCache.getNextReadyNonce(addedTxs[0].getSender()))
+    assertThat(readyTransactionsCache.getNextReadyNonce(addedTxs[0].getSender()))
         .isPresent()
         .hasValue(1);
   }
@@ -220,7 +222,7 @@ public class PendingTransactionsCacheTest {
   @Test
   public void returnsNextReadyNonceForSenderWithMultipleReadyTransactions() {
     final var addedTxs = populateCache(2, 0);
-    assertThat(pendingTransactionsCache.getNextReadyNonce(addedTxs[0].getSender()))
+    assertThat(readyTransactionsCache.getNextReadyNonce(addedTxs[0].getSender()))
         .isPresent()
         .hasValue(2);
   }
@@ -228,7 +230,7 @@ public class PendingTransactionsCacheTest {
   @Test
   public void returnsCorrectNextReadyWhenAddedTransactionsHaveGaps() {
     final var addedTxs = populateCache(3, 0, 1);
-    assertThat(pendingTransactionsCache.getNextReadyNonce(addedTxs[0].getSender()))
+    assertThat(readyTransactionsCache.getNextReadyNonce(addedTxs[0].getSender()))
         .isPresent()
         .hasValue(1);
   }
@@ -237,21 +239,21 @@ public class PendingTransactionsCacheTest {
   public void returnsEmptyHasNextReadyNonceForSenderWithoutReadyTransactions() {
     final var transaction = createTransaction(0);
     assertTransactionNotPresent(transaction);
-    assertThat(pendingTransactionsCache.getNextReadyNonce(transaction.getSender())).isEmpty();
+    assertThat(readyTransactionsCache.getNextReadyNonce(transaction.getSender())).isEmpty();
   }
 
   @Test
   public void emptyStreamWhenNoReadyTransactionsForSender() {
     final var transaction = createTransaction(0);
     assertTransactionNotPresent(transaction);
-    assertThat(pendingTransactionsCache.streamReadyTransactions(transaction.getSender())).isEmpty();
+    assertThat(readyTransactionsCache.streamReadyTransactions(transaction.getSender())).isEmpty();
   }
 
   @Test
   public void emptyStreamWhenUsingNonceAndNoReadyTransactionsForSender() {
     final var transaction = createTransaction(0);
     assertTransactionNotPresent(transaction);
-    assertThat(pendingTransactionsCache.streamReadyTransactions(transaction.getSender(), 1))
+    assertThat(readyTransactionsCache.streamReadyTransactions(transaction.getSender(), 1))
         .isEmpty();
   }
 
@@ -260,7 +262,7 @@ public class PendingTransactionsCacheTest {
     final var readyTxs = populateCache(1, 0);
     assertThat(readyTxs).hasSize(1);
     assertThat(Arrays.stream(readyTxs).mapToLong(Transaction::getNonce)).containsExactly(0L);
-    assertThat(pendingTransactionsCache.streamReadyTransactions(readyTxs[0].getSender()))
+    assertThat(readyTransactionsCache.streamReadyTransactions(readyTxs[0].getSender()))
         .map(PendingTransaction::getTransaction)
         .containsExactly(readyTxs);
   }
@@ -270,7 +272,7 @@ public class PendingTransactionsCacheTest {
     final var readyTxs = populateCache(2, 1);
     assertThat(readyTxs).hasSize(2);
     assertThat(Arrays.stream(readyTxs).mapToLong(Transaction::getNonce)).containsExactly(1L, 2L);
-    assertThat(pendingTransactionsCache.streamReadyTransactions(readyTxs[0].getSender(), 2L))
+    assertThat(readyTransactionsCache.streamReadyTransactions(readyTxs[0].getSender(), 2L))
         .isEmpty();
   }
 
@@ -280,7 +282,7 @@ public class PendingTransactionsCacheTest {
     assertThat(readyTxs).hasSize(3);
     assertThat(Arrays.stream(readyTxs).mapToLong(Transaction::getNonce))
         .containsExactly(1L, 2L, 3L);
-    assertThat(pendingTransactionsCache.streamReadyTransactions(readyTxs[0].getSender()))
+    assertThat(readyTransactionsCache.streamReadyTransactions(readyTxs[0].getSender()))
         .map(PendingTransaction::getTransaction)
         .containsExactly(readyTxs);
   }
@@ -291,7 +293,7 @@ public class PendingTransactionsCacheTest {
     assertThat(readyTxs).hasSize(3);
     assertThat(Arrays.stream(readyTxs).mapToLong(Transaction::getNonce))
         .containsExactly(1L, 2L, 3L);
-    assertThat(pendingTransactionsCache.streamReadyTransactions(readyTxs[0].getSender(), 2))
+    assertThat(readyTransactionsCache.streamReadyTransactions(readyTxs[0].getSender(), 2))
         .map(PendingTransaction::getTransaction)
         .containsExactly(readyTxs[2]);
   }
@@ -301,7 +303,7 @@ public class PendingTransactionsCacheTest {
     final var readyTxs = populateCache(4, 1, 3);
     assertThat(readyTxs).hasSize(2);
     assertThat(Arrays.stream(readyTxs).mapToLong(Transaction::getNonce)).containsExactly(1L, 2L);
-    assertThat(pendingTransactionsCache.streamReadyTransactions(readyTxs[0].getSender()))
+    assertThat(readyTransactionsCache.streamReadyTransactions(readyTxs[0].getSender()))
         .map(PendingTransaction::getTransaction)
         .containsExactly(readyTxs);
   }
@@ -311,7 +313,7 @@ public class PendingTransactionsCacheTest {
     final var readyTxs = populateCache(4, 1, 3);
     assertThat(readyTxs).hasSize(2);
     assertThat(Arrays.stream(readyTxs).mapToLong(Transaction::getNonce)).containsExactly(1L, 2L);
-    assertThat(pendingTransactionsCache.streamReadyTransactions(readyTxs[0].getSender(), 3))
+    assertThat(readyTransactionsCache.streamReadyTransactions(readyTxs[0].getSender(), 3))
         .isEmpty();
   }
 
@@ -319,17 +321,14 @@ public class PendingTransactionsCacheTest {
   public void noPromotableTransactionsWhenCacheIsEmpty() {
     final var confirmedTransaction = createTransaction(0);
     assertTransactionNotPresent(confirmedTransaction);
-    assertThat(
-            pendingTransactionsCache.getPromotableTransactions(
-                List.of(confirmedTransaction), 1, this::alwaysPromote))
-        .isEmpty();
+    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    assertThat(readyTransactionsCache.getPromotableTransactions(1, this::alwaysPromote)).isEmpty();
   }
 
   @Test
   public void noPromotableTransactionsWhenNoConfirmedTransactionsAndCacheIsEmpty() {
-    assertThat(
-            pendingTransactionsCache.getPromotableTransactions(List.of(), 1, this::alwaysPromote))
-        .isEmpty();
+    readyTransactionsCache.removeConfirmedTransactions(List.of());
+    assertThat(readyTransactionsCache.getPromotableTransactions(1, this::alwaysPromote)).isEmpty();
   }
 
   @Test
@@ -340,10 +339,8 @@ public class PendingTransactionsCacheTest {
 
     final var confirmedTransaction = readyTxs[0];
 
-    assertThat(
-            pendingTransactionsCache.getPromotableTransactions(
-                List.of(confirmedTransaction), 0, this::alwaysPromote))
-        .isEmpty();
+    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    assertThat(readyTransactionsCache.getPromotableTransactions(0, this::alwaysPromote)).isEmpty();
   }
 
   @Test
@@ -353,10 +350,8 @@ public class PendingTransactionsCacheTest {
     assertThat(Arrays.stream(readyTxs).mapToLong(Transaction::getNonce)).containsExactly(1L, 2L);
 
     final var confirmedTransaction = readyTxs[0];
-
-    assertThat(
-            pendingTransactionsCache.getPromotableTransactions(
-                List.of(confirmedTransaction), 1, this::alwaysPromote))
+    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    assertThat(readyTransactionsCache.getPromotableTransactions(1, this::alwaysPromote))
         .map(PendingTransaction::getTransaction)
         .containsExactly(readyTxs[1]);
   }
@@ -369,10 +364,8 @@ public class PendingTransactionsCacheTest {
 
     final var confirmedTransaction = createTransaction(0, KEYS2);
     assertNoTransactionsForSender(confirmedTransaction.getSender());
-
-    assertThat(
-            pendingTransactionsCache.getPromotableTransactions(
-                List.of(confirmedTransaction), 1, this::alwaysPromote))
+    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    assertThat(readyTransactionsCache.getPromotableTransactions(1, this::alwaysPromote))
         .map(PendingTransaction::getTransaction)
         .containsExactly(readyTxs[0]);
   }
@@ -395,10 +388,8 @@ public class PendingTransactionsCacheTest {
     assertSenderHasExactlyTransactions(transaction0SenderC);
 
     final var confirmedTransaction = transaction0SenderA;
-
-    assertThat(
-            pendingTransactionsCache.getPromotableTransactions(
-                List.of(confirmedTransaction), 2, this::alwaysPromote))
+    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    assertThat(readyTransactionsCache.getPromotableTransactions(2, this::alwaysPromote))
         .map(PendingTransaction::getTransaction)
         .containsExactly(transaction1SenderA, transaction0SenderB);
   }
@@ -411,10 +402,8 @@ public class PendingTransactionsCacheTest {
         .containsExactly(0L, 1L, 2L);
 
     final var confirmedTransaction = readyTxs[1];
-
-    assertThat(
-            pendingTransactionsCache.getPromotableTransactions(
-                List.of(confirmedTransaction), 2, this::alwaysPromote))
+    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    assertThat(readyTransactionsCache.getPromotableTransactions(2, this::alwaysPromote))
         .map(PendingTransaction::getTransaction)
         .containsExactly(readyTxs[2]);
 
@@ -424,7 +413,7 @@ public class PendingTransactionsCacheTest {
   @Test
   public void postponeTransactionIfNotFitsInCache() {
     final var largeTransaction = createTransaction(0, CACHE_CAPACITY_BYTES);
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(largeTransaction), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(largeTransaction), 0))
         .isEqualTo(POSTPONED);
     assertTransactionNotPresent(largeTransaction);
   }
@@ -435,7 +424,7 @@ public class PendingTransactionsCacheTest {
     final var largeTransaction = createTransaction(1, Wei.of(20), CACHE_CAPACITY_BYTES - 50, KEYS1);
     populateCache(lowFeeTransaction);
     // largeTransaction is postponed even if of higher fee than the first one, to avoid gaps
-    assertThat(pendingTransactionsCache.add(createPendingTransaction(largeTransaction), 0))
+    assertThat(readyTransactionsCache.add(createPendingTransaction(largeTransaction), 0))
         .isEqualTo(POSTPONED);
     assertSenderHasExactlyTransactions(lowFeeTransaction);
   }
@@ -454,8 +443,7 @@ public class PendingTransactionsCacheTest {
 
     // to make space for the large transaction both previous transactions are postponed
     assertThat(
-            pendingTransactionsCache.add(
-                createPendingTransaction(largeHighFeeTransactionSenderC), 0))
+            readyTransactionsCache.add(createPendingTransaction(largeHighFeeTransactionSenderC), 0))
         .isEqualTo(ADDED);
 
     assertNoTransactionsForSender(lowFeeTransactionSenderA.getSender());
@@ -467,7 +455,7 @@ public class PendingTransactionsCacheTest {
   void postponedToReadyWhenFillingNonceGap() {
     final var postponedTransaction = createTransaction(1);
     when(postponedTransactionsCache.promoteForSender(
-            eq(postponedTransaction.getSender()), eq(0L), anyInt(), anyLong()))
+            eq(postponedTransaction.getSender()), eq(0L), anyLong()))
         .thenReturn(
             CompletableFuture.completedFuture(
                 List.of(createPendingTransaction(postponedTransaction))));
@@ -486,7 +474,7 @@ public class PendingTransactionsCacheTest {
         createTransaction(
             1, Wei.of(10), CACHE_CAPACITY_BYTES - arrivesLateTransaction.getSize() + 1, KEYS1);
     when(postponedTransactionsCache.promoteForSender(
-            eq(postponedTransaction.getSender()), eq(0L), anyInt(), anyLong()))
+            eq(postponedTransaction.getSender()), eq(0L), anyLong()))
         .thenReturn(
             CompletableFuture.completedFuture(
                 List.of(createPendingTransaction(postponedTransaction))));
@@ -524,7 +512,7 @@ public class PendingTransactionsCacheTest {
       } else {
         final var transaction = createTransaction(nonce, keys);
         final var res =
-            pendingTransactionsCache.add(createPendingTransaction(transaction), startingNonce);
+            readyTransactionsCache.add(createPendingTransaction(transaction), startingNonce);
         if (afterGap) {
           assertThat(res).isEqualTo(POSTPONED);
           assertTransactionNotPresent(transaction);
@@ -544,8 +532,7 @@ public class PendingTransactionsCacheTest {
                 .map(this::createPendingTransaction)
                 .map(
                     pendingTransaction ->
-                        pendingTransactionsCache.add(
-                            pendingTransaction, transactions[0].getNonce()))
+                        readyTransactionsCache.add(pendingTransaction, transactions[0].getNonce()))
                 .filter(ADDED::equals)
                 .count())
         .isEqualTo(transactions.length);
@@ -597,6 +584,7 @@ public class PendingTransactionsCacheTest {
     var payloadBytes = Bytes.repeat((byte) 1, payloadSize);
     var tx =
         new TransactionTestFixture()
+            .to(Optional.of(Address.fromHexString("0x634316eA0EE79c701c6F67C53A4C54cBAfd2316d")))
             .value(Wei.of(nonce))
             .nonce(nonce)
             .type(type)
@@ -621,7 +609,7 @@ public class PendingTransactionsCacheTest {
   }
 
   private void assertTransactionPresent(final Transaction transaction) {
-    assertThat(pendingTransactionsCache.get(transaction.getSender(), transaction.getNonce()))
+    assertThat(readyTransactionsCache.get(transaction.getSender(), transaction.getNonce()))
         .isPresent()
         .map(PendingTransaction::getHash)
         .hasValue(transaction.getHash());
@@ -629,7 +617,7 @@ public class PendingTransactionsCacheTest {
 
   private void assertTransactionNotPresent(final Transaction transaction) {
     final var maybeTransaction =
-        pendingTransactionsCache.get(transaction.getSender(), transaction.getNonce());
+        readyTransactionsCache.get(transaction.getSender(), transaction.getNonce());
     if (!maybeTransaction.isEmpty()) {
       assertThat(maybeTransaction)
           .isPresent()
@@ -639,11 +627,11 @@ public class PendingTransactionsCacheTest {
   }
 
   private void assertNoTransactionsForSender(final Address sender) {
-    assertThat(pendingTransactionsCache.streamReadyTransactions(sender)).isEmpty();
+    assertThat(readyTransactionsCache.streamReadyTransactions(sender)).isEmpty();
   }
 
   private void assertSenderHasExactlyTransactions(final Transaction... transactions) {
-    assertThat(pendingTransactionsCache.streamReadyTransactions(transactions[0].getSender()))
+    assertThat(readyTransactionsCache.streamReadyTransactions(transactions[0].getSender()))
         .map(PendingTransaction::getTransaction)
         .containsExactly(transactions);
   }

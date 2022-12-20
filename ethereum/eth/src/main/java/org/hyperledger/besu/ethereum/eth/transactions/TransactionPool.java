@@ -53,6 +53,7 @@ import org.hyperledger.besu.plugin.services.metrics.LabelledMetric;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -155,41 +156,45 @@ public class TransactionPool implements BlockAddedObserver {
     final List<Transaction> addedTransactions = new ArrayList<>(transactions.size());
     LOG.trace("Adding {} remote transactions", transactions.size());
 
-    for (final Transaction transaction : transactions) {
+    transactions.stream()
+        .sorted(Comparator.comparing(Transaction::getSender).thenComparing(Transaction::getNonce))
+        .forEach(
+            transaction -> {
+              if (pendingTransactions.containsTransaction(transaction.getHash())) {
+                traceLambda(LOG, "Discard already present transaction {}", transaction::toTraceLog);
+                // We already have this transaction, don't even validate it.
+                duplicateTransactionCounter.labels(REMOTE).inc();
 
-      if (pendingTransactions.containsTransaction(transaction.getHash())) {
-        traceLambda(LOG, "Discard already present transaction {}", transaction::toTraceLog);
-        // We already have this transaction, don't even validate it.
-        duplicateTransactionCounter.labels(REMOTE).inc();
-        continue;
-      }
+              } else {
+                final ValidationResultAndAccount validationResult =
+                    validateRemoteTransaction(transaction);
 
-      final ValidationResultAndAccount validationResult = validateRemoteTransaction(transaction);
+                if (validationResult.result.isValid()) {
+                  final TransactionAddedResult status =
+                      pendingTransactions.addRemoteTransaction(
+                          transaction, validationResult.maybeAccount);
+                  if (status.equals(ADDED)) {
+                    traceLambda(LOG, "Added remote transaction {}", transaction::toTraceLog);
+                    addedTransactions.add(transaction);
+                  } else if (status.equals(POSTPONED)) {
+                    traceLambda(LOG, "Postponed remote transaction {}", transaction::toTraceLog);
+                    addedTransactions.add(transaction);
+                  } else if (status.equals(ALREADY_KNOWN)) {
 
-      if (validationResult.result.isValid()) {
-        final TransactionAddedResult status =
-            pendingTransactions.addRemoteTransaction(transaction, validationResult.maybeAccount);
-        if (status.equals(ADDED)) {
-          traceLambda(LOG, "Added remote transaction {}", transaction::toTraceLog);
-          addedTransactions.add(transaction);
-        } else if (status.equals(POSTPONED)) {
-          traceLambda(LOG, "Postponed remote transaction {}", transaction::toTraceLog);
-          addedTransactions.add(transaction);
-        } else if (status.equals(ALREADY_KNOWN)) {
-
-          traceLambda(LOG, "Duplicate remote transaction {}", transaction::toTraceLog);
-          duplicateTransactionCounter.labels(REMOTE).inc();
-        } else {
-          LOG.trace("Transaction added result {}", status);
-        }
-      } else {
-        traceLambda(
-            LOG,
-            "Discard invalid transaction {}, reason {}",
-            transaction::toTraceLog,
-            validationResult.result::getInvalidReason);
-      }
-    }
+                    traceLambda(LOG, "Duplicate remote transaction {}", transaction::toTraceLog);
+                    duplicateTransactionCounter.labels(REMOTE).inc();
+                  } else {
+                    LOG.trace("Transaction added result {}", status);
+                  }
+                } else {
+                  traceLambda(
+                      LOG,
+                      "Discard invalid transaction {}, reason {}",
+                      transaction::toTraceLog,
+                      validationResult.result::getInvalidReason);
+                }
+              }
+            });
 
     if (!addedTransactions.isEmpty()) {
       transactionBroadcaster.onTransactionsAdded(addedTransactions);

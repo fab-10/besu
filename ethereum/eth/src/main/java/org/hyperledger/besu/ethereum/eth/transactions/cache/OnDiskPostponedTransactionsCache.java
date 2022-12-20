@@ -44,10 +44,14 @@ public class OnDiskPostponedTransactionsCache implements PostponedTransactionsCa
 
   @Override
   public CompletableFuture<List<PendingTransaction>> promoteForSender(
-      final Address sender,
-      final long lastReadyNonce,
-      final int maxPromotable,
-      final long maxSize) {
+      final Address sender, final long lastReadyNonce, final long maxSize) {
+    // todo: concrete implementation
+    return CompletableFuture.completedFuture(List.of());
+  }
+
+  @Override
+  public CompletableFuture<List<PendingTransaction>> promote(
+      final int maxPromotable, final long maxSize) {
     // todo: concrete implementation
     return CompletableFuture.completedFuture(List.of());
   }

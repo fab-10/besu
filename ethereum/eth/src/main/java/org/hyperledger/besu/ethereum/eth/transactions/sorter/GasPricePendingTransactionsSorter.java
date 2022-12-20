@@ -18,17 +18,14 @@ import static java.util.Comparator.comparing;
 
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
-import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.NoOpPostponedTransactionsCache;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.PostponedTransactionsCache;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.time.Clock;
-import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NavigableSet;
 import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
@@ -40,58 +37,51 @@ import java.util.function.Supplier;
  * <p>This class is safe for use across multiple threads.
  */
 public class GasPricePendingTransactionsSorter extends AbstractPendingTransactionsSorter {
-  private static final Comparator<PendingTransaction> compareByValue =
-      Comparator.comparing(PendingTransaction::getGasPrice);
-
-  private final NavigableSet<PendingTransaction> prioritizedTransactions =
-      new TreeSet<>(
-          comparing(PendingTransaction::isReceivedFromLocalSource)
-              .thenComparing(PendingTransaction::getGasPrice)
-              .thenComparing(PendingTransaction::getAddedToPoolAt)
-              .thenComparing(PendingTransaction::getSequence)
-              .reversed());
 
   public GasPricePendingTransactionsSorter(
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
       final Supplier<BlockHeader> chainHeadHeaderSupplier) {
-    super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier);
+    this(
+        poolConfig,
+        clock,
+        metricsSystem,
+        chainHeadHeaderSupplier,
+        new NoOpPostponedTransactionsCache());
+  }
+
+  public GasPricePendingTransactionsSorter(
+      final TransactionPoolConfiguration poolConfig,
+      final Clock clock,
+      final MetricsSystem metricsSystem,
+      final Supplier<BlockHeader> chainHeadHeaderSupplier,
+      final PostponedTransactionsCache postponedTransactionsCache) {
+    super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier, postponedTransactionsCache);
+    this.orderByFee = new TreeSet<>(this::compareByValue);
   }
 
   @Override
-  public void manageBlockAdded(
-      final Block block, final List<Transaction> confirmedTransactions, final FeeMarket feeMarket) {
-    transactionsAddedToBlock(confirmedTransactions);
+  public int compareByValue(final PendingTransaction pt1, final PendingTransaction pt2) {
+    return comparing(PendingTransaction::isReceivedFromLocalSource)
+        .thenComparing(PendingTransaction::getGasPrice)
+        .thenComparing(PendingTransaction::getAddedToPoolAt)
+        .thenComparing(PendingTransaction::getSequence)
+        .compare(pt1, pt2);
   }
 
   @Override
-  protected Iterator<PendingTransaction> prioritizedTransactions() {
-    return prioritizedTransactions.iterator();
+  protected void manageBlockAdded(final Block block, final FeeMarket feeMarket) {
+    // no-op
   }
 
   @Override
-  protected void prioritizeTransaction(final PendingTransaction pendingTx) {
-    prioritizedTransactions.add(pendingTx);
-  }
-
-  @Override
-  protected void removePrioritizedTransaction(
+  protected void removeFromOrderedTransactions(
       final PendingTransaction removedPendingTx, final boolean addedToBlock) {
-    if (prioritizedTransactions.remove(removedPendingTx)) {
+    if (orderByFee.remove(removedPendingTx)) {
       incrementTransactionRemovedCounter(
           removedPendingTx.isReceivedFromLocalSource(), addedToBlock);
     }
-  }
-
-  @Override
-  protected PendingTransaction getLeastPriorityTransaction() {
-    return prioritizedTransactions.last();
-  }
-
-  @Override
-  protected Comparator<PendingTransaction> getComparatorByValue() {
-    return compareByValue;
   }
 
   @Override

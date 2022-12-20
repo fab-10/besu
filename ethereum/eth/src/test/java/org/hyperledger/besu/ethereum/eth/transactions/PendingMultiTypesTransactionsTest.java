@@ -23,6 +23,7 @@ import org.hyperledger.besu.crypto.KeyPair;
 import org.hyperledger.besu.crypto.SignatureAlgorithm;
 import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
@@ -103,7 +104,10 @@ public class PendingMultiTypesTransactionsTest {
     transactions.addLocalTransaction(localTransaction3, Optional.empty());
     transactions.addLocalTransaction(localTransaction4, Optional.empty());
 
-    transactions.updateBaseFee(Wei.of(300L));
+    final Block newBlock = mock(Block.class);
+    final BlockHeader newBlockHeader = mockBlockHeader(Wei.of(300L));
+    when(newBlock.getHeader()).thenReturn(newBlockHeader);
+    transactions.manageBlockAdded(newBlock, List.of(), FeeMarket.london(0));
 
     transactions.addLocalTransaction(localTransaction5, Optional.empty());
     assertThat(transactions.size()).isEqualTo(5);
@@ -187,15 +191,15 @@ public class PendingMultiTypesTransactionsTest {
 
   @Test
   public void shouldChangePriorityWhenBaseFeeIncrease() {
-    final Transaction localTransaction0 = create1559Transaction(1, 200, 18, KEYS1);
-    final Transaction localTransaction1 = create1559Transaction(1, 100, 20, KEYS2);
-    final Transaction localTransaction2 = create1559Transaction(2, 100, 19, KEYS2);
+    final Transaction localTransaction0 = create1559Transaction(0, 200, 18, KEYS1);
+    final Transaction localTransaction1 = create1559Transaction(0, 100, 20, KEYS2);
+    final Transaction localTransaction2 = create1559Transaction(1, 100, 19, KEYS2);
 
     transactions.addLocalTransaction(localTransaction0, Optional.empty());
     transactions.addLocalTransaction(localTransaction1, Optional.empty());
     transactions.addLocalTransaction(localTransaction2, Optional.empty());
 
-    final List<Transaction> iterationOrder = new ArrayList<>();
+    final List<Transaction> iterationOrder = new ArrayList<>(3);
     transactions.selectTransactions(
         transaction -> {
           iterationOrder.add(transaction);
@@ -205,7 +209,10 @@ public class PendingMultiTypesTransactionsTest {
     assertThat(iterationOrder)
         .containsExactly(localTransaction1, localTransaction2, localTransaction0);
 
-    transactions.updateBaseFee(Wei.of(110L));
+    final Block newBlock = mock(Block.class);
+    final BlockHeader newBlockHeader = mockBlockHeader(Wei.of(100L));
+    when(newBlock.getHeader()).thenReturn(newBlockHeader);
+    transactions.manageBlockAdded(newBlock, List.of(), FeeMarket.london(0));
 
     final List<Transaction> iterationOrderAfterBaseIncreased = new ArrayList<>();
     transactions.selectTransactions(
@@ -220,11 +227,14 @@ public class PendingMultiTypesTransactionsTest {
 
   @Test
   public void shouldChangePriorityWhenBaseFeeDecrease() {
-    final Transaction localTransaction0 = create1559Transaction(1, 200, 18, KEYS1);
-    final Transaction localTransaction1 = create1559Transaction(1, 100, 20, KEYS2);
-    final Transaction localTransaction2 = create1559Transaction(2, 100, 19, KEYS2);
+    final Transaction localTransaction0 = create1559Transaction(0, 200, 18, KEYS1);
+    final Transaction localTransaction1 = create1559Transaction(0, 100, 20, KEYS2);
+    final Transaction localTransaction2 = create1559Transaction(1, 100, 19, KEYS2);
 
-    transactions.updateBaseFee(Wei.of(110L));
+    final Block newBlock1 = mock(Block.class);
+    final BlockHeader newBlockHeader1 = mockBlockHeader(Wei.of(110L));
+    when(newBlock1.getHeader()).thenReturn(newBlockHeader1);
+    transactions.manageBlockAdded(newBlock1, List.of(), FeeMarket.london(0));
 
     transactions.addLocalTransaction(localTransaction0, Optional.empty());
     transactions.addLocalTransaction(localTransaction1, Optional.empty());
@@ -240,7 +250,10 @@ public class PendingMultiTypesTransactionsTest {
     assertThat(iterationOrder)
         .containsExactly(localTransaction0, localTransaction1, localTransaction2);
 
-    transactions.updateBaseFee(Wei.of(50L));
+    final Block newBlock2 = mock(Block.class);
+    final BlockHeader newBlockHeader2 = mockBlockHeader(Wei.of(50L));
+    when(newBlock2.getHeader()).thenReturn(newBlockHeader2);
+    transactions.manageBlockAdded(newBlock2, List.of(), FeeMarket.london(0));
 
     final List<Transaction> iterationOrderAfterBaseIncreased = new ArrayList<>();
     transactions.selectTransactions(
@@ -255,17 +268,17 @@ public class PendingMultiTypesTransactionsTest {
 
   @Test
   public void shouldCorrectlyPrioritizeMultipleTransactionTypesBasedOnNonce() {
-    final Transaction localTransaction0 = create1559Transaction(1, 200, 18, KEYS1);
-    final Transaction localTransaction1 = create1559Transaction(1, 100, 20, KEYS2);
-    final Transaction localTransaction2 = create1559Transaction(2, 100, 19, KEYS2);
-    final Transaction localTransaction3 = createLegacyTransaction(0, 20, KEYS1);
+    final Transaction localTransaction0 = create1559Transaction(0, 200, 18, KEYS1);
+    final Transaction localTransaction1 = create1559Transaction(0, 100, 20, KEYS2);
+    final Transaction localTransaction2 = create1559Transaction(1, 100, 19, KEYS2);
+    final Transaction localTransaction3 = createLegacyTransaction(1, 20, KEYS1);
 
     transactions.addLocalTransaction(localTransaction0, Optional.empty());
     transactions.addLocalTransaction(localTransaction1, Optional.empty());
     transactions.addLocalTransaction(localTransaction2, Optional.empty());
     transactions.addLocalTransaction(localTransaction3, Optional.empty());
 
-    final List<Transaction> iterationOrder = new ArrayList<>();
+    final List<Transaction> iterationOrder = new ArrayList<>(4);
     transactions.selectTransactions(
         transaction -> {
           iterationOrder.add(transaction);
@@ -274,7 +287,7 @@ public class PendingMultiTypesTransactionsTest {
 
     assertThat(iterationOrder)
         .containsExactly(
-            localTransaction1, localTransaction2, localTransaction3, localTransaction0);
+            localTransaction1, localTransaction2, localTransaction0, localTransaction3);
   }
 
   @Test

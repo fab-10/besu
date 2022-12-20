@@ -14,26 +14,21 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
-import static java.util.Comparator.comparing;
-import static java.util.stream.Collectors.toUnmodifiableList;
 import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
 
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
-import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.NoOpPostponedTransactionsCache;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.PostponedTransactionsCache;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.BaseFeeMarket;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.time.Clock;
 import java.util.Comparator;
-import java.util.Iterator;
-import java.util.List;
-import java.util.NavigableSet;
-import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeSet;
 import java.util.function.Predicate;
@@ -54,69 +49,63 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
 
   private Optional<Wei> nextBlockBaseFee;
 
-  private final Comparator<PendingTransaction> compareByValue =
-      Comparator.comparing(
-              (PendingTransaction pendingTransaction) ->
-                  pendingTransaction
-                      .getTransaction()
-                      .getEffectivePriorityFeePerGas(nextBlockBaseFee)
-                      .getAsBigInteger())
-          .thenComparing(PendingTransaction::getAddedToPoolAt)
-          .thenComparing(PendingTransaction::getSequence);
-
-  /**
-   * See this post for an explainer about these data structures:
-   * https://hackmd.io/@adietrichs/1559-transaction-sorting
-   */
-  private final NavigableSet<PendingTransaction> prioritizedTransactionsStaticRange =
-      new TreeSet<>(
-          comparing(PendingTransaction::isReceivedFromLocalSource)
-              .thenComparing(
-                  pendingTx ->
-                      pendingTx
-                          .getTransaction()
-                          .getMaxPriorityFeePerGas()
-                          // just in case we attempt to compare non-1559 transaction
-                          .orElse(Wei.ZERO)
-                          .getAsBigInteger()
-                          .longValue())
-              .thenComparing(PendingTransaction::getAddedToPoolAt)
-              .thenComparing(PendingTransaction::getSequence)
-              .reversed());
-
-  private final NavigableSet<PendingTransaction> prioritizedTransactionsDynamicRange =
-      new TreeSet<>(
-          comparing(PendingTransaction::isReceivedFromLocalSource)
-              .thenComparing(
-                  pendingTx ->
-                      pendingTx
-                          .getTransaction()
-                          .getMaxFeePerGas()
-                          .map(maxFeePerGas -> maxFeePerGas.getAsBigInteger().longValue())
-                          .orElse(pendingTx.getGasPrice().toLong()))
-              .thenComparing(PendingTransaction::getAddedToPoolAt)
-              .thenComparing(PendingTransaction::getSequence)
-              .reversed());
-
   public BaseFeePendingTransactionsSorter(
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
       final Supplier<BlockHeader> chainHeadHeaderSupplier,
       final BaseFeeMarket baseFeeMarket) {
-    super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier);
+    this(
+        poolConfig,
+        clock,
+        metricsSystem,
+        chainHeadHeaderSupplier,
+        baseFeeMarket,
+        new NoOpPostponedTransactionsCache());
+  }
+
+  public BaseFeePendingTransactionsSorter(
+      final TransactionPoolConfiguration poolConfig,
+      final Clock clock,
+      final MetricsSystem metricsSystem,
+      final Supplier<BlockHeader> chainHeadHeaderSupplier,
+      final BaseFeeMarket baseFeeMarket,
+      final PostponedTransactionsCache postponedTransactionsCache) {
+    super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier, postponedTransactionsCache);
     this.nextBlockBaseFee =
         Optional.of(calculateNextBlockBaseFee(baseFeeMarket, chainHeadHeaderSupplier.get()));
+    this.orderByFee = new TreeSet<>(this::compareByValue);
   }
 
   @Override
-  public void manageBlockAdded(
-      final Block block, final List<Transaction> confirmedTransactions, final FeeMarket feeMarket) {
+  public int compareByValue(final PendingTransaction pt1, final PendingTransaction pt2) {
+    return Comparator.comparing(
+            (PendingTransaction pendingTransaction) ->
+                pendingTransaction.getTransaction().getEffectivePriorityFeePerGas(nextBlockBaseFee))
+        .thenComparing(PendingTransaction::getAddedToPoolAt)
+        .thenComparing(PendingTransaction::getSequence)
+        .compare(pt1, pt2);
+  }
+
+  @Override
+  protected void manageBlockAdded(final Block block, final FeeMarket feeMarket) {
     final BlockHeader blockHeader = block.getHeader();
     final BaseFeeMarket baseFeeMarket = (BaseFeeMarket) feeMarket;
     final Wei newNextBlockBaseFee = calculateNextBlockBaseFee(baseFeeMarket, blockHeader);
-    updateBaseFee(newNextBlockBaseFee);
-    transactionsAddedToBlock(confirmedTransactions);
+
+    traceLambda(
+        LOG,
+        "Updating base fee from {} to {}",
+        nextBlockBaseFee.get()::toHumanReadableString,
+        newNextBlockBaseFee::toHumanReadableString);
+
+    if (nextBlockBaseFee.orElse(Wei.ZERO).equals(newNextBlockBaseFee)) {
+      return;
+    }
+
+    nextBlockBaseFee = Optional.of(newNextBlockBaseFee);
+    orderByFee = new TreeSet<>(this::compareByValue);
+    orderByFee.addAll(prioritizedPendingTransactions.values());
   }
 
   private Wei calculateNextBlockBaseFee(
@@ -129,137 +118,13 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
   }
 
   @Override
-  protected void removePrioritizedTransaction(
+  protected void removeFromOrderedTransactions(
       final PendingTransaction removedPendingTx, final boolean addedToBlock) {
-    if (prioritizedTransactionsDynamicRange.remove(removedPendingTx)) {
-      traceLambda(LOG, "Removed dynamic range transaction {}", removedPendingTx::toTraceLog);
+    // when added to block we can avoid removing from orderByFee since it will be recreated
+    if (addedToBlock || orderByFee.remove(removedPendingTx)) {
       incrementTransactionRemovedCounter(
           removedPendingTx.isReceivedFromLocalSource(), addedToBlock);
-    } else {
-      removedPendingTx
-          .getTransaction()
-          .getMaxPriorityFeePerGas()
-          .ifPresent(
-              __ -> {
-                if (prioritizedTransactionsStaticRange.remove(removedPendingTx)) {
-                  traceLambda(
-                      LOG, "Removed static range transaction {}", removedPendingTx::toTraceLog);
-                  incrementTransactionRemovedCounter(
-                      removedPendingTx.isReceivedFromLocalSource(), addedToBlock);
-                }
-              });
     }
-  }
-
-  @Override
-  protected Iterator<PendingTransaction> prioritizedTransactions() {
-    return new Iterator<>() {
-      final Iterator<PendingTransaction> staticRangeIterable =
-          prioritizedTransactionsStaticRange.iterator();
-      final Iterator<PendingTransaction> dynamicRangeIterable =
-          prioritizedTransactionsDynamicRange.iterator();
-
-      Optional<PendingTransaction> currentStaticRangeTransaction =
-          getNextOptional(staticRangeIterable);
-      Optional<PendingTransaction> currentDynamicRangeTransaction =
-          getNextOptional(dynamicRangeIterable);
-
-      @Override
-      public boolean hasNext() {
-        return currentStaticRangeTransaction.isPresent()
-            || currentDynamicRangeTransaction.isPresent();
-      }
-
-      @Override
-      public PendingTransaction next() {
-        if (currentStaticRangeTransaction.isEmpty() && currentDynamicRangeTransaction.isEmpty()) {
-          throw new NoSuchElementException("Tried to iterate past end of iterator.");
-        } else if (currentStaticRangeTransaction.isEmpty()) {
-          // only dynamic range txs left
-          final PendingTransaction best = currentDynamicRangeTransaction.get();
-          currentDynamicRangeTransaction = getNextOptional(dynamicRangeIterable);
-          return best;
-        } else if (currentDynamicRangeTransaction.isEmpty()) {
-          // only static range txs left
-          final PendingTransaction best = currentStaticRangeTransaction.get();
-          currentStaticRangeTransaction = getNextOptional(staticRangeIterable);
-          return best;
-        } else {
-          // there are both static and dynamic txs remaining, so we need to compare them by their
-          // effective priority fees
-          final Wei dynamicRangeEffectivePriorityFee =
-              currentDynamicRangeTransaction
-                  .get()
-                  .getTransaction()
-                  .getEffectivePriorityFeePerGas(nextBlockBaseFee);
-          final Wei staticRangeEffectivePriorityFee =
-              currentStaticRangeTransaction
-                  .get()
-                  .getTransaction()
-                  .getEffectivePriorityFeePerGas(nextBlockBaseFee);
-          final PendingTransaction best;
-          if (dynamicRangeEffectivePriorityFee.compareTo(staticRangeEffectivePriorityFee) > 0) {
-            best = currentDynamicRangeTransaction.get();
-            currentDynamicRangeTransaction = getNextOptional(dynamicRangeIterable);
-          } else {
-            best = currentStaticRangeTransaction.get();
-            currentStaticRangeTransaction = getNextOptional(staticRangeIterable);
-          }
-          return best;
-        }
-      }
-
-      private Optional<PendingTransaction> getNextOptional(
-          final Iterator<PendingTransaction> pendingTxsIterator) {
-        return pendingTxsIterator.hasNext()
-            ? Optional.of(pendingTxsIterator.next())
-            : Optional.empty();
-      }
-    };
-  }
-
-  @Override
-  protected void prioritizeTransaction(final PendingTransaction pendingTransaction) {
-    // check if it's in static or dynamic range
-    final String kind;
-    if (isInStaticRange(pendingTransaction.getTransaction(), nextBlockBaseFee)) {
-      kind = "static";
-      prioritizedTransactionsStaticRange.add(pendingTransaction);
-    } else {
-      kind = "dynamic";
-      prioritizedTransactionsDynamicRange.add(pendingTransaction);
-    }
-    traceLambda(
-        LOG,
-        "Adding {} to pending transactions, range type {}",
-        pendingTransaction::toTraceLog,
-        kind::toString);
-  }
-
-  @Override
-  protected PendingTransaction getLeastPriorityTransaction() {
-    final var lastStatic =
-        prioritizedTransactionsStaticRange.isEmpty()
-            ? null
-            : prioritizedTransactionsStaticRange.last();
-    final var lastDynamic =
-        prioritizedTransactionsDynamicRange.isEmpty()
-            ? null
-            : prioritizedTransactionsDynamicRange.last();
-
-    if (lastDynamic == null) {
-      return lastStatic;
-    }
-    if (lastStatic == null) {
-      return lastDynamic;
-    }
-
-    return compareByValue.compare(lastStatic, lastDynamic) < 0 ? lastStatic : lastDynamic;
-  }
-
-  @Override
-  protected Comparator<PendingTransaction> getComparatorByValue() {
-    return compareByValue;
   }
 
   @Override
@@ -273,68 +138,5 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
                         .getEffectiveGasPrice(nextBlockBaseFee)
                         .greaterOrEqualThan(baseFee))
             .orElse(false);
-  }
-
-  private boolean isInStaticRange(final Transaction transaction, final Optional<Wei> baseFee) {
-    return transaction
-        .getMaxPriorityFeePerGas()
-        .map(
-            maxPriorityFeePerGas ->
-                transaction.getEffectivePriorityFeePerGas(baseFee).compareTo(maxPriorityFeePerGas)
-                    >= 0)
-        .orElse(
-            // non-eip-1559 txs can't be in static range
-            false);
-  }
-
-  public void updateBaseFee(final Wei newBaseFee) {
-    traceLambda(
-        LOG,
-        "Updating base fee from {} to {}",
-        this.nextBlockBaseFee::toString,
-        newBaseFee::toShortHexString);
-    if (this.nextBlockBaseFee.orElse(Wei.ZERO).equals(newBaseFee)) {
-      return;
-    }
-    synchronized (lock) {
-      final boolean baseFeeIncreased =
-          newBaseFee.compareTo(this.nextBlockBaseFee.orElse(Wei.ZERO)) > 0;
-      this.nextBlockBaseFee = Optional.of(newBaseFee);
-      if (baseFeeIncreased) {
-        // base fee increases can only cause transactions to go from static to dynamic range
-        prioritizedTransactionsStaticRange.stream()
-            .filter(
-                // these are the transactions whose effective priority fee have now dropped
-                // below their max priority fee
-                pendingTx -> !isInStaticRange(pendingTx.getTransaction(), nextBlockBaseFee))
-            .collect(toUnmodifiableList())
-            .forEach(
-                pendingTx -> {
-                  traceLambda(
-                      LOG,
-                      "Moving {} from static to dynamic gas fee paradigm",
-                      pendingTx::toTraceLog);
-                  prioritizedTransactionsStaticRange.remove(pendingTx);
-                  prioritizedTransactionsDynamicRange.add(pendingTx);
-                });
-      } else {
-        // base fee decreases can only cause transactions to go from dynamic to static range
-        prioritizedTransactionsDynamicRange.stream()
-            .filter(
-                // these are the transactions whose effective priority fee are now above their
-                // max priority fee
-                pendingTx -> isInStaticRange(pendingTx.getTransaction(), nextBlockBaseFee))
-            .collect(toUnmodifiableList())
-            .forEach(
-                pendingTx -> {
-                  traceLambda(
-                      LOG,
-                      "Moving {} from dynamic to static gas fee paradigm",
-                      pendingTx::toTraceLog);
-                  prioritizedTransactionsDynamicRange.remove(pendingTx);
-                  prioritizedTransactionsStaticRange.add(pendingTx);
-                });
-      }
-    }
   }
 }

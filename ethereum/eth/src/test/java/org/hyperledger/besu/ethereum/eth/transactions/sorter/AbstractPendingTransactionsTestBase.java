@@ -596,7 +596,7 @@ public abstract class AbstractPendingTransactionsTestBase {
     when(sender2.getNonce()).thenReturn(1L);
 
     final Transaction transactionSender1 = createTransaction(0, Wei.of(10), KEYS1);
-    final Transaction transactionSender2 = createTransaction(1, Wei.of(20), KEYS2);
+    final Transaction transactionSender2 = createTransaction(1, Wei.of(200), KEYS2);
 
     transactions.addLocalTransaction(transactionSender1, Optional.empty());
     transactions.addLocalTransaction(transactionSender2, Optional.of(sender2));
