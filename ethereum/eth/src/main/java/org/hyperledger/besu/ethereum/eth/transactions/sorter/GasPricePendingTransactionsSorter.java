@@ -58,11 +58,11 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
       final Supplier<BlockHeader> chainHeadHeaderSupplier,
       final PostponedTransactionsCache postponedTransactionsCache) {
     super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier, postponedTransactionsCache);
-    this.orderByFee = new TreeSet<>(this::compareByValue);
+    this.orderByFee = new TreeSet<>(this::compareByFee);
   }
 
   @Override
-  public int compareByValue(final PendingTransaction pt1, final PendingTransaction pt2) {
+  public int compareByFee(final PendingTransaction pt1, final PendingTransaction pt2) {
     return comparing(PendingTransaction::isReceivedFromLocalSource)
         .thenComparing(PendingTransaction::getGasPrice)
         .thenComparing(PendingTransaction::getAddedToPoolAt)

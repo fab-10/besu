@@ -74,11 +74,11 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
     super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier, postponedTransactionsCache);
     this.nextBlockBaseFee =
         Optional.of(calculateNextBlockBaseFee(baseFeeMarket, chainHeadHeaderSupplier.get()));
-    this.orderByFee = new TreeSet<>(this::compareByValue);
+    this.orderByFee = new TreeSet<>(this::compareByFee);
   }
 
   @Override
-  public int compareByValue(final PendingTransaction pt1, final PendingTransaction pt2) {
+  public int compareByFee(final PendingTransaction pt1, final PendingTransaction pt2) {
     return Comparator.comparing(
             (PendingTransaction pendingTransaction) ->
                 pendingTransaction.getTransaction().getEffectivePriorityFeePerGas(nextBlockBaseFee))
@@ -104,7 +104,7 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
     }
 
     nextBlockBaseFee = Optional.of(newNextBlockBaseFee);
-    orderByFee = new TreeSet<>(this::compareByValue);
+    orderByFee = new TreeSet<>(this::compareByFee);
     orderByFee.addAll(prioritizedPendingTransactions.values());
   }
 

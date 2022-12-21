@@ -346,7 +346,7 @@ public abstract class AbstractPendingTransactionsSorter {
     }
   }
 
-  public abstract int compareByValue(PendingTransaction pt1, PendingTransaction pt2);
+  public abstract int compareByFee(PendingTransaction pt1, PendingTransaction pt2);
 
   private void removeTransaction(final Transaction transaction, final boolean addedToBlock) {
     final PendingTransaction removedPendingTx =
@@ -415,7 +415,7 @@ public abstract class AbstractPendingTransactionsSorter {
           LOG.trace("Max number of prioritized transactions reached");
 
           var currentLeastPriorityTx = orderByFee.first();
-          if (compareByValue(pendingTransaction, currentLeastPriorityTx) <= 0) {
+          if (compareByFee(pendingTransaction, currentLeastPriorityTx) <= 0) {
             traceLambda(
                 LOG,
                 "Not adding incoming transaction {} to the prioritized list, since it is less valuable than the current least priority transactions {}",
