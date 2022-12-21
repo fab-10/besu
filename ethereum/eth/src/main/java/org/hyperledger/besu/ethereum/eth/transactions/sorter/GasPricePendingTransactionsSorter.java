@@ -26,7 +26,6 @@ import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.time.Clock;
-import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -58,7 +57,6 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
       final Supplier<BlockHeader> chainHeadHeaderSupplier,
       final PostponedTransactionsCache postponedTransactionsCache) {
     super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier, postponedTransactionsCache);
-    this.orderByFee = new TreeSet<>(this::compareByFee);
   }
 
   @Override

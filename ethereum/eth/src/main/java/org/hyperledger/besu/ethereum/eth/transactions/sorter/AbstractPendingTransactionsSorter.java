@@ -83,7 +83,7 @@ public abstract class AbstractPendingTransactionsSorter {
   protected final Object lock = new Object();
   protected final Map<Hash, PendingTransaction> prioritizedPendingTransactions;
 
-  protected volatile TreeSet<PendingTransaction> orderByFee;
+  protected final TreeSet<PendingTransaction> orderByFee;
 
   protected final ReadyTransactionsCache readyTransactionsCache;
 
@@ -148,6 +148,7 @@ public abstract class AbstractPendingTransactionsSorter {
     this.readyTransactionsCache =
         new ReadyTransactionsCache(
             poolConfig, postponedTransactionsCache, transactionReplacementTester);
+    this.orderByFee = new TreeSet<>(this::compareByFee);
   }
 
   public void evictOldTransactions() {

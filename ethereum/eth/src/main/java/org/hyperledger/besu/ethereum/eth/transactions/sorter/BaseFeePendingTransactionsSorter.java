@@ -30,7 +30,6 @@ import org.hyperledger.besu.plugin.services.MetricsSystem;
 import java.time.Clock;
 import java.util.Comparator;
 import java.util.Optional;
-import java.util.TreeSet;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 
@@ -74,7 +73,6 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
     super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier, postponedTransactionsCache);
     this.nextBlockBaseFee =
         Optional.of(calculateNextBlockBaseFee(baseFeeMarket, chainHeadHeaderSupplier.get()));
-    this.orderByFee = new TreeSet<>(this::compareByFee);
   }
 
   @Override
@@ -104,7 +102,7 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
     }
 
     nextBlockBaseFee = Optional.of(newNextBlockBaseFee);
-    orderByFee = new TreeSet<>(this::compareByFee);
+    orderByFee.clear();
     orderByFee.addAll(prioritizedPendingTransactions.values());
   }
 
