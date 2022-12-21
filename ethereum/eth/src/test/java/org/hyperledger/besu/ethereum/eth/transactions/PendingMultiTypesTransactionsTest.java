@@ -27,8 +27,8 @@ import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionSelectionResult;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePrioritizedTransactions;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.PendingTransactionsSorter.TransactionSelectionResult;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.metrics.StubMetricsSystem;
 import org.hyperledger.besu.plugin.data.TransactionType;
@@ -76,8 +76,8 @@ public class PendingMultiTypesTransactionsTest {
       transactionReplacementTester =
           (t1, t2) -> transactionReplacementHandler.shouldReplace(t1, t2, getBlockHeader());
 
-  private final BaseFeePendingTransactionsSorter transactions =
-      new BaseFeePendingTransactionsSorter(
+  private final BaseFeePrioritizedTransactions transactions =
+      new BaseFeePrioritizedTransactions(
           transactionPoolConfiguration,
           TestClock.system(ZoneId.systemDefault()),
           metricsSystem,

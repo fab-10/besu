@@ -42,8 +42,8 @@ import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolCo
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePrioritizedTransactions;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.PendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.storage.StorageProvider;
@@ -99,8 +99,8 @@ public abstract class AbstractIsolationTests {
               transactionReplacementHandler.shouldReplace(
                   t1, t2, protocolContext.getBlockchain().getChainHeadHeader());
 
-  protected final AbstractPendingTransactionsSorter sorter =
-      new GasPricePendingTransactionsSorter(
+  protected final PendingTransactionsSorter sorter =
+      new GasPricePrioritizedTransactions(
           ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(100).build(),
           Clock.systemUTC(),
           new NoOpMetricsSystem(),
@@ -187,7 +187,7 @@ public abstract class AbstractIsolationTests {
         final MiningBeneficiaryCalculator miningBeneficiaryCalculator,
         final Supplier<Optional<Long>> targetGasLimitSupplier,
         final ExtraDataCalculator extraDataCalculator,
-        final AbstractPendingTransactionsSorter pendingTransactions,
+        final PendingTransactionsSorter pendingTransactions,
         final ProtocolContext protocolContext,
         final ProtocolSchedule protocolSchedule,
         final Wei minTransactionGasPrice,
@@ -210,7 +210,7 @@ public abstract class AbstractIsolationTests {
         final BlockHeader parentHeader,
         final ProtocolContext protocolContext,
         final ProtocolSchedule protocolSchedule,
-        final AbstractPendingTransactionsSorter sorter) {
+        final PendingTransactionsSorter sorter) {
       return new TestBlockCreator(
           Address.ZERO,
           __ -> Address.ZERO,

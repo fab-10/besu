@@ -34,9 +34,9 @@ import java.util.function.Predicate;
  *
  * <p>This class is safe for use across multiple threads.
  */
-public class GasPricePendingTransactionsSorter extends AbstractPendingTransactionsSorter {
+public class GasPricePrioritizedTransactions extends AbstractPrioritizedTransactions {
 
-  public GasPricePendingTransactionsSorter(
+  public GasPricePrioritizedTransactions(
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
@@ -51,7 +51,7 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
             poolConfig, new NoOpPostponedTransactionsCache(), transactionReplacementTester));
   }
 
-  public GasPricePendingTransactionsSorter(
+  public GasPricePrioritizedTransactions(
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,

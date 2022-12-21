@@ -90,7 +90,7 @@ import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.ProtocolScheduleFixture;
 import org.hyperledger.besu.ethereum.core.Util;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePrioritizedTransactions;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.transaction.TransactionSimulator;
 import org.hyperledger.besu.ethereum.worldstate.DefaultWorldStateArchive;
@@ -435,8 +435,8 @@ public class TestContextBuilder {
             worldStateArchive,
             new QbftContext(validatorProvider, epochManager, blockInterface, Optional.empty()));
 
-    final GasPricePendingTransactionsSorter pendingTransactions =
-        new GasPricePendingTransactionsSorter(
+    final GasPricePrioritizedTransactions pendingTransactions =
+        new GasPricePrioritizedTransactions(
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
             clock,
             metricsSystem,

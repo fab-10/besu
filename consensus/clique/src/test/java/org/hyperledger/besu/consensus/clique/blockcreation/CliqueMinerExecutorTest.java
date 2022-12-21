@@ -39,7 +39,7 @@ import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.Util;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePrioritizedTransactions;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -94,7 +94,7 @@ public class CliqueMinerExecutorTest {
             cliqueProtocolContext,
             CliqueProtocolSchedule.create(
                 GENESIS_CONFIG_OPTIONS, proposerNodeKey, false, EvmConfiguration.DEFAULT),
-            new GasPricePendingTransactionsSorter(
+            new GasPricePrioritizedTransactions(
                 ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
                 TestClock.system(ZoneId.systemDefault()),
                 metricsSystem,
@@ -136,7 +136,7 @@ public class CliqueMinerExecutorTest {
             cliqueProtocolContext,
             CliqueProtocolSchedule.create(
                 GENESIS_CONFIG_OPTIONS, proposerNodeKey, false, EvmConfiguration.DEFAULT),
-            new GasPricePendingTransactionsSorter(
+            new GasPricePrioritizedTransactions(
                 ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
                 TestClock.system(ZoneId.systemDefault()),
                 metricsSystem,
@@ -178,7 +178,7 @@ public class CliqueMinerExecutorTest {
             cliqueProtocolContext,
             CliqueProtocolSchedule.create(
                 GENESIS_CONFIG_OPTIONS, proposerNodeKey, false, EvmConfiguration.DEFAULT),
-            new GasPricePendingTransactionsSorter(
+            new GasPricePrioritizedTransactions(
                 ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
                 TestClock.system(ZoneId.systemDefault()),
                 metricsSystem,

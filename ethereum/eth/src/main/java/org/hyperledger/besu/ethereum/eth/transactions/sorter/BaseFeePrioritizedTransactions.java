@@ -43,13 +43,13 @@ import org.slf4j.LoggerFactory;
  *
  * <p>This class is safe for use across multiple threads.
  */
-public class BaseFeePendingTransactionsSorter extends AbstractPendingTransactionsSorter {
+public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransactions {
 
-  private static final Logger LOG = LoggerFactory.getLogger(BaseFeePendingTransactionsSorter.class);
+  private static final Logger LOG = LoggerFactory.getLogger(BaseFeePrioritizedTransactions.class);
 
   private Optional<Wei> nextBlockBaseFee;
 
-  public BaseFeePendingTransactionsSorter(
+  public BaseFeePrioritizedTransactions(
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
@@ -68,7 +68,7 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
             poolConfig, new NoOpPostponedTransactionsCache(), transactionReplacementTester));
   }
 
-  public BaseFeePendingTransactionsSorter(
+  public BaseFeePrioritizedTransactions(
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,

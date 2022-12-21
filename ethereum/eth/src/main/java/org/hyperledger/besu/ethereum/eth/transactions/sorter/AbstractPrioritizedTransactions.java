@@ -1,5 +1,5 @@
 /*
- * Copyright ConsenSys AG.
+ * Copyright Hyperledger Besu Contributors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -70,9 +70,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p>This class is safe for use across multiple threads.
  */
-public abstract class AbstractPendingTransactionsSorter {
-  private static final Logger LOG =
-      LoggerFactory.getLogger(AbstractPendingTransactionsSorter.class);
+public abstract class AbstractPrioritizedTransactions implements PendingTransactionsSorter {
+  private static final Logger LOG = LoggerFactory.getLogger(AbstractPrioritizedTransactions.class);
 
   protected final Clock clock;
   protected final TransactionPoolConfiguration poolConfig;
@@ -100,7 +99,7 @@ public abstract class AbstractPendingTransactionsSorter {
 
   private final Set<Address> localSenders = ConcurrentHashMap.newKeySet();
 
-  public AbstractPendingTransactionsSorter(
+  public AbstractPrioritizedTransactions(
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
@@ -143,8 +142,12 @@ public abstract class AbstractPendingTransactionsSorter {
     this.orderByFee = new TreeSet<>(this::compareByFee);
   }
 
+  protected abstract int compareByFee(final PendingTransaction pt1, final PendingTransaction pt2);
+
+  @Override
   public void evictOldTransactions() {}
 
+  @Override
   public List<Transaction> getLocalTransactions() {
     return prioritizedPendingTransactions.values().stream()
         .filter(PendingTransaction::isReceivedFromLocalSource)
@@ -152,6 +155,7 @@ public abstract class AbstractPendingTransactionsSorter {
         .collect(Collectors.toList());
   }
 
+  @Override
   public TransactionAddedResult addRemoteTransaction(
       final Transaction transaction, final Optional<Account> maybeSenderAccount) {
 
@@ -159,6 +163,7 @@ public abstract class AbstractPendingTransactionsSorter {
         new PendingTransaction.Remote(transaction, clock.instant()), maybeSenderAccount);
   }
 
+  @Override
   public TransactionAddedResult addLocalTransaction(
       final Transaction transaction, final Optional<Account> maybeSenderAccount) {
 
@@ -322,6 +327,7 @@ public abstract class AbstractPendingTransactionsSorter {
   // block could end up with transactions of the new type.
   // This seems like it would be very rare but worth it to document that we don't handle that case
   // right now.
+  @Override
   public void selectTransactions(final TransactionSelector selector) {
     synchronized (lock) {
       final Set<Transaction> transactionsToRemove = new HashSet<>();
@@ -363,47 +369,58 @@ public abstract class AbstractPendingTransactionsSorter {
             .map(PendingTransaction::getTransaction));
   }
 
+  @Override
   public long maxSize() {
     return poolConfig.getTxPoolMaxSize();
   }
 
+  @Override
   public int size() {
     return prioritizedPendingTransactions.size();
   }
 
+  @Override
   public boolean containsTransaction(final Hash transactionHash) {
     return prioritizedPendingTransactions.containsKey(transactionHash);
   }
 
+  @Override
   public Optional<Transaction> getTransactionByHash(final Hash transactionHash) {
     return Optional.ofNullable(prioritizedPendingTransactions.get(transactionHash))
         .map(PendingTransaction::getTransaction);
   }
 
+  @Override
   public Set<PendingTransaction> getPrioritizedPendingTransactions() {
     return new HashSet<>(prioritizedPendingTransactions.values());
   }
 
+  @Override
   public long subscribePendingTransactions(final PendingTransactionListener listener) {
     return pendingTransactionSubscribers.subscribe(listener);
   }
 
+  @Override
   public void unsubscribePendingTransactions(final long id) {
     pendingTransactionSubscribers.unsubscribe(id);
   }
 
+  @Override
   public long subscribeDroppedTransactions(final PendingTransactionDroppedListener listener) {
     return transactionDroppedListeners.subscribe(listener);
   }
 
+  @Override
   public void unsubscribeDroppedTransactions(final long id) {
     transactionDroppedListeners.unsubscribe(id);
   }
 
+  @Override
   public OptionalLong getNextNonceForSender(final Address sender) {
     return readyTransactionsCache.getNextReadyNonce(sender);
   }
 
+  @Override
   public void manageBlockAdded(
       final Block block, final List<Transaction> confirmedTransactions, final FeeMarket feeMarket) {
     synchronized (lock) {
@@ -464,8 +481,6 @@ public abstract class AbstractPendingTransactionsSorter {
     }
   }
 
-  public abstract int compareByFee(PendingTransaction pt1, PendingTransaction pt2);
-
   private void removeReplacedPrioritizedTransaction(final PendingTransaction pendingTransaction) {
     final PendingTransaction removedPendingTransaction =
         prioritizedPendingTransactions.remove(pendingTransaction.getHash());
@@ -514,6 +529,7 @@ public abstract class AbstractPendingTransactionsSorter {
 
   protected abstract Predicate<PendingTransaction> getPromotionFilter();
 
+  @Override
   public String toTraceLog() {
     synchronized (lock) {
       StringBuilder sb =
@@ -531,22 +547,13 @@ public abstract class AbstractPendingTransactionsSorter {
     }
   }
 
+  @Override
   public String logStats() {
     return "Ready " + prioritizedPendingTransactions.size();
   }
 
+  @Override
   public boolean isLocalSender(final Address sender) {
     return localSenders.contains(sender);
-  }
-
-  public enum TransactionSelectionResult {
-    DELETE_TRANSACTION_AND_CONTINUE,
-    CONTINUE,
-    COMPLETE_OPERATION
-  }
-
-  @FunctionalInterface
-  public interface TransactionSelector {
-    TransactionSelectionResult evaluateTransaction(final Transaction transaction);
   }
 }

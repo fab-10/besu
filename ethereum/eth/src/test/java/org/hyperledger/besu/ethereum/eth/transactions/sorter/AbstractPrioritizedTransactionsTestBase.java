@@ -19,9 +19,9 @@ import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedRes
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ALREADY_KNOWN;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.POSTPONED;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.REJECTED_UNDERPRICED_REPLACEMENT;
-import static org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionSelectionResult.COMPLETE_OPERATION;
-import static org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionSelectionResult.CONTINUE;
-import static org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionSelectionResult.DELETE_TRANSACTION_AND_CONTINUE;
+import static org.hyperledger.besu.ethereum.eth.transactions.sorter.PendingTransactionsSorter.TransactionSelectionResult.COMPLETE_OPERATION;
+import static org.hyperledger.besu.ethereum.eth.transactions.sorter.PendingTransactionsSorter.TransactionSelectionResult.CONTINUE;
+import static org.hyperledger.besu.ethereum.eth.transactions.sorter.PendingTransactionsSorter.TransactionSelectionResult.DELETE_TRANSACTION_AND_CONTINUE;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -67,7 +67,7 @@ import com.google.common.collect.Lists;
 import org.junit.Ignore;
 import org.junit.Test;
 
-public abstract class AbstractPendingTransactionsTestBase {
+public abstract class AbstractPrioritizedTransactionsTestBase {
 
   protected static final int MAX_TRANSACTIONS = 5;
   private static final float LIMITED_TRANSACTIONS_BY_SENDER_PERCENTAGE = 0.8f;
@@ -87,7 +87,7 @@ public abstract class AbstractPendingTransactionsTestBase {
   protected final StubMetricsSystem metricsSystem = new StubMetricsSystem();
   protected ReadyTransactionsCache readyTransactionsCache;
 
-  protected AbstractPendingTransactionsSorter transactions =
+  protected AbstractPrioritizedTransactions transactions =
       getSorter(
           ImmutableTransactionPoolConfiguration.builder()
               .txPoolMaxSize(MAX_TRANSACTIONS)
@@ -99,7 +99,7 @@ public abstract class AbstractPendingTransactionsTestBase {
           .txPoolMaxSize(MAX_TRANSACTIONS)
           .txPoolLimitByAccountPercentage(LIMITED_TRANSACTIONS_BY_SENDER_PERCENTAGE)
           .build();
-  protected AbstractPendingTransactionsSorter senderLimitedTransactions =
+  protected PendingTransactionsSorter senderLimitedTransactions =
       getSorter(senderLimitedConfig, Optional.empty());
 
   private final TransactionPoolConfiguration largePoolConfig =
@@ -107,7 +107,7 @@ public abstract class AbstractPendingTransactionsTestBase {
           .txPoolMaxSize(MAX_TRANSACTIONS * 10)
           .txPoolLimitByAccountPercentage(1.0f)
           .build();
-  protected AbstractPendingTransactionsSorter largePoolTransactions =
+  protected PendingTransactionsSorter largePoolTransactions =
       getSorter(largePoolConfig, Optional.empty());
 
   protected final Transaction transaction0 = createTransaction(0);
@@ -120,13 +120,13 @@ public abstract class AbstractPendingTransactionsTestBase {
   protected static final Address SENDER1 = Util.publicKeyToAddress(KEYS1.getPublicKey());
   protected static final Address SENDER2 = Util.publicKeyToAddress(KEYS2.getPublicKey());
 
-  private AbstractPendingTransactionsSorter getSorter(
+  private AbstractPrioritizedTransactions getSorter(
       final TransactionPoolConfiguration poolConfig, final Optional<Clock> clock) {
     return getSorter(
         poolConfig, clock, (pt1, pt2) -> transactionReplacementTester(poolConfig, pt1, pt2));
   }
 
-  abstract AbstractPendingTransactionsSorter getSorter(
+  abstract AbstractPrioritizedTransactions getSorter(
       final TransactionPoolConfiguration poolConfig,
       final Optional<Clock> clock,
       final BiFunction<PendingTransaction, PendingTransaction, Boolean>
@@ -698,7 +698,7 @@ public abstract class AbstractPendingTransactionsTestBase {
   @Ignore
   public void shouldEvictMultipleOldTransactions() {
     final int maxTransactionRetentionHours = 1;
-    final AbstractPendingTransactionsSorter transactions =
+    final PendingTransactionsSorter transactions =
         getSorter(
             ImmutableTransactionPoolConfiguration.builder()
                 .pendingTxRetentionPeriod(maxTransactionRetentionHours)
@@ -721,7 +721,7 @@ public abstract class AbstractPendingTransactionsTestBase {
   @Test
   @Ignore
   public void shouldEvictSingleOldTransaction() {
-    final AbstractPendingTransactionsSorter evictSingleTransactions =
+    final PendingTransactionsSorter evictSingleTransactions =
         getSorter(
             ImmutableTransactionPoolConfiguration.builder()
                 .pendingTxRetentionPeriod(1)
@@ -740,7 +740,7 @@ public abstract class AbstractPendingTransactionsTestBase {
   @Test
   @Ignore
   public void shouldEvictExclusivelyOldTransactions() {
-    final AbstractPendingTransactionsSorter twoHourEvictionTransactionPool =
+    final PendingTransactionsSorter twoHourEvictionTransactionPool =
         getSorter(
             ImmutableTransactionPoolConfiguration.builder()
                 .pendingTxRetentionPeriod(2)
@@ -910,7 +910,7 @@ public abstract class AbstractPendingTransactionsTestBase {
   }
 
   protected void assertTransactionPending(
-      final AbstractPendingTransactionsSorter transactions, final Transaction t) {
+      final PendingTransactionsSorter transactions, final Transaction t) {
     assertThat(transactions.getTransactionByHash(t.getHash())).contains(t);
   }
 
@@ -919,7 +919,7 @@ public abstract class AbstractPendingTransactionsTestBase {
   }
 
   protected void assertTransactionNotPending(
-      final AbstractPendingTransactionsSorter transactions, final Transaction t) {
+      final PendingTransactionsSorter transactions, final Transaction t) {
     assertThat(transactions.getTransactionByHash(t.getHash())).isEmpty();
   }
 
@@ -950,7 +950,7 @@ public abstract class AbstractPendingTransactionsTestBase {
   }
 
   protected void addLocalTransactions(
-      final AbstractPendingTransactionsSorter sorter, final Account sender, final long... nonces) {
+      final PendingTransactionsSorter sorter, final Account sender, final long... nonces) {
     for (final long nonce : nonces) {
       sorter.addLocalTransaction(createTransaction(nonce), Optional.of(sender));
     }

@@ -76,7 +76,7 @@ import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.Util;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePrioritizedTransactions;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
@@ -330,8 +330,8 @@ public class TestContextBuilder {
             worldStateArchive,
             new BftContext(validatorProvider, epochManager, blockInterface));
 
-    final GasPricePendingTransactionsSorter pendingTransactions =
-        new GasPricePendingTransactionsSorter(
+    final GasPricePrioritizedTransactions pendingTransactions =
+        new GasPricePrioritizedTransactions(
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
             clock,
             metricsSystem,

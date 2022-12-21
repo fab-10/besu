@@ -48,7 +48,7 @@ import org.hyperledger.besu.ethereum.core.BlockBody;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 import org.hyperledger.besu.ethereum.core.Util;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePrioritizedTransactions;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
@@ -131,7 +131,7 @@ public class CliqueBlockCreatorTest {
             coinbase,
             () -> Optional.of(10_000_000L),
             parent -> extraData,
-            new GasPricePendingTransactionsSorter(
+            new GasPricePrioritizedTransactions(
                 ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(5).build(),
                 TestClock.system(ZoneId.systemDefault()),
                 metricsSystem,
@@ -164,7 +164,7 @@ public class CliqueBlockCreatorTest {
             coinbase,
             () -> Optional.of(10_000_000L),
             parent -> extraData,
-            new GasPricePendingTransactionsSorter(
+            new GasPricePrioritizedTransactions(
                 ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(5).build(),
                 TestClock.system(ZoneId.systemDefault()),
                 metricsSystem,
@@ -199,7 +199,7 @@ public class CliqueBlockCreatorTest {
             coinbase,
             () -> Optional.of(10_000_000L),
             parent -> extraData,
-            new GasPricePendingTransactionsSorter(
+            new GasPricePrioritizedTransactions(
                 ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(5).build(),
                 TestClock.system(ZoneId.systemDefault()),
                 metricsSystem,

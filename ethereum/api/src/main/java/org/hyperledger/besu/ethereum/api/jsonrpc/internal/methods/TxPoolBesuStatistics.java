@@ -20,15 +20,15 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcRespon
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.PendingTransactionsStatisticsResult;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.PendingTransactionsSorter;
 
 import java.util.Set;
 
 public class TxPoolBesuStatistics implements JsonRpcMethod {
 
-  private final AbstractPendingTransactionsSorter pendingTransactions;
+  private final PendingTransactionsSorter pendingTransactions;
 
-  public TxPoolBesuStatistics(final AbstractPendingTransactionsSorter pendingTransactions) {
+  public TxPoolBesuStatistics(final PendingTransactionsSorter pendingTransactions) {
     this.pendingTransactions = pendingTransactions;
   }
 

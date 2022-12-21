@@ -62,7 +62,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.sync.backwardsync.BackwardSyncContext;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePrioritizedTransactions;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.BaseFeeMarket;
@@ -139,8 +139,8 @@ public class MergeCoordinatorTest implements MergeGenesisConfigHelper {
   private final org.hyperledger.besu.metrics.StubMetricsSystem metricsSystem =
       new StubMetricsSystem();
 
-  private final BaseFeePendingTransactionsSorter transactions =
-      new BaseFeePendingTransactionsSorter(
+  private final BaseFeePrioritizedTransactions transactions =
+      new BaseFeePrioritizedTransactions(
           ImmutableTransactionPoolConfiguration.builder()
               .txPoolMaxSize(10)
               .txPoolLimitByAccountPercentage(100.0f)

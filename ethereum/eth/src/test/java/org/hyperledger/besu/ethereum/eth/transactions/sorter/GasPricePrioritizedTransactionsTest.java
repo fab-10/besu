@@ -38,10 +38,10 @@ import java.util.stream.IntStream;
 
 import org.junit.Test;
 
-public class GasPricePendingTransactionsTest extends AbstractPendingTransactionsTestBase {
+public class GasPricePrioritizedTransactionsTest extends AbstractPrioritizedTransactionsTestBase {
 
   @Override
-  AbstractPendingTransactionsSorter getSorter(
+  AbstractPrioritizedTransactions getSorter(
       final TransactionPoolConfiguration poolConfig,
       final Optional<Clock> clock,
       final BiFunction<PendingTransaction, PendingTransaction, Boolean>
@@ -52,7 +52,7 @@ public class GasPricePendingTransactionsTest extends AbstractPendingTransactions
             new ReadyTransactionsCache(
                 poolConfig, new NoOpPostponedTransactionsCache(), transactionReplacementTester));
 
-    return new GasPricePendingTransactionsSorter(
+    return new GasPricePrioritizedTransactions(
         poolConfig,
         clock.orElse(TestClock.system(ZoneId.systemDefault())),
         metricsSystem,

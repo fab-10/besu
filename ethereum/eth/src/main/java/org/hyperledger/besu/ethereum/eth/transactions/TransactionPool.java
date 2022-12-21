@@ -35,7 +35,7 @@ import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.PendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.MainnetTransactionValidator;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.TransactionValidationParams;
@@ -75,7 +75,7 @@ public class TransactionPool implements BlockAddedObserver {
 
   private static final String REMOTE = "remote";
   private static final String LOCAL = "local";
-  private final AbstractPendingTransactionsSorter pendingTransactions;
+  private final PendingTransactionsSorter pendingTransactions;
   private final ProtocolSchedule protocolSchedule;
   private final ProtocolContext protocolContext;
   private final TransactionBroadcaster transactionBroadcaster;
@@ -84,7 +84,7 @@ public class TransactionPool implements BlockAddedObserver {
   private final TransactionPoolConfiguration configuration;
 
   public TransactionPool(
-      final AbstractPendingTransactionsSorter pendingTransactions,
+      final PendingTransactionsSorter pendingTransactions,
       final ProtocolSchedule protocolSchedule,
       final ProtocolContext protocolContext,
       final TransactionBroadcaster transactionBroadcaster,
@@ -266,7 +266,7 @@ public class TransactionPool implements BlockAddedObserver {
         .getTransactionValidator();
   }
 
-  public AbstractPendingTransactionsSorter getPendingTransactions() {
+  public PendingTransactionsSorter getPendingTransactions() {
     return pendingTransactions;
   }
 

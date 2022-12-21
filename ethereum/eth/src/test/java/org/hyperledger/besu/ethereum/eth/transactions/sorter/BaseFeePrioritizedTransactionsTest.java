@@ -43,11 +43,11 @@ import java.util.stream.IntStream;
 
 import org.junit.Test;
 
-public class BaseFeePendingTransactionsTest extends AbstractPendingTransactionsTestBase {
+public class BaseFeePrioritizedTransactionsTest extends AbstractPrioritizedTransactionsTestBase {
   private static final Random randomizeTxType = new Random();
 
   @Override
-  AbstractPendingTransactionsSorter getSorter(
+  AbstractPrioritizedTransactions getSorter(
       final TransactionPoolConfiguration poolConfig,
       final Optional<Clock> clock,
       final BiFunction<PendingTransaction, PendingTransaction, Boolean>
@@ -58,7 +58,7 @@ public class BaseFeePendingTransactionsTest extends AbstractPendingTransactionsT
             new ReadyTransactionsCache(
                 poolConfig, new NoOpPostponedTransactionsCache(), transactionReplacementTester));
 
-    return new BaseFeePendingTransactionsSorter(
+    return new BaseFeePrioritizedTransactions(
         poolConfig,
         clock.orElse(TestClock.system(ZoneId.systemDefault())),
         metricsSystem,

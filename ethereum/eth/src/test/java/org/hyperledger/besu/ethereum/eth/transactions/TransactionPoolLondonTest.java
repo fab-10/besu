@@ -35,8 +35,8 @@ import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.transactions.cache.InMemoryPostponedTransactionsCache;
 import org.hyperledger.besu.ethereum.eth.transactions.cache.ReadyTransactionsCache;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePrioritizedTransactions;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.PendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
@@ -60,12 +60,12 @@ public class TransactionPoolLondonTest extends AbstractTransactionPoolTest {
   private static final Wei BASE_FEE_FLOOR = Wei.of(7L);
 
   @Override
-  protected AbstractPendingTransactionsSorter createPendingTransactionsSorter(
+  protected PendingTransactionsSorter createPendingTransactionsSorter(
       final TransactionPoolConfiguration poolConfig,
       final BiFunction<PendingTransaction, PendingTransaction, Boolean>
           transactionReplacementTester) {
 
-    return new BaseFeePendingTransactionsSorter(
+    return new BaseFeePrioritizedTransactions(
         poolConfig,
         TestClock.system(ZoneId.systemDefault()),
         metricsSystem,

@@ -34,8 +34,8 @@ import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.transactions.cache.InMemoryPostponedTransactionsCache;
 import org.hyperledger.besu.ethereum.eth.transactions.cache.ReadyTransactionsCache;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePrioritizedTransactions;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.PendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
@@ -57,12 +57,12 @@ import org.mockito.junit.MockitoJUnitRunner;
 public class TransactionPoolLegacyTest extends AbstractTransactionPoolTest {
 
   @Override
-  protected AbstractPendingTransactionsSorter createPendingTransactionsSorter(
+  protected PendingTransactionsSorter createPendingTransactionsSorter(
       final TransactionPoolConfiguration poolConfig,
       final BiFunction<PendingTransaction, PendingTransaction, Boolean>
           transactionReplacementTester) {
 
-    return new GasPricePendingTransactionsSorter(
+    return new GasPricePrioritizedTransactions(
         poolConfig,
         TestClock.system(ZoneId.systemDefault()),
         metricsSystem,

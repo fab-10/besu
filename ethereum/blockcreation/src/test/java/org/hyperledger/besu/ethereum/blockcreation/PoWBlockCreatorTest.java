@@ -31,7 +31,7 @@ import org.hyperledger.besu.ethereum.core.MutableWorldState;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePrioritizedTransactions;
 import org.hyperledger.besu.ethereum.mainnet.EpochCalculator;
 import org.hyperledger.besu.ethereum.mainnet.PoWHasher;
 import org.hyperledger.besu.ethereum.mainnet.PoWSolver;
@@ -95,8 +95,8 @@ public class PoWBlockCreatorTest {
             1000,
             8);
 
-    final BaseFeePendingTransactionsSorter pendingTransactions =
-        new BaseFeePendingTransactionsSorter(
+    final BaseFeePrioritizedTransactions pendingTransactions =
+        new BaseFeePrioritizedTransactions(
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
             TestClock.fixed(),
             metricsSystem,
@@ -158,8 +158,8 @@ public class PoWBlockCreatorTest {
             1000,
             8);
 
-    final BaseFeePendingTransactionsSorter pendingTransactions =
-        new BaseFeePendingTransactionsSorter(
+    final BaseFeePrioritizedTransactions pendingTransactions =
+        new BaseFeePrioritizedTransactions(
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
             TestClock.fixed(),
             metricsSystem,
@@ -213,8 +213,8 @@ public class PoWBlockCreatorTest {
             1000,
             8);
 
-    final BaseFeePendingTransactionsSorter pendingTransactions =
-        new BaseFeePendingTransactionsSorter(
+    final BaseFeePrioritizedTransactions pendingTransactions =
+        new BaseFeePrioritizedTransactions(
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
             TestClock.fixed(),
             metricsSystem,
@@ -284,8 +284,8 @@ public class PoWBlockCreatorTest {
             1000,
             8);
 
-    final BaseFeePendingTransactionsSorter pendingTransactions =
-        new BaseFeePendingTransactionsSorter(
+    final BaseFeePrioritizedTransactions pendingTransactions =
+        new BaseFeePrioritizedTransactions(
             ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build(),
             TestClock.fixed(),
             metricsSystem,
