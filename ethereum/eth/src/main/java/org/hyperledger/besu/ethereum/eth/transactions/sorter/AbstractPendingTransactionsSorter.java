@@ -174,23 +174,97 @@ public abstract class AbstractPendingTransactionsSorter {
   public TransactionAddedResult addRemoteTransaction(
       final Transaction transaction, final Optional<Account> maybeSenderAccount) {
 
-    final PendingTransaction pendingTransaction =
-        new PendingTransaction.Remote(transaction, clock.instant());
-    final TransactionAddedResult transactionAddedResult =
-        addTransaction(pendingTransaction, maybeSenderAccount);
-    return transactionAddedResult;
+    return addTransaction(transaction, maybeSenderAccount);
   }
 
   public TransactionAddedResult addLocalTransaction(
       final Transaction transaction, final Optional<Account> maybeSenderAccount) {
-    final TransactionAddedResult transactionAdded =
-        addTransaction(
-            new PendingTransaction.Local(transaction, clock.instant()), maybeSenderAccount);
+
+    final TransactionAddedResult transactionAdded = addTransaction(transaction, maybeSenderAccount);
     if (transactionAdded.equals(ADDED)) {
       localSenders.add(transaction.getSender());
     }
     return transactionAdded;
   }
+
+  private TransactionAddedResult addTransaction(
+          final Transaction transaction, final Optional<Account> maybeSenderAccount) {
+
+    final PendingTransaction pendingTransaction =
+            new PendingTransaction.Remote(transaction, clock.instant());
+
+    final long senderNonce = maybeSenderAccount.map(AccountState::getNonce).orElse(0L);
+
+    final long nonceDistance = pendingTransaction.getNonce() - senderNonce;
+
+    if (nonceDistance < 0) {
+      traceLambda(
+              LOG,
+              "Drop already confirmed transaction {}, since current sender nonce is {}",
+              pendingTransaction::toTraceLog,
+              () -> senderNonce);
+      return ALREADY_KNOWN;
+    } else if (nonceDistance > poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
+      traceLambda(
+              LOG,
+              "Drop too much in the future transaction {}, since current sender nonce is {}",
+              pendingTransaction::toTraceLog,
+              () -> senderNonce);
+      return NONCE_TOO_FAR_IN_FUTURE_FOR_SENDER;
+    }
+
+    synchronized (lock) {
+      var addResult = readyTransactionsCache.add(pendingTransaction, senderNonce);
+
+      if (addResult.equals(ADDED) || addResult.isReplacement()) {
+        addResult
+                .maybeReplacedTransaction()
+                .ifPresent(
+                        replacedTx -> {
+                          traceLambda(
+                                  LOG,
+                                  "Replace existing transaction {}, with new transaction {}",
+                                  replacedTx::toTraceLog,
+                                  pendingTransaction::toTraceLog);
+                          removeReplacedPrioritizedTransaction(replacedTx);
+                        });
+
+        if (prioritizedPendingTransactions.size() >= poolConfig.getTxPoolMaxSize()) {
+          LOG.trace("Max number of prioritized transactions reached");
+
+          var currentLeastPriorityTx = orderByFee.first();
+          if (compareByFee(pendingTransaction, currentLeastPriorityTx) <= 0) {
+            traceLambda(
+                    LOG,
+                    "Not adding incoming transaction {} to the prioritized list, since it is less valuable than the current least priority transactions {}",
+                    pendingTransaction::toTraceLog,
+                    currentLeastPriorityTx::toTraceLog);
+            return addResult;
+          } else if (currentLeastPriorityTx.getSender().equals(pendingTransaction.getSender())) {
+            traceLambda(
+                    LOG,
+                    "Not adding incoming transaction {} to the prioritized list, since it is from the same sender as the least valuable one {}",
+                    pendingTransaction::toTraceLog,
+                    currentLeastPriorityTx::toTraceLog);
+            return addResult;
+          }
+
+          traceLambda(
+                  LOG,
+                  "Demote transactions for the sender of the current least priority transaction {}, to make space for the incoming transaction {}",
+                  currentLeastPriorityTx::toTraceLog,
+                  pendingTransaction::toTraceLog);
+          demoteTransactionForSenderAfter(currentLeastPriorityTx);
+        }
+
+        addPrioritizedTransaction(pendingTransaction);
+        notifyTransactionAdded(pendingTransaction.getTransaction());
+      }
+
+      return addResult;
+    }
+  }
+
 
   void removeTransaction(final Transaction transaction) {
     removeTransaction(transaction, false);
@@ -374,79 +448,6 @@ public abstract class AbstractPendingTransactionsSorter {
     return orderByFee.descendingIterator();
   }
 
-  private TransactionAddedResult addTransaction(
-      final PendingTransaction pendingTransaction, final Optional<Account> maybeSenderAccount) {
-    synchronized (lock) {
-      final long senderNonce = maybeSenderAccount.map(AccountState::getNonce).orElse(0L);
-
-      final long nonceDistance = pendingTransaction.getNonce() - senderNonce;
-
-      if (nonceDistance < 0) {
-        traceLambda(
-            LOG,
-            "Drop already confirmed transaction {}, since current sender nonce is {}",
-            pendingTransaction::toTraceLog,
-            () -> senderNonce);
-        return ALREADY_KNOWN;
-      } else if (nonceDistance > poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
-        traceLambda(
-            LOG,
-            "Drop too much in the future transaction {}, since current sender nonce is {}",
-            pendingTransaction::toTraceLog,
-            () -> senderNonce);
-        return NONCE_TOO_FAR_IN_FUTURE_FOR_SENDER;
-      }
-
-      var addResult = readyTransactionsCache.add(pendingTransaction, senderNonce);
-
-      if (addResult.equals(ADDED) || addResult.isReplacement()) {
-        addResult
-            .maybeReplacedTransaction()
-            .ifPresent(
-                replacedTx -> {
-                  traceLambda(
-                      LOG,
-                      "Replace existing transaction {}, with new transaction {}",
-                      replacedTx::toTraceLog,
-                      pendingTransaction::toTraceLog);
-                  removeReplacedPrioritizedTransaction(replacedTx);
-                });
-
-        if (prioritizedPendingTransactions.size() >= poolConfig.getTxPoolMaxSize()) {
-          LOG.trace("Max number of prioritized transactions reached");
-
-          var currentLeastPriorityTx = orderByFee.first();
-          if (compareByFee(pendingTransaction, currentLeastPriorityTx) <= 0) {
-            traceLambda(
-                LOG,
-                "Not adding incoming transaction {} to the prioritized list, since it is less valuable than the current least priority transactions {}",
-                pendingTransaction::toTraceLog,
-                currentLeastPriorityTx::toTraceLog);
-            return addResult;
-          } else if (currentLeastPriorityTx.getSender().equals(pendingTransaction.getSender())) {
-            traceLambda(
-                LOG,
-                "Not adding incoming transaction {} to the prioritized list, since it is from the same sender as the least valuable one {}",
-                pendingTransaction::toTraceLog,
-                currentLeastPriorityTx::toTraceLog);
-            return addResult;
-          }
-
-          traceLambda(
-              LOG,
-              "Demote transactions for the sender of the current least priority transaction {}, to make space for the incoming transaction {}",
-              currentLeastPriorityTx::toTraceLog,
-              pendingTransaction::toTraceLog);
-          demoteTransactionForSenderAfter(currentLeastPriorityTx);
-        }
-
-        addPrioritizedTransaction(pendingTransaction);
-        notifyTransactionAdded(pendingTransaction.getTransaction());
-      }
-
-      return addResult;
-    }
-  }
 
   private void demoteTransactionForSenderAfter(final PendingTransaction firstDemotedTx) {
     final var demotableSenderTxs =

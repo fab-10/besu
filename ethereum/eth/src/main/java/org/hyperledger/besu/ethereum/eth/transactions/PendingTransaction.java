@@ -33,13 +33,11 @@ public abstract class PendingTransaction {
 
   private static final AtomicLong TRANSACTIONS_ADDED = new AtomicLong();
   private final Transaction transaction;
-  // private final boolean receivedFromLocalSource;
   private final Instant addedToPoolAt;
   private final long sequence; // Allows prioritization based on order transactions are added
 
   protected PendingTransaction(final Transaction transaction, final Instant addedToPoolAt) {
     this.transaction = transaction;
-    //  this.receivedFromLocalSource = receivedFromLocalSource;
     this.addedToPoolAt = addedToPoolAt;
     this.sequence = TRANSACTIONS_ADDED.getAndIncrement();
   }
