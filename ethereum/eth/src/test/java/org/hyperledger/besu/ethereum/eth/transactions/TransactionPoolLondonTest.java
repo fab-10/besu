@@ -250,12 +250,6 @@ public class TransactionPoolLondonTest extends AbstractTransactionPoolTest {
         .isEqualTo(1);
   }
 
-  @Test
-  @Override
-  public void shouldReAddTransactionsFromThePreviousCanonicalHeadWhenAReorgOccurs() {
-    super.shouldReAddTransactionsFromThePreviousCanonicalHeadWhenAReorgOccurs();
-  }
-
   private int add1559TxAndGetPendingTxsCount(
       final Wei genesisBaseFee,
       final Wei minGasPrice,

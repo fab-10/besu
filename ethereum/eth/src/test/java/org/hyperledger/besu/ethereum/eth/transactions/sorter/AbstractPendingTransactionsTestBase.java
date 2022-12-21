@@ -22,6 +22,7 @@ import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedRes
 import static org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionSelectionResult.COMPLETE_OPERATION;
 import static org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionSelectionResult.CONTINUE;
 import static org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter.TransactionSelectionResult.DELETE_TRANSACTION_AND_CONTINUE;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -49,6 +50,7 @@ import org.hyperledger.besu.metrics.StubMetricsSystem;
 import org.hyperledger.besu.testutil.TestClock;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Iterator;
@@ -207,16 +209,23 @@ public abstract class AbstractPendingTransactionsTestBase {
 
   @Test
   public void shouldNotCreateGapsInPrioritizedList() {
-    // fill the pool
-    for (int i = 0; i < MAX_TRANSACTIONS; i++) {
-      transactions.addRemoteTransaction(createTransaction(i), Optional.empty());
-    }
-    assertThat(transactions.size()).isEqualTo(MAX_TRANSACTIONS);
+    transactions.addRemoteTransaction(transaction0, Optional.empty());
+    transactions.addRemoteTransaction(transaction1, Optional.empty());
 
-    // add 2 more ready txs that do not fit in the pool
-    transactions.addRemoteTransaction(createTransaction(MAX_TRANSACTIONS + 1), Optional.empty());
-    transactions.addRemoteTransaction(createTransaction(MAX_TRANSACTIONS + 2), Optional.empty());
-    assertThat(transactions.size()).isEqualTo(MAX_TRANSACTIONS);
+    assertThat(transactions.size()).isEqualTo(2);
+
+    // pretend tx 2 was only added as ready and not prioritized,
+    // so we can now simulate the adding of tx 3
+    final Transaction transaction3 = createTransaction(3);
+    final PendingTransaction pendingTransaction3 =
+        new PendingTransaction.Remote(transaction3, Instant.now());
+    doReturn(ADDED).when(readyTransactionsCache).add(pendingTransaction3, 0);
+
+    // tx 3 must not be added, otherwise a gap is created
+    assertThat(transactions.size()).isEqualTo(2);
+    assertTransactionPending(transaction0);
+    assertTransactionPending(transaction1);
+    assertTransactionNotPending(transaction3);
   }
 
   @Test

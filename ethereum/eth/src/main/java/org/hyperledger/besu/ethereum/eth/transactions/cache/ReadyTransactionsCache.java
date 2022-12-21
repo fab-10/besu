@@ -135,6 +135,14 @@ public class ReadyTransactionsCache {
     }
   }
 
+  /**
+   * Search and returns ready transaction that could be promoted to prioritized
+   *
+   * @param maxPromotable max number of ready transactions that could be promoted
+   * @param promotionFilter first that a ready transaction needs to pass to get promoted
+   * @return a list of transactions that could be prioritized, for each sender the transactions are
+   *     in asc nonce order
+   */
   public List<PendingTransaction> getPromotableTransactions(
       final int maxPromotable, final Predicate<PendingTransaction> promotionFilter) {
 

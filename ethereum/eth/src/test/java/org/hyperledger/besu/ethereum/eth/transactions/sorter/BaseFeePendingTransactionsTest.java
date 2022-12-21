@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.crypto.KeyPair;
@@ -53,8 +54,9 @@ public class BaseFeePendingTransactionsTest extends AbstractPendingTransactionsT
           transactionReplacementTester) {
 
     this.readyTransactionsCache =
-        new ReadyTransactionsCache(
-            poolConfig, new NoOpPostponedTransactionsCache(), transactionReplacementTester);
+        spy(
+            new ReadyTransactionsCache(
+                poolConfig, new NoOpPostponedTransactionsCache(), transactionReplacementTester));
 
     return new BaseFeePendingTransactionsSorter(
         poolConfig,

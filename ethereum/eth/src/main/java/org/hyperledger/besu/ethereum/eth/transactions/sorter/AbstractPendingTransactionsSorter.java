@@ -267,27 +267,27 @@ public abstract class AbstractPendingTransactionsSorter {
   }
 
   private void removeInvalidTransaction(final Transaction transaction) {
-    final PendingTransaction removedPendingTx =
-        prioritizedPendingTransactions.remove(transaction.getHash());
-    if (removedPendingTx != null) {
-      removeFromOrderedTransactions(removedPendingTx, false);
-      // find all prioritized transaction from same sender and with higher nonce to avoid gaps
-      List<PendingTransaction> dependentTransactions =
-          prioritizedPendingTransactions.values().stream()
-              .filter(pt -> pt.getSender().equals(transaction.getSender()))
-              .filter(pt -> pt.getNonce() > transaction.getNonce())
-              .collect(Collectors.toUnmodifiableList());
-      dependentTransactions.forEach(
-          pt -> {
-            if (prioritizedPendingTransactions.remove(pt.getHash()) != null) {
-              removeFromOrderedTransactions(pt, false);
-            }
-            readyTransactionsCache.remove(pt.getTransaction());
-            notifyTransactionDropped(pt.getTransaction());
-          });
+    List<PendingTransaction> allSenderTxs =
+        prioritizedPendingTransactions.values().stream()
+            .filter(pt -> pt.getSender().equals(transaction.getSender()))
+            .collect(Collectors.toUnmodifiableList());
+
+    Transaction lastGoodTx = null;
+    for (final var pendingTransaction : allSenderTxs) {
+      if (pendingTransaction.getNonce() < transaction.getNonce()) {
+        lastGoodTx = pendingTransaction.getTransaction();
+      }
+      prioritizedPendingTransactions.remove(pendingTransaction.getHash());
+      removeFromOrderedTransactions(pendingTransaction, false);
+      readyTransactionsCache.remove(pendingTransaction.getTransaction());
+      notifyTransactionDropped(pendingTransaction.getTransaction());
     }
-    readyTransactionsCache.remove(transaction);
-    notifyTransactionDropped(transaction);
+
+    if (lastGoodTx == null) {
+      expectedNonceForSender.remove(transaction.getSender());
+    } else {
+      expectedNonceForSender.put(transaction.getSender(), lastGoodTx.getNonce());
+    }
   }
 
   private void notifyTransactionAdded(final Transaction transaction) {
@@ -413,6 +413,8 @@ public abstract class AbstractPendingTransactionsSorter {
     }
   }
 
+  protected abstract void manageBlockAdded(final Block block, final FeeMarket feeMarket);
+
   protected void transactionsAddedToBlock(final List<Transaction> confirmedTransactions) {
 
     confirmedTransactions.stream()
@@ -446,8 +448,6 @@ public abstract class AbstractPendingTransactionsSorter {
             groupingBy(
                 Transaction::getSender, mapping(Transaction::getNonce, maxBy(Long::compare))));
   }
-
-  protected abstract void manageBlockAdded(final Block block, final FeeMarket feeMarket);
 
   protected void promoteFromReady() {
     final int maxPromotable = poolConfig.getTxPoolMaxSize() - prioritizedPendingTransactions.size();
