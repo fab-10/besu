@@ -38,6 +38,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 import com.google.common.base.Suppliers;
@@ -62,15 +63,26 @@ public class PendingMultiTypesTransactionsTest {
   private final BlockHeader blockHeader = mock(BlockHeader.class);
 
   private final StubMetricsSystem metricsSystem = new StubMetricsSystem();
+  private final TransactionPoolConfiguration transactionPoolConfiguration =
+      ImmutableTransactionPoolConfiguration.builder()
+          .txPoolMaxSize(MAX_TRANSACTIONS)
+          .txPoolLimitByAccountPercentage(MAX_TRANSACTIONS_BY_SENDER_PERCENTAGE)
+          .build();
+
+  protected final TransactionPoolReplacementHandler transactionReplacementHandler =
+      new TransactionPoolReplacementHandler(transactionPoolConfiguration.getPriceBump());
+
+  protected final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+      transactionReplacementTester =
+          (t1, t2) -> transactionReplacementHandler.shouldReplace(t1, t2, getBlockHeader());
+
   private final BaseFeePendingTransactionsSorter transactions =
       new BaseFeePendingTransactionsSorter(
-          ImmutableTransactionPoolConfiguration.builder()
-              .txPoolMaxSize(MAX_TRANSACTIONS)
-              .txPoolLimitByAccountPercentage(MAX_TRANSACTIONS_BY_SENDER_PERCENTAGE)
-              .build(),
+          transactionPoolConfiguration,
           TestClock.system(ZoneId.systemDefault()),
           metricsSystem,
           () -> mockBlockHeader(Wei.of(7L)),
+          transactionReplacementTester,
           FeeMarket.london(0L));
 
   @Test
@@ -392,6 +404,10 @@ public class PendingMultiTypesTransactionsTest {
 
   private BlockHeader mockBlockHeader(final Wei baseFee) {
     when(blockHeader.getBaseFee()).thenReturn(Optional.of(baseFee));
+    return blockHeader;
+  }
+
+  private BlockHeader getBlockHeader() {
     return blockHeader;
   }
 }

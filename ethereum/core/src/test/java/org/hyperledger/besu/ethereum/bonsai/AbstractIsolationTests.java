@@ -39,6 +39,9 @@ import org.hyperledger.besu.ethereum.core.SealableBlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSchedule;
@@ -61,6 +64,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -83,12 +87,24 @@ public abstract class AbstractIsolationTests {
   protected final GenesisState genesisState =
       GenesisState.fromConfig(GenesisConfigFile.development(), protocolSchedule);
   protected final MutableBlockchain blockchain = createInMemoryBlockchain(genesisState.getBlock());
+
+  protected final TransactionPoolConfiguration transactionPoolConfiguration =
+      ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(100).build();
+  protected final TransactionPoolReplacementHandler transactionReplacementHandler =
+      new TransactionPoolReplacementHandler(transactionPoolConfiguration.getPriceBump());
+
+  protected final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+      transactionReplacementTester =
+          (t1, t2) ->
+              transactionReplacementHandler.shouldReplace(
+                  t1, t2, protocolContext.getBlockchain().getChainHeadHeader());
+
   protected final AbstractPendingTransactionsSorter sorter =
       new GasPricePendingTransactionsSorter(
           ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(100).build(),
           Clock.systemUTC(),
           new NoOpMetricsSystem(),
-          blockchain::getChainHeadHeader);
+          transactionReplacementTester);
 
   protected final List<GenesisAllocation> accounts =
       GenesisConfigFile.development()

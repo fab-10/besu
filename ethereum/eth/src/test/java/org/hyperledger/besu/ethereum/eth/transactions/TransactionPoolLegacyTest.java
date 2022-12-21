@@ -33,6 +33,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.transactions.cache.InMemoryPostponedTransactionsCache;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.ReadyTransactionsCache;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
@@ -45,6 +46,7 @@ import java.math.BigInteger;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiFunction;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -55,17 +57,18 @@ import org.mockito.junit.MockitoJUnitRunner;
 public class TransactionPoolLegacyTest extends AbstractTransactionPoolTest {
 
   @Override
-  protected AbstractPendingTransactionsSorter createPendingTransactionsSorter() {
+  protected AbstractPendingTransactionsSorter createPendingTransactionsSorter(
+      final TransactionPoolConfiguration poolConfig,
+      final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+          transactionReplacementTester) {
 
     return new GasPricePendingTransactionsSorter(
-        ImmutableTransactionPoolConfiguration.builder()
-            .txPoolMaxSize(MAX_TRANSACTIONS)
-            .txPoolLimitByAccountPercentage(1)
-            .build(),
+        poolConfig,
         TestClock.system(ZoneId.systemDefault()),
         metricsSystem,
-        protocolContext.getBlockchain()::getChainHeadHeader,
-        new InMemoryPostponedTransactionsCache());
+        transactionReplacementTester,
+        new ReadyTransactionsCache(
+            poolConfig, new InMemoryPostponedTransactionsCache(), transactionReplacementTester));
   }
 
   @Override

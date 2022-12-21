@@ -17,17 +17,16 @@ package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 import static java.util.Comparator.comparing;
 
 import org.hyperledger.besu.ethereum.core.Block;
-import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.cache.NoOpPostponedTransactionsCache;
-import org.hyperledger.besu.ethereum.eth.transactions.cache.PostponedTransactionsCache;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.ReadyTransactionsCache;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.time.Clock;
+import java.util.function.BiFunction;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 
 /**
  * Holds the current set of pending transactions with the ability to iterate them based on priority
@@ -41,22 +40,25 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
-      final Supplier<BlockHeader> chainHeadHeaderSupplier) {
+      final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+          transactionReplacementTester) {
     this(
         poolConfig,
         clock,
         metricsSystem,
-        chainHeadHeaderSupplier,
-        new NoOpPostponedTransactionsCache());
+        transactionReplacementTester,
+        new ReadyTransactionsCache(
+            poolConfig, new NoOpPostponedTransactionsCache(), transactionReplacementTester));
   }
 
   public GasPricePendingTransactionsSorter(
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
-      final Supplier<BlockHeader> chainHeadHeaderSupplier,
-      final PostponedTransactionsCache postponedTransactionsCache) {
-    super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier, postponedTransactionsCache);
+      final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+          transactionReplacementTester,
+      final ReadyTransactionsCache readyTransactionsCache) {
+    super(poolConfig, clock, metricsSystem, transactionReplacementTester, readyTransactionsCache);
   }
 
   @Override

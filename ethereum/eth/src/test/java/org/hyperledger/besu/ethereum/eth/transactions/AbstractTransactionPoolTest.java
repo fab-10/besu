@@ -77,6 +77,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 
 import org.junit.Before;
@@ -117,13 +118,16 @@ public abstract class AbstractTransactionPoolTest {
   private ExecutionContextTestFixture executionContext;
   protected ProtocolContext protocolContext;
   protected TransactionPool transactionPool;
+  protected TransactionPoolConfiguration poolConfig;
   protected long blockGasLimit;
   protected EthProtocolManager ethProtocolManager;
   private EthContext ethContext;
   private PeerTransactionTracker peerTransactionTracker;
   private ArgumentCaptor<Runnable> syncTaskCapture;
 
-  protected abstract AbstractPendingTransactionsSorter createPendingTransactionsSorter();
+  protected abstract AbstractPendingTransactionsSorter createPendingTransactionsSorter(
+      final TransactionPoolConfiguration poolConfig,
+      BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester);
 
   protected abstract ExecutionContextTestFixture createExecutionContextTestFixture();
 
@@ -134,7 +138,7 @@ public abstract class AbstractTransactionPoolTest {
     executionContext = createExecutionContextTestFixture();
     protocolContext = executionContext.getProtocolContext();
     blockchain = executionContext.getBlockchain();
-    transactions = spy(createPendingTransactionsSorter());
+
     when(protocolSpec.getTransactionValidator()).thenReturn(transactionValidator);
     when(protocolSpec.getFeeMarket()).thenReturn(getFeeMarket());
     protocolSchedule = spy(executionContext.getProtocolSchedule());
@@ -149,16 +153,9 @@ public abstract class AbstractTransactionPoolTest {
     doReturn(ethScheduler).when(ethContext).getScheduler();
 
     peerTransactionTracker = new PeerTransactionTracker();
-    transactionBroadcaster =
-        spy(
-            new TransactionBroadcaster(
-                ethContext,
-                transactions,
-                peerTransactionTracker,
-                transactionsMessageSender,
-                newPooledTransactionHashesMessageSender));
 
     transactionPool = createTransactionPool();
+
     blockchain.observeBlockAdded(transactionPool);
     when(miningParameters.getMinTransactionGasPrice()).thenReturn(Wei.of(2));
   }
@@ -172,7 +169,26 @@ public abstract class AbstractTransactionPoolTest {
     final ImmutableTransactionPoolConfiguration.Builder configBuilder =
         ImmutableTransactionPoolConfiguration.builder();
     configConsumer.accept(configBuilder);
-    final TransactionPoolConfiguration config = configBuilder.build();
+    poolConfig = configBuilder.build();
+
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(poolConfig.getPriceBump());
+
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) ->
+            transactionReplacementHandler.shouldReplace(
+                t1, t2, protocolContext.getBlockchain().getChainHeadHeader());
+
+    transactions = spy(createPendingTransactionsSorter(poolConfig, transactionReplacementTester));
+
+    transactionBroadcaster =
+        spy(
+            new TransactionBroadcaster(
+                ethContext,
+                transactions,
+                peerTransactionTracker,
+                transactionsMessageSender,
+                newPooledTransactionHashesMessageSender));
 
     return new TransactionPool(
         transactions,
@@ -182,7 +198,7 @@ public abstract class AbstractTransactionPoolTest {
         ethContext,
         miningParameters,
         metricsSystem,
-        config);
+        poolConfig);
   }
 
   @Test

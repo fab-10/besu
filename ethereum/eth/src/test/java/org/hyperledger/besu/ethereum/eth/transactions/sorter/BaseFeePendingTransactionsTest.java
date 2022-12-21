@@ -24,6 +24,8 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.NoOpPostponedTransactionsCache;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.ReadyTransactionsCache;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.data.TransactionType;
 import org.hyperledger.besu.testutil.TestClock;
@@ -34,6 +36,7 @@ import java.time.ZoneId;
 import java.util.Comparator;
 import java.util.Optional;
 import java.util.Random;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -44,16 +47,27 @@ public class BaseFeePendingTransactionsTest extends AbstractPendingTransactionsT
 
   @Override
   AbstractPendingTransactionsSorter getSorter(
-      final TransactionPoolConfiguration poolConfig, final Optional<Clock> clock) {
+      final TransactionPoolConfiguration poolConfig,
+      final Optional<Clock> clock,
+      final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+          transactionReplacementTester) {
+
+    this.readyTransactionsCache =
+        new ReadyTransactionsCache(
+            poolConfig, new NoOpPostponedTransactionsCache(), transactionReplacementTester);
+
     return new BaseFeePendingTransactionsSorter(
         poolConfig,
         clock.orElse(TestClock.system(ZoneId.systemDefault())),
         metricsSystem,
-        BaseFeePendingTransactionsTest::mockBlockHeader,
-        FeeMarket.london(0L));
+        this::mockBlockHeader,
+        transactionReplacementTester,
+        FeeMarket.london(0L),
+        readyTransactionsCache);
   }
 
-  private static BlockHeader mockBlockHeader() {
+  @Override
+  protected BlockHeader mockBlockHeader() {
     final BlockHeader blockHeader = mock(BlockHeader.class);
     when(blockHeader.getBaseFee()).thenReturn(Optional.of(Wei.ONE));
     return blockHeader;

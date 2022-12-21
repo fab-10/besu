@@ -30,6 +30,7 @@ import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.time.Clock;
+import java.util.function.BiFunction;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -163,7 +164,16 @@ public class TransactionPoolFactory {
       final Clock clock,
       final MetricsSystem metricsSystem,
       final TransactionPoolConfiguration transactionPoolConfiguration) {
-    boolean isFeeMarketImplementBaseFee =
+
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(transactionPoolConfiguration.getPriceBump());
+
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) ->
+            transactionReplacementHandler.shouldReplace(
+                t1, t2, protocolContext.getBlockchain().getChainHeadHeader());
+
+    final boolean isFeeMarketImplementBaseFee =
         protocolSchedule
             .streamMilestoneBlocks()
             .map(protocolSchedule::getByBlockNumber)
@@ -185,13 +195,11 @@ public class TransactionPoolFactory {
           clock,
           metricsSystem,
           protocolContext.getBlockchain()::getChainHeadHeader,
+          transactionReplacementTester,
           baseFeeMarket);
     } else {
       return new GasPricePendingTransactionsSorter(
-          transactionPoolConfiguration,
-          clock,
-          metricsSystem,
-          protocolContext.getBlockchain()::getChainHeadHeader);
+          transactionPoolConfiguration, clock, metricsSystem, transactionReplacementTester);
     }
   }
 }

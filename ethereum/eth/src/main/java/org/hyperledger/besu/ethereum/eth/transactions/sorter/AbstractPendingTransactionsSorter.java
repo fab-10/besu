@@ -14,6 +14,9 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions.sorter;
 
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.maxBy;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ADDED;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ALREADY_KNOWN;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.NONCE_TOO_FAR_IN_FUTURE_FOR_SENDER;
@@ -23,15 +26,12 @@ import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.AccountTransactionOrder;
 import org.hyperledger.besu.ethereum.core.Block;
-import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionDroppedListener;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionListener;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
-import org.hyperledger.besu.ethereum.eth.transactions.cache.PostponedTransactionsCache;
 import org.hyperledger.besu.ethereum.eth.transactions.cache.ReadyTransactionsCache;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.account.Account;
@@ -43,8 +43,6 @@ import org.hyperledger.besu.plugin.services.metrics.LabelledMetric;
 import org.hyperledger.besu.util.Subscribers;
 
 import java.time.Clock;
-import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -60,7 +58,6 @@ import java.util.TreeSet;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -84,6 +81,7 @@ public abstract class AbstractPendingTransactionsSorter {
   protected final Map<Hash, PendingTransaction> prioritizedPendingTransactions;
 
   protected final TreeSet<PendingTransaction> orderByFee;
+  protected final Map<Address, Long> expectedNonceForSender;
 
   protected final ReadyTransactionsCache readyTransactionsCache;
 
@@ -97,8 +95,8 @@ public abstract class AbstractPendingTransactionsSorter {
   protected final LabelledMetric<Counter> transactionRemovedCounter;
   protected final LabelledMetric<Counter> transactionReplacedCounter;
 
-  protected final TransactionPoolReplacementHandler transactionReplacementHandler;
-  protected final Supplier<BlockHeader> chainHeadHeaderSupplier;
+  protected final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+      transactionReplacementTester;
 
   private final Set<Address> localSenders = ConcurrentHashMap.newKeySet();
 
@@ -106,14 +104,14 @@ public abstract class AbstractPendingTransactionsSorter {
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
-      final Supplier<BlockHeader> chainHeadHeaderSupplier,
-      final PostponedTransactionsCache postponedTransactionsCache) {
+      final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+          transactionReplacementTester,
+      final ReadyTransactionsCache readyTransactionsCache) {
     this.poolConfig = poolConfig;
     this.prioritizedPendingTransactions = new ConcurrentHashMap<>(poolConfig.getTxPoolMaxSize());
+    this.expectedNonceForSender = new HashMap<>();
     this.clock = clock;
-    this.chainHeadHeaderSupplier = chainHeadHeaderSupplier;
-    this.transactionReplacementHandler =
-        new TransactionPoolReplacementHandler(poolConfig.getPriceBump());
+    this.transactionReplacementTester = transactionReplacementTester;
     this.transactionAddedCounter =
         metricsSystem.createLabelledCounter(
             BesuMetricCategory.TRANSACTION_POOL,
@@ -141,28 +139,11 @@ public abstract class AbstractPendingTransactionsSorter {
         "Current size of the transaction pool",
         prioritizedPendingTransactions::size);
 
-    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
-        (t1, t2) ->
-            transactionReplacementHandler.shouldReplace(t1, t2, chainHeadHeaderSupplier.get());
-
-    this.readyTransactionsCache =
-        new ReadyTransactionsCache(
-            poolConfig, postponedTransactionsCache, transactionReplacementTester);
+    this.readyTransactionsCache = readyTransactionsCache;
     this.orderByFee = new TreeSet<>(this::compareByFee);
   }
 
-  public void evictOldTransactions() {
-    final Instant removeTransactionsBefore =
-        clock.instant().minus(poolConfig.getPendingTxRetentionPeriod(), ChronoUnit.HOURS);
-
-    prioritizedPendingTransactions.values().stream()
-        .filter(transaction -> transaction.getAddedToPoolAt().isBefore(removeTransactionsBefore))
-        .forEach(
-            transactionInfo -> {
-              traceLambda(LOG, "Evicted {} due to age", transactionInfo::toTraceLog);
-              removeTransaction(transactionInfo.getTransaction());
-            });
-  }
+  public void evictOldTransactions() {}
 
   public List<Transaction> getLocalTransactions() {
     return prioritizedPendingTransactions.values().stream()
@@ -174,13 +155,16 @@ public abstract class AbstractPendingTransactionsSorter {
   public TransactionAddedResult addRemoteTransaction(
       final Transaction transaction, final Optional<Account> maybeSenderAccount) {
 
-    return addTransaction(transaction, maybeSenderAccount);
+    return addTransaction(
+        new PendingTransaction.Remote(transaction, clock.instant()), maybeSenderAccount);
   }
 
   public TransactionAddedResult addLocalTransaction(
       final Transaction transaction, final Optional<Account> maybeSenderAccount) {
 
-    final TransactionAddedResult transactionAdded = addTransaction(transaction, maybeSenderAccount);
+    final TransactionAddedResult transactionAdded =
+        addTransaction(
+            new PendingTransaction.Local(transaction, clock.instant()), maybeSenderAccount);
     if (transactionAdded.equals(ADDED)) {
       localSenders.add(transaction.getSender());
     }
@@ -188,10 +172,7 @@ public abstract class AbstractPendingTransactionsSorter {
   }
 
   private TransactionAddedResult addTransaction(
-      final Transaction transaction, final Optional<Account> maybeSenderAccount) {
-
-    final PendingTransaction pendingTransaction =
-        new PendingTransaction.Remote(transaction, clock.instant());
+      final PendingTransaction pendingTransaction, final Optional<Account> maybeSenderAccount) {
 
     final long senderNonce = maybeSenderAccount.map(AccountState::getNonce).orElse(0L);
 
@@ -204,7 +185,7 @@ public abstract class AbstractPendingTransactionsSorter {
           pendingTransaction::toTraceLog,
           () -> senderNonce);
       return ALREADY_KNOWN;
-    } else if (nonceDistance > poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
+    } else if (nonceDistance >= poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
       traceLambda(
           LOG,
           "Drop too much in the future transaction {}, since current sender nonce is {}",
@@ -217,66 +198,96 @@ public abstract class AbstractPendingTransactionsSorter {
       var addResult = readyTransactionsCache.add(pendingTransaction, senderNonce);
 
       if (addResult.equals(ADDED) || addResult.isReplacement()) {
-        addResult
-            .maybeReplacedTransaction()
-            .ifPresent(
-                replacedTx -> {
-                  traceLambda(
-                      LOG,
-                      "Replace existing transaction {}, with new transaction {}",
-                      replacedTx::toTraceLog,
-                      pendingTransaction::toTraceLog);
-                  removeReplacedPrioritizedTransaction(replacedTx);
-                });
-
-        if (prioritizedPendingTransactions.size() >= poolConfig.getTxPoolMaxSize()) {
-          LOG.trace("Max number of prioritized transactions reached");
-
-          var currentLeastPriorityTx = orderByFee.first();
-          if (compareByFee(pendingTransaction, currentLeastPriorityTx) <= 0) {
-            traceLambda(
-                LOG,
-                "Not adding incoming transaction {} to the prioritized list, since it is less valuable than the current least priority transactions {}",
-                pendingTransaction::toTraceLog,
-                currentLeastPriorityTx::toTraceLog);
-            return addResult;
-          } else if (currentLeastPriorityTx.getSender().equals(pendingTransaction.getSender())) {
-            traceLambda(
-                LOG,
-                "Not adding incoming transaction {} to the prioritized list, since it is from the same sender as the least valuable one {}",
-                pendingTransaction::toTraceLog,
-                currentLeastPriorityTx::toTraceLog);
-            return addResult;
-          }
-
-          traceLambda(
-              LOG,
-              "Demote transactions for the sender of the current least priority transaction {}, to make space for the incoming transaction {}",
-              currentLeastPriorityTx::toTraceLog,
-              pendingTransaction::toTraceLog);
-          demoteTransactionForSenderAfter(currentLeastPriorityTx);
-        }
-
-        addPrioritizedTransaction(pendingTransaction);
-        notifyTransactionAdded(pendingTransaction.getTransaction());
+        maybePrioritizedAddedTransaction(pendingTransaction, senderNonce, addResult);
       }
 
       return addResult;
     }
   }
 
-  void removeTransaction(final Transaction transaction) {
-    removeTransaction(transaction, false);
-    notifyTransactionDropped(transaction);
+  private void maybePrioritizedAddedTransaction(
+      final PendingTransaction addedReadyTransaction,
+      final long senderNonce,
+      final TransactionAddedResult addResult) {
+    addResult
+        .maybeReplacedTransaction()
+        .ifPresent(
+            replacedTx -> {
+              traceLambda(
+                  LOG,
+                  "Replace existing transaction {}, with new transaction {}",
+                  replacedTx::toTraceLog,
+                  addedReadyTransaction::toTraceLog);
+              removeReplacedPrioritizedTransaction(replacedTx);
+            });
+
+    final var expectedNonce =
+        expectedNonceForSender.getOrDefault(addedReadyTransaction.getSender(), senderNonce);
+
+    // only add to prioritized if it appends to the already prioritized for its sender, without gaps
+    if (!addResult.isReplacement() && addedReadyTransaction.getNonce() != expectedNonce) {
+      traceLambda(
+          LOG,
+          "Not adding transaction {} to prioritized list since expected next nonce for this sender is {}",
+          addedReadyTransaction::toTraceLog,
+          () -> expectedNonce);
+      return;
+    }
+
+    if (prioritizedPendingTransactions.size() >= poolConfig.getTxPoolMaxSize()) {
+      LOG.trace("Max number of prioritized transactions reached");
+
+      var currentLeastPriorityTx = orderByFee.first();
+      if (compareByFee(addedReadyTransaction, currentLeastPriorityTx) <= 0) {
+        traceLambda(
+            LOG,
+            "Not adding incoming transaction {} to the prioritized list, since it is less valuable than the current least priority transactions {}",
+            addedReadyTransaction::toTraceLog,
+            currentLeastPriorityTx::toTraceLog);
+        return;
+      } else if (currentLeastPriorityTx.getSender().equals(addedReadyTransaction.getSender())) {
+        traceLambda(
+            LOG,
+            "Not adding incoming transaction {} to the prioritized list, since it is from the same sender as the least valuable one {}",
+            addedReadyTransaction::toTraceLog,
+            currentLeastPriorityTx::toTraceLog);
+        return;
+      }
+
+      traceLambda(
+          LOG,
+          "Demote transactions for the sender of the current least priority transaction {}, to make space for the incoming transaction {}",
+          currentLeastPriorityTx::toTraceLog,
+          addedReadyTransaction::toTraceLog);
+      demoteTransactionForSenderAfter(currentLeastPriorityTx);
+    }
+
+    addPrioritizedTransaction(addedReadyTransaction);
+    notifyTransactionAdded(addedReadyTransaction.getTransaction());
   }
 
-  private void removeTransaction(final Transaction transaction, final boolean addedToBlock) {
+  private void removeInvalidTransaction(final Transaction transaction) {
     final PendingTransaction removedPendingTx =
         prioritizedPendingTransactions.remove(transaction.getHash());
     if (removedPendingTx != null) {
-      removeFromOrderedTransactions(removedPendingTx, addedToBlock);
+      removeFromOrderedTransactions(removedPendingTx, false);
+      // find all prioritized transaction from same sender and with higher nonce to avoid gaps
+      List<PendingTransaction> dependentTransactions =
+          prioritizedPendingTransactions.values().stream()
+              .filter(pt -> pt.getSender().equals(transaction.getSender()))
+              .filter(pt -> pt.getNonce() > transaction.getNonce())
+              .collect(Collectors.toUnmodifiableList());
+      dependentTransactions.forEach(
+          pt -> {
+            if (prioritizedPendingTransactions.remove(pt.getHash()) != null) {
+              removeFromOrderedTransactions(pt, false);
+            }
+            readyTransactionsCache.remove(pt.getTransaction());
+            notifyTransactionDropped(pt.getTransaction());
+          });
     }
     readyTransactionsCache.remove(transaction);
+    notifyTransactionDropped(transaction);
   }
 
   private void notifyTransactionAdded(final Transaction transaction) {
@@ -334,14 +345,14 @@ public abstract class AbstractPendingTransactionsSorter {
             case CONTINUE:
               break;
             case COMPLETE_OPERATION:
-              transactionsToRemove.forEach(this::removeTransaction);
+              transactionsToRemove.forEach(this::removeInvalidTransaction);
               return;
             default:
               throw new RuntimeException("Illegal value for TransactionSelectionResult.");
           }
         }
       }
-      transactionsToRemove.forEach(this::removeTransaction);
+      transactionsToRemove.forEach(this::removeInvalidTransaction);
     }
   }
 
@@ -403,13 +414,37 @@ public abstract class AbstractPendingTransactionsSorter {
   }
 
   protected void transactionsAddedToBlock(final List<Transaction> confirmedTransactions) {
+
     confirmedTransactions.stream()
         .map(Transaction::getHash)
         .map(prioritizedPendingTransactions::remove)
         .filter(Objects::nonNull)
         .forEach(tx -> removeFromOrderedTransactions(tx, true));
 
-    readyTransactionsCache.removeConfirmedTransactions(confirmedTransactions);
+    // update expected nonce for senders
+    final var orderedConfirmedNonceBySender = maxConfirmedNonceNySender(confirmedTransactions);
+    for (final var confirmedNonceEntry : orderedConfirmedNonceBySender.entrySet()) {
+      expectedNonceForSender.computeIfPresent(
+          confirmedNonceEntry.getKey(),
+          (sender, expectedNonce) -> {
+            if (confirmedNonceEntry.getValue().get() >= expectedNonce - 1) {
+              // all the current prioritized transactions for the sender are confirmed, remove the
+              // entry
+              return null;
+            }
+            return expectedNonce;
+          });
+    }
+
+    readyTransactionsCache.removeConfirmedTransactions(orderedConfirmedNonceBySender);
+  }
+
+  private Map<Address, Optional<Long>> maxConfirmedNonceNySender(
+      final List<Transaction> confirmedTransactions) {
+    return confirmedTransactions.stream()
+        .collect(
+            groupingBy(
+                Transaction::getSender, mapping(Transaction::getNonce, maxBy(Long::compare))));
   }
 
   protected abstract void manageBlockAdded(final Block block, final FeeMarket feeMarket);
@@ -473,6 +508,7 @@ public abstract class AbstractPendingTransactionsSorter {
   protected void addPrioritizedTransaction(final PendingTransaction prioritizedTx) {
     prioritizedPendingTransactions.put(prioritizedTx.getHash(), prioritizedTx);
     orderByFee.add(prioritizedTx);
+    expectedNonceForSender.put(prioritizedTx.getSender(), prioritizedTx.getNonce() + 1);
     incrementTransactionAddedCounter(prioritizedTx.isReceivedFromLocalSource());
   }
 

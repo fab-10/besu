@@ -43,6 +43,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Random;
@@ -318,13 +319,14 @@ public class ReadyTransactionsCacheTest {
   public void noPromotableTransactionsWhenCacheIsEmpty() {
     final var confirmedTransaction = createTransaction(0);
     assertTransactionNotPresent(confirmedTransaction);
-    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    readyTransactionsCache.removeConfirmedTransactions(
+        Map.of(confirmedTransaction.getSender(), Optional.of(0L)));
     assertThat(readyTransactionsCache.getPromotableTransactions(1, this::alwaysPromote)).isEmpty();
   }
 
   @Test
   public void noPromotableTransactionsWhenNoConfirmedTransactionsAndCacheIsEmpty() {
-    readyTransactionsCache.removeConfirmedTransactions(List.of());
+    readyTransactionsCache.removeConfirmedTransactions(Map.of());
     assertThat(readyTransactionsCache.getPromotableTransactions(1, this::alwaysPromote)).isEmpty();
   }
 
@@ -336,7 +338,8 @@ public class ReadyTransactionsCacheTest {
 
     final var confirmedTransaction = readyTxs[0];
 
-    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    readyTransactionsCache.removeConfirmedTransactions(
+        Map.of(confirmedTransaction.getSender(), Optional.of(0L)));
     assertThat(readyTransactionsCache.getPromotableTransactions(0, this::alwaysPromote)).isEmpty();
   }
 
@@ -347,7 +350,8 @@ public class ReadyTransactionsCacheTest {
     assertThat(Arrays.stream(readyTxs).mapToLong(Transaction::getNonce)).containsExactly(1L, 2L);
 
     final var confirmedTransaction = readyTxs[0];
-    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    readyTransactionsCache.removeConfirmedTransactions(
+        Map.of(confirmedTransaction.getSender(), Optional.of(1L)));
     assertThat(readyTransactionsCache.getPromotableTransactions(1, this::alwaysPromote))
         .map(PendingTransaction::getTransaction)
         .containsExactly(readyTxs[1]);
@@ -361,7 +365,8 @@ public class ReadyTransactionsCacheTest {
 
     final var confirmedTransaction = createTransaction(0, KEYS2);
     assertNoTransactionsForSender(confirmedTransaction.getSender());
-    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    readyTransactionsCache.removeConfirmedTransactions(
+        Map.of(confirmedTransaction.getSender(), Optional.of(0L)));
     assertThat(readyTransactionsCache.getPromotableTransactions(1, this::alwaysPromote))
         .map(PendingTransaction::getTransaction)
         .containsExactly(readyTxs[0]);
@@ -385,7 +390,8 @@ public class ReadyTransactionsCacheTest {
     assertSenderHasExactlyTransactions(transaction0SenderC);
 
     final var confirmedTransaction = transaction0SenderA;
-    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    readyTransactionsCache.removeConfirmedTransactions(
+        Map.of(confirmedTransaction.getSender(), Optional.of(0L)));
     assertThat(readyTransactionsCache.getPromotableTransactions(2, this::alwaysPromote))
         .map(PendingTransaction::getTransaction)
         .containsExactly(transaction1SenderA, transaction0SenderB);
@@ -399,7 +405,8 @@ public class ReadyTransactionsCacheTest {
         .containsExactly(0L, 1L, 2L);
 
     final var confirmedTransaction = readyTxs[1];
-    readyTransactionsCache.removeConfirmedTransactions(List.of(confirmedTransaction));
+    readyTransactionsCache.removeConfirmedTransactions(
+        Map.of(confirmedTransaction.getSender(), Optional.of(1L)));
     assertThat(readyTransactionsCache.getPromotableTransactions(2, this::alwaysPromote))
         .map(PendingTransaction::getTransaction)
         .containsExactly(readyTxs[2]);

@@ -14,9 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions.cache;
 
-import static java.util.stream.Collectors.groupingBy;
-import static java.util.stream.Collectors.mapping;
-import static java.util.stream.Collectors.maxBy;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ADDED;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ALREADY_KNOWN;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.POSTPONED;
@@ -78,13 +75,6 @@ public class ReadyTransactionsCache {
   public TransactionAddedResult add(
       final PendingTransaction pendingTransaction, final long senderNonce) {
 
-    // if too much pending transactions for the sender then postpone
-    if (pendingTransaction.getNonce() - senderNonce
-        >= poolConfig.getTxPoolMaxFutureTransactionByAccount()) {
-      postponedCache.add(pendingTransaction);
-      return POSTPONED;
-    }
-
     // try to add to the ready set
     var addToReadyStatus =
         modifySenderReadyTxsWrapper(
@@ -134,10 +124,7 @@ public class ReadyTransactionsCache {
     return OptionalLong.empty();
   }
 
-  public void removeConfirmedTransactions(final List<Transaction> confirmedTransactions) {
-
-    final Map<Address, Optional<Long>> confirmedBySender =
-        maxConfirmedNonceBySender(confirmedTransactions);
+  public void removeConfirmedTransactions(final Map<Address, Optional<Long>> confirmedBySender) {
 
     for (var senderMaxConfirmedNonce : confirmedBySender.entrySet()) {
       final var maxConfirmedNonce = senderMaxConfirmedNonce.getValue().get();
@@ -379,14 +366,6 @@ public class ReadyTransactionsCache {
       postponedCache.removeForSenderBelowNonce(sender, maxConfirmedNonce);
     }
     return null;
-  }
-
-  private Map<Address, Optional<Long>> maxConfirmedNonceBySender(
-      final List<Transaction> confirmedTransactions) {
-    return confirmedTransactions.stream()
-        .collect(
-            groupingBy(
-                Transaction::getSender, mapping(Transaction::getNonce, maxBy(Long::compare))));
   }
 
   private Collection<PendingTransaction> promoteReady(

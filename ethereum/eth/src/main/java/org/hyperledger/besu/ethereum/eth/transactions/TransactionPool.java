@@ -57,6 +57,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -152,12 +153,16 @@ public class TransactionPool implements BlockAddedObserver {
         .orElse(true);
   }
 
+  private Stream<Transaction> sortedBySenderAndNonce(final Collection<Transaction> transactions) {
+    return transactions.stream()
+        .sorted(Comparator.comparing(Transaction::getSender).thenComparing(Transaction::getNonce));
+  }
+
   public void addRemoteTransactions(final Collection<Transaction> transactions) {
     final List<Transaction> addedTransactions = new ArrayList<>(transactions.size());
     LOG.trace("Adding {} remote transactions", transactions.size());
 
-    transactions.stream()
-        .sorted(Comparator.comparing(Transaction::getSender).thenComparing(Transaction::getNonce))
+    sortedBySenderAndNonce(transactions)
         .forEach(
             transaction -> {
               if (pendingTransactions.containsTransaction(transaction.getHash())) {
@@ -246,7 +251,7 @@ public class TransactionPool implements BlockAddedObserver {
       var reAddRemoteTxs = txsByOrigin.get(false);
       if (!reAddLocalTxs.isEmpty()) {
         LOG.trace("Re-adding {} local transactions from a block event", reAddLocalTxs.size());
-        reAddLocalTxs.forEach(this::addLocalTransaction);
+        sortedBySenderAndNonce(reAddLocalTxs).forEach(this::addLocalTransaction);
       }
       if (!reAddRemoteTxs.isEmpty()) {
         LOG.trace("Re-adding {} remote transactions from a block event", reAddRemoteTxs.size());

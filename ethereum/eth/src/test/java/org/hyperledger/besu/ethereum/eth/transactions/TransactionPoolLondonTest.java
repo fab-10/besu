@@ -34,6 +34,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.transactions.cache.InMemoryPostponedTransactionsCache;
+import org.hyperledger.besu.ethereum.eth.transactions.cache.ReadyTransactionsCache;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
@@ -49,6 +50,7 @@ import java.math.BigInteger;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.junit.Test;
@@ -58,18 +60,20 @@ public class TransactionPoolLondonTest extends AbstractTransactionPoolTest {
   private static final Wei BASE_FEE_FLOOR = Wei.of(7L);
 
   @Override
-  protected AbstractPendingTransactionsSorter createPendingTransactionsSorter() {
+  protected AbstractPendingTransactionsSorter createPendingTransactionsSorter(
+      final TransactionPoolConfiguration poolConfig,
+      final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+          transactionReplacementTester) {
 
     return new BaseFeePendingTransactionsSorter(
-        ImmutableTransactionPoolConfiguration.builder()
-            .txPoolMaxSize(MAX_TRANSACTIONS)
-            .txPoolLimitByAccountPercentage(1)
-            .build(),
+        poolConfig,
         TestClock.system(ZoneId.systemDefault()),
         metricsSystem,
         protocolContext.getBlockchain()::getChainHeadHeader,
+        transactionReplacementTester,
         FeeMarket.london(0L),
-        new InMemoryPostponedTransactionsCache());
+        new ReadyTransactionsCache(
+            poolConfig, new InMemoryPostponedTransactionsCache(), transactionReplacementTester));
   }
 
   @Override
@@ -244,6 +248,12 @@ public class TransactionPoolLondonTest extends AbstractTransactionPoolTest {
             add1559TxAndGetPendingTxsCount(
                 genesisBaseFee, minGasPrice, lastBlockBaseFee, txMaxFeePerGas, true))
         .isEqualTo(1);
+  }
+
+  @Test
+  @Override
+  public void shouldReAddTransactionsFromThePreviousCanonicalHeadWhenAReorgOccurs() {
+    super.shouldReAddTransactionsFromThePreviousCanonicalHeadWhenAReorgOccurs();
   }
 
   private int add1559TxAndGetPendingTxsCount(
