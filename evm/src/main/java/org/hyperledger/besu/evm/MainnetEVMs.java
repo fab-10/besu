@@ -48,6 +48,7 @@ import org.hyperledger.besu.evm.operation.CodeSizeOperation;
 import org.hyperledger.besu.evm.operation.CoinbaseOperation;
 import org.hyperledger.besu.evm.operation.Create2Operation;
 import org.hyperledger.besu.evm.operation.CreateOperation;
+import org.hyperledger.besu.evm.operation.DataHashOperation;
 import org.hyperledger.besu.evm.operation.DelegateCallOperation;
 import org.hyperledger.besu.evm.operation.DifficultyOperation;
 import org.hyperledger.besu.evm.operation.DivOperation;
@@ -496,6 +497,7 @@ public class MainnetEVMs {
     registry.put(new RelativeJumpVectorOperation(gasCalculator));
     registry.put(new CallFOperation(gasCalculator));
     registry.put(new RetFOperation(gasCalculator));
+    registry.put(new DataHashOperation(gasCalculator));
   }
 
   public static EVM futureEips(final BigInteger chainId, final EvmConfiguration evmConfiguration) {
