@@ -1200,7 +1200,6 @@ public class MessageFrame {
     return versionedHashes;
   }
 
-
   public void reset() {
     maybeUpdatedMemory = Optional.empty();
     maybeUpdatedStorage = Optional.empty();
@@ -1409,7 +1408,7 @@ public class MessageFrame {
           maxStackSize,
           accessListWarmAddresses,
           accessListWarmStorage,
-              versionedHashes);
+          versionedHashes);
     }
   }
 }
