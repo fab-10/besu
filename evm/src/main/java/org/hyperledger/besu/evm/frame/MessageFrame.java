@@ -237,6 +237,7 @@ public class MessageFrame {
   private Optional<Bytes> revertReason;
 
   private final Map<String, Object> contextVariables;
+  private final Optional<List<Hash>> versionedHashes;
 
   // Miscellaneous fields.
   private Optional<ExceptionalHaltReason> exceptionalHaltReason = Optional.empty();
@@ -273,7 +274,8 @@ public class MessageFrame {
       final Optional<Bytes> revertReason,
       final int maxStackSize,
       final Set<Address> accessListWarmAddresses,
-      final Multimap<Address, Bytes32> accessListWarmStorage) {
+      final Multimap<Address, Bytes32> accessListWarmStorage,
+      final Optional<List<Hash>> versionedHashes) {
     this.type = type;
     this.messageFrameStack = messageFrameStack;
     this.parentMessageFrame = messageFrameStack.peek();
@@ -316,6 +318,7 @@ public class MessageFrame {
     this.warmedUpAddresses.add(sender);
     this.warmedUpAddresses.add(contract);
     this.warmedUpStorage = HashMultimap.create(accessListWarmStorage);
+    this.versionedHashes = versionedHashes;
 
     // the warmed up addresses will always be a superset of the address keys in the warmed up
     // storage, so we can do both warm-ups in one pass
@@ -1193,6 +1196,10 @@ public class MessageFrame {
     return maybeUpdatedStorage;
   }
 
+  public Optional<List<Hash>> getVersionedHashes() {
+    return versionedHashes;
+  }
+
   public void reset() {
     maybeUpdatedMemory = Optional.empty();
     maybeUpdatedStorage = Optional.empty();
@@ -1224,6 +1231,8 @@ public class MessageFrame {
     private Optional<Bytes> reason = Optional.empty();
     private Set<Address> accessListWarmAddresses = emptySet();
     private Multimap<Address, Bytes32> accessListWarmStorage = HashMultimap.create();
+
+    private Optional<List<Hash>> versionedHashes;
 
     public Builder type(final Type type) {
       this.type = type;
@@ -1345,6 +1354,11 @@ public class MessageFrame {
       return this;
     }
 
+    public Builder versionedHashes(final Optional<List<Hash>> versionedHashes) {
+      this.versionedHashes = versionedHashes;
+      return this;
+    }
+
     private void validate() {
       checkState(type != null, "Missing message frame type");
       checkState(messageFrameStack != null, "Missing message frame message frame stack");
@@ -1393,7 +1407,8 @@ public class MessageFrame {
           reason,
           maxStackSize,
           accessListWarmAddresses,
-          accessListWarmStorage);
+          accessListWarmStorage,
+          versionedHashes);
     }
   }
 }

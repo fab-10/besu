@@ -14,6 +14,7 @@
 ### Breaking Changes
 
 ### Additions and Improvements
+- Support for new DATAHASH opcode as part of EIP-4844
 
 ### Bug Fixes
 - Mitigation fix for stale bonsai code storage leading to log rolling issues on contract recreates [#4906](https://github.com/hyperledger/besu/pull/4906)
@@ -27,6 +28,7 @@
 ### Additions and Improvements
 
 - Improve SLOAD and SSTORE performance by caching empty slots [#4874](https://github.com/hyperledger/besu/pull/4874)
+- Support for new DATAHASH opcode as part of EIP-4844
 - RPC methods that lookup block by hash will now return an error response if no block found [#4582](https://github.com/hyperledger/besu/pull/4582)
 - Added support for `safe` and `finalized` strings for the RPC methods using defaultBlock parameter [#4902](https://github.com/hyperledger/besu/pull/4902)
 

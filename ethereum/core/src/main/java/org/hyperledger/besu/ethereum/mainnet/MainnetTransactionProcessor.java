@@ -43,6 +43,7 @@ import org.hyperledger.besu.evm.gascalculator.GasCalculator;
 import org.hyperledger.besu.evm.processor.AbstractMessageProcessor;
 import org.hyperledger.besu.evm.tracing.OperationTracer;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
+import org.hyperledger.besu.plugin.data.TransactionType;
 
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -378,6 +379,10 @@ public class MainnetTransactionProcessor {
                 .address(contractAddress)
                 .contract(contractAddress)
                 .inputData(Bytes.EMPTY)
+                .versionedHashes(
+                    transaction.getType() == TransactionType.BLOB_TX_TYPE
+                        ? transaction.getVersionedHashes()
+                        : Optional.empty())
                 .code(
                     contractCreationProcessor.getCodeFromEVM(
                         Hash.hash(initCodeBytes), initCodeBytes))
@@ -392,6 +397,10 @@ public class MainnetTransactionProcessor {
                 .address(to)
                 .contract(to)
                 .inputData(transaction.getPayload())
+                .versionedHashes(
+                    transaction.getType() == TransactionType.BLOB_TX_TYPE
+                        ? transaction.getVersionedHashes()
+                        : Optional.empty())
                 .code(
                     maybeContract
                         .map(c -> messageCallProcessor.getCodeFromEVM(c.getCodeHash(), c.getCode()))
