@@ -74,7 +74,7 @@ public class LayeredPendingTransactions implements PendingTransactions {
       new ConcurrentHashMap<>();
   private final NavigableSet<PendingTransaction> orderByMaxFee =
       new TreeSet<>(
-          Comparator.comparing((PendingTransaction pt) -> pt.getTransaction().getMaxGasFee())
+          Comparator.comparing((PendingTransaction pt) -> pt.getTransaction().getMaxGasPrice())
               .thenComparing(PendingTransaction::getSequence));
 
   private final Map<Address, NavigableMap<Long, PendingTransaction>> sparseBySender =

@@ -174,8 +174,8 @@ public class SignedBlobTransaction implements SSZUtil.SSZType {
       return accessList.getList();
     }
 
-    public SSZUtil.Uint256SSZWrapper getMaxFeePerData() {
-      return maxFeePerData;
+    public UInt256 getMaxFeePerDataGas() {
+      return maxFeePerData.getValue();
     }
 
     public SSZUtil.SSZFixedSizeList<VersionedHash> getBlobVersionedHashes() {

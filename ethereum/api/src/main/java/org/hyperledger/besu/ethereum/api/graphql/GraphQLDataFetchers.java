@@ -343,6 +343,7 @@ public class GraphQLDataFetchers {
                 transaction.getGasPrice(),
                 transaction.getMaxPriorityFeePerGas(),
                 transaction.getMaxFeePerGas(),
+                transaction.getMaxFeePerDataGas(),
                 transaction.getGasLimit(),
                 transaction.getTo(),
                 transaction.getValue(),

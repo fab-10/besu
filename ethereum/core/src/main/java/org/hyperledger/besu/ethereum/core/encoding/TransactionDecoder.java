@@ -96,6 +96,7 @@ public class TransactionDecoder {
         .nonce(blobTransaction.getNonce())
         .maxPriorityFeePerGas(Wei.of(blobTransaction.getMaxPriorityFeePerGas()))
         .maxFeePerGas(Wei.of(blobTransaction.getMaxFeePerGas()))
+        .maxFeePerDataGas(Wei.of(blobTransaction.getMaxFeePerDataGas()))
         .gasLimit(blobTransaction.getGas())
         .to(blobTransaction.getAddress().orElse(null))
         .value(Wei.of(blobTransaction.getValue().getValue()))
