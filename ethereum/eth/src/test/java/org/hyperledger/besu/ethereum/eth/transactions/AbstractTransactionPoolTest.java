@@ -50,6 +50,7 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.ExecutionContextTestFixture;
 import org.hyperledger.besu.ethereum.core.MiningParameters;
+import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
@@ -355,7 +356,7 @@ public abstract class AbstractTransactionPoolTest {
   @Test
   public void shouldNotAddRemoteTransactionsWhenThereIsAnLowestInvalidNonceForTheSender() {
     givenTransactionIsValid(transaction2);
-    when(transactionValidator.validate(eq(transaction1), any(Optional.class), any()))
+    when(transactionValidator.validate(eq(transaction1), any(ProcessableBlockHeader.class), any()))
         .thenReturn(ValidationResult.invalid(NONCE_TOO_LOW));
 
     transactionPool.addRemoteTransactions(asList(transaction1, transaction2));
@@ -377,10 +378,12 @@ public abstract class AbstractTransactionPoolTest {
     assertTransactionPending(transaction1);
     assertTransactionNotPending(transaction2);
     verify(transactionBroadcaster).onTransactionsAdded(singletonList(transaction1));
-    verify(transactionValidator).validate(eq(transaction1), any(Optional.class), any());
+    verify(transactionValidator)
+        .validate(eq(transaction1), any(ProcessableBlockHeader.class), any());
     verify(transactionValidator)
         .validateForSender(eq(transaction1), eq(null), any(TransactionValidationParams.class));
-    verify(transactionValidator).validate(eq(transaction2), any(Optional.class), any());
+    verify(transactionValidator)
+        .validate(eq(transaction2), any(ProcessableBlockHeader.class), any());
     verify(transactionValidator).validateForSender(eq(transaction2), any(), any());
     verify(transactionValidator, atLeastOnce()).getGoQuorumCompatibilityMode();
     verifyNoMoreInteractions(transactionValidator);
@@ -562,7 +565,7 @@ public abstract class AbstractTransactionPoolTest {
     final ArgumentCaptor<TransactionValidationParams> txValidationParamCaptor =
         ArgumentCaptor.forClass(TransactionValidationParams.class);
 
-    when(transactionValidator.validate(eq(transaction1), any(Optional.class), any()))
+    when(transactionValidator.validate(eq(transaction1), any(ProcessableBlockHeader.class), any()))
         .thenReturn(valid());
     when(transactionValidator.validateForSender(any(), any(), txValidationParamCaptor.capture()))
         .thenReturn(valid());
@@ -658,7 +661,7 @@ public abstract class AbstractTransactionPoolTest {
   }
 
   protected void givenTransactionIsValid(final Transaction transaction) {
-    when(transactionValidator.validate(eq(transaction), any(Optional.class), any()))
+    when(transactionValidator.validate(eq(transaction), any(ProcessableBlockHeader.class), any()))
         .thenReturn(valid());
     when(transactionValidator.validateForSender(
             eq(transaction), nullable(Account.class), any(TransactionValidationParams.class)))

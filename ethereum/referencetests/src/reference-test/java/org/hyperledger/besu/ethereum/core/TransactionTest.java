@@ -126,7 +126,8 @@ public class TransactionTest {
   }
 
   public void milestone(
-      final TransactionTestCaseSpec spec, final String name, final String milestone, final GasCalculator gasCalculator, final Optional<Wei> baseFee) {
+      final TransactionTestCaseSpec spec, final String name, final String milestone, final GasCalculator gasCalculator,
+      final Optional<Wei> baseFee) {
 
     final TransactionTestCaseSpec.Expectation expected = spec.expectation(milestone);
 
@@ -140,11 +141,13 @@ public class TransactionTest {
         rlp = output.encoded();
       }
 
+      final BlockHeaderBuilder blockHeaderBuilder = new BlockHeaderBuilder();
+      baseFee.ifPresent(blockHeaderBuilder::baseFee);
       // Test transaction deserialization (will throw an exception if it fails).
       final Transaction transaction = Transaction.readFrom(RLP.input(rlp));
       final ValidationResult<TransactionInvalidReason> validation =
           transactionValidator(milestone)
-              .validate(transaction, baseFee, TransactionValidationParams.processingBlock());
+              .validate(transaction, blockHeaderBuilder.buildProcessableBlockHeader(), TransactionValidationParams.processingBlock());
       if (!validation.isValid()) {
         throw new RuntimeException(
             String.format(
@@ -172,4 +175,5 @@ public class TransactionTest {
       }
     }
   }
+
 }
