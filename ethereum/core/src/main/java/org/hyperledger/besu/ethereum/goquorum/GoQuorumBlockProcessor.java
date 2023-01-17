@@ -235,8 +235,7 @@ public class GoQuorumBlockProcessor extends MainnetBlockProcessor {
     final TransactionValidationParams transactionValidationParams =
         TransactionValidationParams.processingBlock();
     ValidationResult<TransactionInvalidReason> validationResult =
-        transactionValidator.validate(
-            transaction, blockHeader.getBaseFee(), transactionValidationParams);
+        transactionValidator.validate(transaction, blockHeader, transactionValidationParams);
     if (!validationResult.isValid()) {
       LOG.warn(
           "Invalid transaction: {}. Block {} Transaction {}",

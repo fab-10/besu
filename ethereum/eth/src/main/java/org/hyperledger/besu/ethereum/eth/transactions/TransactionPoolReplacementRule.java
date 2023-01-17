@@ -14,9 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions;
 
-import org.hyperledger.besu.datatypes.Wei;
-
-import java.util.Optional;
+import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 
 @FunctionalInterface
 public interface TransactionPoolReplacementRule {
@@ -24,7 +22,7 @@ public interface TransactionPoolReplacementRule {
   boolean shouldReplace(
       PendingTransaction existingPendingTransaction,
       PendingTransaction newPendingTransaction,
-      Optional<Wei> baseFee);
+      ProcessableBlockHeader blockHeader);
 
   default boolean isNotGasPriced(final PendingTransaction tInfo) {
     return tInfo.getTransaction().getType().supports1559FeeMarket();

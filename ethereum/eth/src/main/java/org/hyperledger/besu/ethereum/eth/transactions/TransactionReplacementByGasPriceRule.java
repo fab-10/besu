@@ -15,9 +15,8 @@
 package org.hyperledger.besu.ethereum.eth.transactions;
 
 import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.util.number.Percentage;
-
-import java.util.Optional;
 
 public class TransactionReplacementByGasPriceRule implements TransactionPoolReplacementRule {
   private final Percentage priceBump;
@@ -30,7 +29,7 @@ public class TransactionReplacementByGasPriceRule implements TransactionPoolRepl
   public boolean shouldReplace(
       final PendingTransaction existingPendingTransaction,
       final PendingTransaction newPendingTransaction,
-      final Optional<Wei> baseFee) {
+      final ProcessableBlockHeader blockHeader) {
     assert existingPendingTransaction.getTransaction() != null
         && newPendingTransaction.getTransaction() != null;
 

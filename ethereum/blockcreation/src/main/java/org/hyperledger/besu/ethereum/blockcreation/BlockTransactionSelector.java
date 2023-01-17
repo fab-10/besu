@@ -344,9 +344,7 @@ public class BlockTransactionSelector {
       // we assured sure that the maxFeePerGas is >= of the minimum price accepted by the node
       // and so the price of the transaction could satisfy this rule in the future
       final Wei currentMinTransactionGasPriceInBlock =
-          feeMarket
-              .getTransactionPriceCalculator()
-              .price(transaction, processableBlockHeader.getBaseFee());
+          feeMarket.getTransactionPriceCalculator().price(transaction, processableBlockHeader);
       if (minTransactionGasPrice.compareTo(currentMinTransactionGasPriceInBlock) > 0) {
         LOG.trace(
             "Current gas fee of {} is lower than configured minimum {}, skipping",
@@ -395,8 +393,7 @@ public class BlockTransactionSelector {
     final MainnetTransactionValidator transactionValidator =
         transactionProcessor.getTransactionValidator();
     ValidationResult<TransactionInvalidReason> validationResult =
-        transactionValidator.validate(
-            transaction, blockHeader.getBaseFee(), transactionValidationParams);
+        transactionValidator.validate(transaction, blockHeader, transactionValidationParams);
     if (!validationResult.isValid()) {
       return validationResult;
     }

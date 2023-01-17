@@ -48,8 +48,6 @@ public class TransactionPoolReplacementHandler {
             .anyMatch(
                 rule ->
                     rule.shouldReplace(
-                        existingPendingTransaction,
-                        newPendingTransaction,
-                        chainHeadHeader.getBaseFee()));
+                        existingPendingTransaction, newPendingTransaction, chainHeadHeader));
   }
 }

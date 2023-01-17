@@ -33,6 +33,7 @@ import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionFilter;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
@@ -66,7 +67,7 @@ public class MainnetTransactionValidatorTest {
       TransactionValidationParams.processingBlockParams;
 
   @Mock private GasCalculator gasCalculator;
-
+  @Mock private ProcessableBlockHeader blockHeader;
   private final Transaction basicTransaction =
       new TransactionTestFixture()
           .chainId(Optional.of(BigInteger.ONE))
@@ -85,8 +86,8 @@ public class MainnetTransactionValidatorTest {
             .chainId(Optional.empty())
             .createTransaction(senderKeys);
     when(gasCalculator.transactionIntrinsicGasCost(any(), anyBoolean())).thenReturn(50L);
-
-    assertThat(validator.validate(transaction, Optional.empty(), transactionValidationParams))
+    when(blockHeader.getBaseFee()).thenReturn(Optional.empty());
+    assertThat(validator.validate(transaction, blockHeader, transactionValidationParams))
         .isEqualTo(
             ValidationResult.invalid(TransactionInvalidReason.INTRINSIC_GAS_EXCEEDS_GAS_LIMIT));
   }
@@ -96,7 +97,8 @@ public class MainnetTransactionValidatorTest {
     final MainnetTransactionValidator validator =
         new MainnetTransactionValidator(
             gasCalculator, false, Optional.empty(), defaultGoQuorumCompatibilityMode);
-    assertThat(validator.validate(basicTransaction, Optional.empty(), transactionValidationParams))
+    when(blockHeader.getBaseFee()).thenReturn(Optional.empty());
+    assertThat(validator.validate(basicTransaction, blockHeader, transactionValidationParams))
         .isEqualTo(
             ValidationResult.invalid(
                 TransactionInvalidReason.REPLAY_PROTECTED_SIGNATURES_NOT_SUPPORTED));
@@ -110,7 +112,8 @@ public class MainnetTransactionValidatorTest {
             false,
             Optional.of(BigInteger.valueOf(2)),
             defaultGoQuorumCompatibilityMode);
-    assertThat(validator.validate(basicTransaction, Optional.empty(), transactionValidationParams))
+    when(blockHeader.getBaseFee()).thenReturn(Optional.empty());
+    assertThat(validator.validate(basicTransaction, blockHeader, transactionValidationParams))
         .isEqualTo(ValidationResult.invalid(TransactionInvalidReason.WRONG_CHAIN_ID));
   }
 
@@ -275,9 +278,9 @@ public class MainnetTransactionValidatorTest {
             .payload(Bytes.EMPTY)
             .chainId(BigInteger.ONE)
             .signAndBuild(new SECP256K1().generateKeyPair());
-
+    when(blockHeader.getBaseFee()).thenReturn(Optional.of(Wei.ONE));
     final ValidationResult<TransactionInvalidReason> validationResult =
-        validator.validate(transaction, Optional.of(Wei.ONE), transactionValidationParams);
+        validator.validate(transaction, blockHeader, transactionValidationParams);
     assertThat(validationResult)
         .isEqualTo(ValidationResult.invalid(MAX_PRIORITY_FEE_PER_GAS_EXCEEDS_MAX_FEE_PER_GAS));
     assertThat(validationResult.getErrorMessage())
@@ -365,15 +368,14 @@ public class MainnetTransactionValidatorTest {
             .chainId(Optional.of(BigInteger.ONE))
             .createTransaction(senderKeys);
 
-    assertThat(
-            frontierValidator.validate(transaction, Optional.empty(), transactionValidationParams))
+    when(blockHeader.getBaseFee()).thenReturn(Optional.empty()).thenReturn(Optional.of(Wei.ONE));
+
+    assertThat(frontierValidator.validate(transaction, blockHeader, transactionValidationParams))
         .isEqualTo(ValidationResult.invalid(INVALID_TRANSACTION_FORMAT));
 
     when(gasCalculator.transactionIntrinsicGasCost(any(), anyBoolean())).thenReturn(0L);
 
-    assertThat(
-            eip1559Validator.validate(
-                transaction, Optional.of(Wei.ONE), transactionValidationParams))
+    assertThat(eip1559Validator.validate(transaction, blockHeader, transactionValidationParams))
         .isEqualTo(ValidationResult.valid());
   }
 
@@ -396,7 +398,8 @@ public class MainnetTransactionValidatorTest {
             .chainId(Optional.of(BigInteger.ONE))
             .createTransaction(senderKeys);
     final Optional<Wei> basefee = Optional.of(Wei.of(150000L));
-    assertThat(validator.validate(transaction, basefee, transactionValidationParams))
+    when(blockHeader.getBaseFee()).thenReturn(basefee);
+    assertThat(validator.validate(transaction, blockHeader, transactionValidationParams))
         .isEqualTo(ValidationResult.invalid(GAS_PRICE_BELOW_CURRENT_BASE_FEE));
   }
 
@@ -419,8 +422,8 @@ public class MainnetTransactionValidatorTest {
             .maxFeePerGas(Optional.of(Wei.ZERO))
             .chainId(Optional.of(BigInteger.ONE))
             .createTransaction(senderKeys);
-
-    assertThat(validator.validate(transaction, zeroBaseFee, transactionValidationParams))
+    when(blockHeader.getBaseFee()).thenReturn(zeroBaseFee);
+    assertThat(validator.validate(transaction, blockHeader, transactionValidationParams))
         .isEqualTo(ValidationResult.valid());
   }
 
@@ -444,8 +447,8 @@ public class MainnetTransactionValidatorTest {
             .createTransaction(senderKeys);
     final Optional<Wei> basefee = Optional.of(Wei.of(150000L));
     when(gasCalculator.transactionIntrinsicGasCost(any(), anyBoolean())).thenReturn(50L);
-
-    assertThat(validator.validate(transaction, basefee, transactionValidationParams))
+    when(blockHeader.getBaseFee()).thenReturn(basefee);
+    assertThat(validator.validate(transaction, blockHeader, transactionValidationParams))
         .isEqualTo(ValidationResult.valid());
   }
 
@@ -468,10 +471,10 @@ public class MainnetTransactionValidatorTest {
             .chainId(Optional.of(BigInteger.ONE))
             .createTransaction(senderKeys);
     when(gasCalculator.transactionIntrinsicGasCost(any(), anyBoolean())).thenReturn(50L);
-
+    when(blockHeader.getBaseFee()).thenReturn(Optional.of(Wei.ONE));
     assertThat(
             validator.validate(
-                transaction, Optional.of(Wei.ONE), TransactionValidationParams.transactionPool()))
+                transaction, blockHeader, TransactionValidationParams.transactionPool()))
         .isEqualTo(ValidationResult.valid());
   }
 
@@ -492,8 +495,8 @@ public class MainnetTransactionValidatorTest {
             .payload(Bytes.fromHexString("0x" + "00".repeat(0xc001)))
             .chainId(Optional.of(BigInteger.ONE))
             .createTransaction(senderKeys);
-    var validationResult =
-        validator.validate(bigPayload, Optional.empty(), transactionValidationParams);
+    when(blockHeader.getBaseFee()).thenReturn(Optional.empty());
+    var validationResult = validator.validate(bigPayload, blockHeader, transactionValidationParams);
 
     assertThat(validationResult.isValid()).isFalse();
     assertThat(validationResult.getInvalidReason())
@@ -511,15 +514,12 @@ public class MainnetTransactionValidatorTest {
             .gasPrice(Wei.ONE)
             .chainId(Optional.empty())
             .createTransaction(senderKeys);
-
-    assertThat(
-            validator
-                .validate(transaction, Optional.empty(), transactionValidationParams)
-                .isValid())
+    when(blockHeader.getBaseFee()).thenReturn(Optional.empty());
+    assertThat(validator.validate(transaction, blockHeader, transactionValidationParams).isValid())
         .isFalse();
     assertThat(
             validator
-                .validate(transaction, Optional.empty(), transactionValidationParams)
+                .validate(transaction, blockHeader, transactionValidationParams)
                 .getInvalidReason())
         .isEqualTo(GAS_PRICE_MUST_BE_ZERO);
   }
@@ -535,11 +535,8 @@ public class MainnetTransactionValidatorTest {
             .createTransaction(senderKeys);
 
     when(gasCalculator.transactionIntrinsicGasCost(any(), anyBoolean())).thenReturn(50L);
-
-    assertThat(
-            validator
-                .validate(transaction, Optional.empty(), transactionValidationParams)
-                .isValid())
+    when(blockHeader.getBaseFee()).thenReturn(Optional.empty());
+    assertThat(validator.validate(transaction, blockHeader, transactionValidationParams).isValid())
         .isTrue();
   }
 

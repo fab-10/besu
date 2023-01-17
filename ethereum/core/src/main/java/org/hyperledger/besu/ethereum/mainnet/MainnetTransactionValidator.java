@@ -20,6 +20,7 @@ import org.hyperledger.besu.crypto.SECPSignature;
 import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionFilter;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
@@ -105,7 +106,7 @@ public class MainnetTransactionValidator {
    * Asserts whether a transaction is valid.
    *
    * @param transaction the transaction to validate
-   * @param baseFee optional baseFee
+   * @param blockHeader block header to get basefee and excess_data_gas
    * @param transactionValidationParams Validation parameters that will be used
    * @return An empty {@link Optional} if the transaction is considered valid; otherwise an {@code
    *     Optional} containing a {@link TransactionInvalidReason} that identifies why the transaction
@@ -113,7 +114,7 @@ public class MainnetTransactionValidator {
    */
   public ValidationResult<TransactionInvalidReason> validate(
       final Transaction transaction,
-      final Optional<Wei> baseFee,
+      final ProcessableBlockHeader blockHeader,
       final TransactionValidationParams transactionValidationParams) {
     final ValidationResult<TransactionInvalidReason> signatureResult =
         validateTransactionSignature(transaction);
@@ -136,10 +137,11 @@ public class MainnetTransactionValidator {
               transactionType, acceptedTransactionTypes));
     }
 
-    if (baseFee.isPresent()) {
-      final Wei price = feeMarket.getTransactionPriceCalculator().price(transaction, baseFee);
+    final var maybeBaseFee = blockHeader.getBaseFee();
+    if (maybeBaseFee.isPresent()) {
+      final Wei price = feeMarket.getTransactionPriceCalculator().price(transaction, blockHeader);
       if (!transactionValidationParams.isAllowMaxFeeGasBelowBaseFee()
-          && price.compareTo(baseFee.orElseThrow()) < 0) {
+          && price.compareTo(maybeBaseFee.orElseThrow()) < 0) {
         return ValidationResult.invalid(
             TransactionInvalidReason.GAS_PRICE_BELOW_CURRENT_BASE_FEE,
             "gasPrice is less than the current BaseFee");

@@ -266,8 +266,7 @@ public class MainnetTransactionProcessor {
     try {
       LOG.trace("Starting execution of {}", transaction);
       ValidationResult<TransactionInvalidReason> validationResult =
-          transactionValidator.validate(
-              transaction, blockHeader.getBaseFee(), transactionValidationParams);
+          transactionValidator.validate(transaction, blockHeader, transactionValidationParams);
       // Make sure the transaction is intrinsically valid before trying to
       // compare against a sender account (because the transaction may not
       // be signed correctly to extract the sender).
@@ -290,7 +289,7 @@ public class MainnetTransactionProcessor {
       final MutableAccount senderMutableAccount = sender.getMutable();
       final long previousNonce = senderMutableAccount.incrementNonce();
       final Wei transactionGasPrice =
-          feeMarket.getTransactionPriceCalculator().price(transaction, blockHeader.getBaseFee());
+          feeMarket.getTransactionPriceCalculator().price(transaction, blockHeader);
       LOG.trace(
           "Incremented sender {} nonce ({} -> {})",
           senderAddress,
