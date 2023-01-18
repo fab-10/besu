@@ -166,7 +166,7 @@ public abstract class AbstractEngineNewPayload extends ExecutionEngineJsonRpcMet
               "Computed block hash %s does not match block hash parameter %s",
               newBlockHeader.getBlockHash(), blockParam.getBlockHash());
       LOG.debug(errorMessage);
-      return respondWithInvalid(reqId, blockParam, null, INVALID_BLOCK_HASH, errorMessage);
+      return respondWithInvalid(reqId, blockParam, null, getInvalidBlockHashStatus(), errorMessage);
     }
     // do we already have this payload
     if (protocolContext.getBlockchain().getBlockByHash(newBlockHeader.getBlockHash()).isPresent()) {
@@ -209,7 +209,8 @@ public abstract class AbstractEngineNewPayload extends ExecutionEngineJsonRpcMet
     }
 
     // TODO: post-merge cleanup
-    if (!mergeContext.get().isCheckpointPostMergeSync()
+    if (requireTerminalPoWBlockValidation()
+        && !mergeContext.get().isCheckpointPostMergeSync()
         && !mergeCoordinator.latestValidAncestorDescendsFromTerminal(newBlockHeader)
         && !mergeContext.get().isChainPruningEnabled()) {
       mergeCoordinator.addBadBlock(block, Optional.empty());
@@ -307,6 +308,14 @@ public abstract class AbstractEngineNewPayload extends ExecutionEngineJsonRpcMet
         requestId,
         new EnginePayloadStatusResult(
             invalidStatus, latestValidHash, Optional.of(validationError)));
+  }
+
+  protected boolean requireTerminalPoWBlockValidation() {
+    return false;
+  }
+
+  protected EngineStatus getInvalidBlockHashStatus() {
+    return INVALID;
   }
 
   private void logImportedBlockInfo(final Block block, final double timeInS) {

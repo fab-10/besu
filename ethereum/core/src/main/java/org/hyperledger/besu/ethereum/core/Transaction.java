@@ -192,7 +192,7 @@ public class Transaction
           maybeAccessList.isPresent(), "Must specify access list for access list transaction");
     }
 
-    if (Objects.equals(transactionType, TransactionType.BLOB_TX_TYPE)) {
+    if (Objects.equals(transactionType, TransactionType.BLOB)) {
       checkArgument(
           versionedHashes.isPresent(), "Must specify blob versioned hashes for blob transaction");
       checkArgument(
@@ -840,7 +840,7 @@ public class Transaction
                 chainId,
                 accessList);
         break;
-      case BLOB_TX_TYPE:
+      case BLOB:
         preimage =
             eip4844Preimage(
                 nonce,
@@ -957,7 +957,7 @@ public class Transaction
               rlpOutput.writeUInt256Scalar(maxFeePerDataGas);
               rlpOutput.endList();
             });
-    return Bytes.concatenate(Bytes.of(TransactionType.BLOB_TX_TYPE.getSerializedType()), encoded);
+    return Bytes.concatenate(Bytes.of(TransactionType.BLOB.getSerializedType()), encoded);
   }
 
   private static Bytes accessListPreimage(
@@ -1190,7 +1190,7 @@ public class Transaction
 
     public Builder guessType() {
       if (versionedHashes != null && !versionedHashes.isEmpty()) {
-        transactionType = TransactionType.BLOB_TX_TYPE;
+        transactionType = TransactionType.BLOB;
       } else if (maxPriorityFeePerGas != null || maxFeePerGas != null) {
         transactionType = TransactionType.EIP1559;
       } else if (accessList.isPresent()) {

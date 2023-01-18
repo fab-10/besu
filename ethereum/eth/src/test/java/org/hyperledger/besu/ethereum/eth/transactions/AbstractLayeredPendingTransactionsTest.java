@@ -51,6 +51,7 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.ExecutionContextTestFixture;
 import org.hyperledger.besu.ethereum.core.MiningParameters;
+import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
@@ -379,10 +380,12 @@ public abstract class AbstractLayeredPendingTransactionsTest {
     assertTransactionPending(transaction0);
     assertTransactionNotPending(transaction1);
     verify(transactionBroadcaster).onTransactionsAdded(singletonList(transaction0));
-    verify(transactionValidator).validate(eq(transaction0), any(Optional.class), any());
+    verify(transactionValidator)
+        .validate(eq(transaction0), any(ProcessableBlockHeader.class), any());
     verify(transactionValidator)
         .validateForSender(eq(transaction0), eq(null), any(TransactionValidationParams.class));
-    verify(transactionValidator).validate(eq(transaction1), any(Optional.class), any());
+    verify(transactionValidator)
+        .validate(eq(transaction1), any(ProcessableBlockHeader.class), any());
     verify(transactionValidator).validateForSender(eq(transaction1), any(), any());
     verify(transactionValidator, atLeastOnce()).getGoQuorumCompatibilityMode();
     verifyNoMoreInteractions(transactionValidator);
@@ -555,7 +558,7 @@ public abstract class AbstractLayeredPendingTransactionsTest {
     final ArgumentCaptor<TransactionValidationParams> txValidationParamCaptor =
         ArgumentCaptor.forClass(TransactionValidationParams.class);
 
-    when(transactionValidator.validate(eq(transaction0), any(Optional.class), any()))
+    when(transactionValidator.validate(eq(transaction0), any(ProcessableBlockHeader.class), any()))
         .thenReturn(valid());
     when(transactionValidator.validateForSender(any(), any(), txValidationParamCaptor.capture()))
         .thenReturn(valid());
@@ -651,7 +654,7 @@ public abstract class AbstractLayeredPendingTransactionsTest {
   }
 
   protected void givenTransactionIsValid(final Transaction transaction) {
-    when(transactionValidator.validate(eq(transaction), any(Optional.class), any()))
+    when(transactionValidator.validate(eq(transaction), any(ProcessableBlockHeader.class), any()))
         .thenReturn(valid());
     when(transactionValidator.validateForSender(
             eq(transaction), nullable(Account.class), any(TransactionValidationParams.class)))

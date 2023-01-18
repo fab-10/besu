@@ -379,7 +379,7 @@ public class MainnetTransactionProcessor {
                 .contract(contractAddress)
                 .inputData(Bytes.EMPTY)
                 .versionedHashes(
-                    transaction.getType() == TransactionType.BLOB_TX_TYPE
+                    transaction.getType() == TransactionType.BLOB
                         ? transaction.getVersionedHashes()
                         : Optional.empty())
                 .code(
@@ -397,7 +397,7 @@ public class MainnetTransactionProcessor {
                 .contract(to)
                 .inputData(transaction.getPayload())
                 .versionedHashes(
-                    transaction.getType() == TransactionType.BLOB_TX_TYPE
+                    transaction.getType() == TransactionType.BLOB
                         ? transaction.getVersionedHashes()
                         : Optional.empty())
                 .code(

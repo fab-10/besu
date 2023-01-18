@@ -60,7 +60,6 @@ import org.hyperledger.besu.ethereum.eth.manager.EthProtocolManagerTestUtil;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.manager.RespondingEthPeer;
 import org.hyperledger.besu.ethereum.eth.messages.EthPV65;
-import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.MainnetTransactionValidator;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
@@ -109,7 +108,7 @@ public abstract class AbstractTransactionPoolTest {
   protected MutableBlockchain blockchain;
   private TransactionBroadcaster transactionBroadcaster;
 
-  protected AbstractPendingTransactionsSorter transactions;
+  protected PendingTransactions transactions;
   private final Transaction transaction1 = createTransaction(1);
   private final Transaction transaction2 = createTransaction(2);
 
@@ -123,7 +122,7 @@ public abstract class AbstractTransactionPoolTest {
   private PeerTransactionTracker peerTransactionTracker;
   private ArgumentCaptor<Runnable> syncTaskCapture;
 
-  protected abstract AbstractPendingTransactionsSorter createPendingTransactionsSorter();
+  protected abstract PendingTransactions createPendingTransactionsSorter();
 
   protected abstract ExecutionContextTestFixture createExecutionContextTestFixture();
 
