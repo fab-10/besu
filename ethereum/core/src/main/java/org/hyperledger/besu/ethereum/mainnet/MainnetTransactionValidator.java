@@ -23,6 +23,7 @@ import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionFilter;
+import org.hyperledger.besu.ethereum.mainnet.feemarket.BaseFeeMarket;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.account.Account;
@@ -32,8 +33,6 @@ import org.hyperledger.besu.plugin.data.TransactionType;
 import java.math.BigInteger;
 import java.util.Optional;
 import java.util.Set;
-
-import com.google.common.primitives.Longs;
 
 /**
  * Validates a transaction based on Frontier protocol runtime requirements.
@@ -122,12 +121,6 @@ public class MainnetTransactionValidator {
       return signatureResult;
     }
 
-    if (goQuorumCompatibilityMode && transaction.hasCostParams()) {
-      return ValidationResult.invalid(
-          TransactionInvalidReason.GAS_PRICE_MUST_BE_ZERO,
-          "gasPrice must be set to zero on a GoQuorum compatible network");
-    }
-
     final TransactionType transactionType = transaction.getType();
     if (!acceptedTransactionTypes.contains(transactionType)) {
       return ValidationResult.invalid(
@@ -135,6 +128,33 @@ public class MainnetTransactionValidator {
           String.format(
               "Transaction type %s is invalid, accepted transaction types are %s",
               transactionType, acceptedTransactionTypes));
+    }
+
+    if (transaction.getNonce() == MAX_NONCE) {
+      return ValidationResult.invalid(
+          TransactionInvalidReason.NONCE_OVERFLOW, "Nonce must be less than 2^64-1");
+    }
+
+    if (transaction.isContractCreation() && transaction.getPayload().size() > maxInitcodeSize) {
+      return ValidationResult.invalid(
+          TransactionInvalidReason.INITCODE_TOO_LARGE,
+          String.format(
+              "Initcode size of %d exceeds maximum size of %s",
+              transaction.getPayload().size(), maxInitcodeSize));
+    }
+
+    return validateCostAndFee(transaction, blockHeader, transactionValidationParams);
+  }
+
+  private ValidationResult<TransactionInvalidReason> validateCostAndFee(
+      final Transaction transaction,
+      final ProcessableBlockHeader blockHeader,
+      final TransactionValidationParams transactionValidationParams) {
+
+    if (goQuorumCompatibilityMode && transaction.hasCostParams()) {
+      return ValidationResult.invalid(
+          TransactionInvalidReason.GAS_PRICE_MUST_BE_ZERO,
+          "gasPrice must be set to zero on a GoQuorum compatible network");
     }
 
     final var maybeBaseFee = blockHeader.getBaseFee();
@@ -161,22 +181,10 @@ public class MainnetTransactionValidator {
       }
     }
 
-    if (transaction.getNonce() == MAX_NONCE) {
-      return ValidationResult.invalid(
-          TransactionInvalidReason.NONCE_OVERFLOW, "Nonce must be less than 2^64-1");
-    }
-
-    if (transaction
-            .getGasPrice()
-            .or(transaction::getMaxFeePerGas)
-            .orElse(Wei.ZERO)
-            .getAsBigInteger()
-            .multiply(new BigInteger(1, Longs.toByteArray(transaction.getGasLimit())))
-            .bitLength()
-        > 256) {
+    if (transaction.calculateUpfrontGasCost(transaction.getMaxGasPrice()).bitLength() > 256) {
       return ValidationResult.invalid(
           TransactionInvalidReason.UPFRONT_FEE_TOO_HIGH,
-          "gasLimit x price must be less than 2^256");
+          "Upfront transaction cost must be less than 2^256");
     }
 
     final long intrinsicGasCost =
@@ -190,15 +198,6 @@ public class MainnetTransactionValidator {
               "intrinsic gas cost %s exceeds gas limit %s",
               intrinsicGasCost, transaction.getGasLimit()));
     }
-
-    if (transaction.isContractCreation() && transaction.getPayload().size() > maxInitcodeSize) {
-      return ValidationResult.invalid(
-          TransactionInvalidReason.INITCODE_TOO_LARGE,
-          String.format(
-              "Initcode size of %d exceeds maximum size of %s",
-              transaction.getPayload().size(), maxInitcodeSize));
-    }
-
     return ValidationResult.valid();
   }
 

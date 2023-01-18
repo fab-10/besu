@@ -21,17 +21,22 @@ import org.hyperledger.besu.ethereum.core.feemarket.TransactionPriceCalculator;
 
 import java.util.Optional;
 
+import org.apache.tuweni.units.bigints.UInt256;
 import org.apache.tuweni.units.bigints.UInt256s;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class LondonFeeMarket implements BaseFeeMarket {
+  private static final Logger LOG = LoggerFactory.getLogger(LondonFeeMarket.class);
+
   static final Wei DEFAULT_BASEFEE_INITIAL_VALUE =
       GenesisConfigFile.BASEFEE_AT_GENESIS_DEFAULT_VALUE;
   static final long DEFAULT_BASEFEE_MAX_CHANGE_DENOMINATOR = 8L;
   static final long DEFAULT_SLACK_COEFFICIENT = 2L;
+
+  static final UInt256 MIN_DATA_GAS_PRICE = UInt256.ONE;
+  static final UInt256 DATA_GAS_PRICE_UPDATE_FRACTION = UInt256.valueOf(2225652L);
   private static final Wei DEFAULT_BASEFEE_FLOOR = Wei.of(7L);
-  private static final Logger LOG = LoggerFactory.getLogger(LondonFeeMarket.class);
 
   private final Wei baseFeeInitialValue;
   private final long londonForkBlockNumber;
@@ -118,6 +123,22 @@ public class LondonFeeMarket implements BaseFeeMarket {
   }
 
   @Override
+  public Wei computeDataGasPrice(final long blockNumber, final UInt256 parentExcessDataGas) {
+    final var dataGasPrice =
+        Wei.of(
+            fakeExponential(
+                MIN_DATA_GAS_PRICE, parentExcessDataGas, DATA_GAS_PRICE_UPDATE_FRACTION));
+    LOG.trace(
+        "block #{} parentExcessDataGas: {} dataGasPrice: {}",
+        blockNumber,
+        parentExcessDataGas,
+        dataGasPrice);
+
+    return Wei.of(
+        fakeExponential(MIN_DATA_GAS_PRICE, parentExcessDataGas, DATA_GAS_PRICE_UPDATE_FRACTION));
+  }
+
+  @Override
   public ValidationMode baseFeeValidationMode(final long blockNumber) {
     return londonForkBlockNumber == blockNumber ? ValidationMode.INITIAL : ValidationMode.ONGOING;
   }
@@ -130,5 +151,19 @@ public class LondonFeeMarket implements BaseFeeMarket {
   @Override
   public boolean isBeforeForkBlock(final long blockNumber) {
     return londonForkBlockNumber > blockNumber;
+  }
+
+  private UInt256 fakeExponential(
+      final UInt256 factor, final UInt256 numerator, final UInt256 denominator) {
+    long i = 1;
+    UInt256 output = UInt256.ZERO;
+    UInt256 numeratorAccumulator = factor.multiply(denominator);
+    while (numeratorAccumulator.greaterThan(UInt256.ZERO)) {
+      output = output.add(numeratorAccumulator);
+      numeratorAccumulator =
+          (numeratorAccumulator.multiply(numerator)).divide(denominator.multiply(i));
+      ++i;
+    }
+    return output.divide(denominator);
   }
 }

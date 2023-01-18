@@ -18,6 +18,8 @@ import org.hyperledger.besu.datatypes.Wei;
 
 import java.util.Optional;
 
+import org.apache.tuweni.units.bigints.UInt256;
+
 public class ZeroBaseFeeMarket extends LondonFeeMarket {
 
   public ZeroBaseFeeMarket(final long londonForkBlockNumber) {
@@ -31,6 +33,11 @@ public class ZeroBaseFeeMarket extends LondonFeeMarket {
       final long parentBlockGasUsed,
       final long targetGasUsed) {
 
+    return Wei.ZERO;
+  }
+
+  @Override
+  public Wei computeDataGasPrice(final long blockNumber, final UInt256 parentExcessDataGas) {
     return Wei.ZERO;
   }
 

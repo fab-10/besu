@@ -43,6 +43,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.stream.Collectors;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -71,7 +72,7 @@ public class Transaction
 
   public static final BigInteger TWO = BigInteger.valueOf(2);
 
-  public static final BigInteger DATA_GAS_PER_BLOB = TWO.pow(17);
+  public static final long DATA_GAS_PER_BLOB = 131072; // 2^17
 
   private final long nonce;
 
@@ -187,12 +188,18 @@ public class Transaction
           "Must not specify access list for transaction not supporting it");
     }
 
-    if (Objects.equals(transactionType, TransactionType.ACCESS_LIST)) {
+    if (transactionType.supportsAccessList()) {
       checkArgument(
           maybeAccessList.isPresent(), "Must specify access list for access list transaction");
     }
 
-    if (Objects.equals(transactionType, TransactionType.BLOB)) {
+    if (versionedHashes.isPresent() || maxFeePerDataGas.isPresent()) {
+      checkArgument(
+          transactionType.supportsBlob(),
+          "Must not specify blob versioned hashes of max fee per data gas for transaction not supporting it");
+    }
+
+    if (transactionType.supportsBlob()) {
       checkArgument(
           versionedHashes.isPresent(), "Must specify blob versioned hashes for blob transaction");
       checkArgument(
@@ -462,6 +469,7 @@ public class Transaction
             })
         .orElseGet(() -> getGasPrice().orElse(Wei.ZERO));
   }
+
   /**
    * Returns the transaction gas limit.
    *
@@ -470,6 +478,19 @@ public class Transaction
   @Override
   public long getGasLimit() {
     return gasLimit;
+  }
+
+  /**
+   * Returns the total data gas used.
+   *
+   * @return optionally the total data gas used if this transaction if it supports blobs or nothing
+   */
+  public OptionalLong getTotalDataGas() {
+    if (transactionType.supportsBlob()) {
+      OptionalLong.of(DATA_GAS_PER_BLOB * versionedHashes.map(List::size).orElseThrow());
+    }
+
+    return OptionalLong.empty();
   }
 
   /**
@@ -722,16 +743,12 @@ public class Transaction
     }
   }
 
-  private BigInteger calculateUpfrontGasCost(final Wei gasPrice) {
+  public BigInteger calculateUpfrontGasCost(final Wei gasPrice) {
     return BigInteger.valueOf(getGasLimit())
         .multiply(gasPrice.getAsBigInteger())
         .add(
-            getVersionedHashes()
-                .map(
-                    versionedHashes ->
-                        DATA_GAS_PER_BLOB
-                            .multiply(BigInteger.valueOf(versionedHashes.size()))
-                            .multiply(maxFeePerDataGas.get().getAsBigInteger()))
+            getMaxFeePerDataGas()
+                .map(wei -> wei.multiply(getTotalDataGas().orElseThrow()).getAsBigInteger())
                 .orElse(BigInteger.ZERO));
   }
 
@@ -842,7 +859,7 @@ public class Transaction
         break;
       case BLOB:
         preimage =
-            eip4844Preimage(
+            blobPreimage(
                 nonce,
                 maxPriorityFeePerGas,
                 maxFeePerGas,
@@ -930,7 +947,7 @@ public class Transaction
     return Bytes.concatenate(Bytes.of(TransactionType.EIP1559.getSerializedType()), encoded);
   }
 
-  private static Bytes eip4844Preimage(
+  private static Bytes blobPreimage(
       final long nonce,
       final Wei maxPriorityFeePerGas,
       final Wei maxFeePerGas,
@@ -955,6 +972,7 @@ public class Transaction
               rlpOutput.writeBytes(payload);
               TransactionEncoder.writeAccessList(rlpOutput, accessList);
               rlpOutput.writeUInt256Scalar(maxFeePerDataGas);
+              // ToDo 4844: TransactionEncoder.writeBlobVersionedHashes(rlpOutput, versionedHashes);
               rlpOutput.endList();
             });
     return Bytes.concatenate(Bytes.of(TransactionType.BLOB.getSerializedType()), encoded);
