@@ -325,10 +325,12 @@ public class BlockHeader extends SealableBlockHeader
     sb.append("extraData=").append(extraData).append(", ");
     sb.append("baseFee=").append(baseFee).append(", ");
     sb.append("mixHashOrPrevRandao=").append(mixHashOrPrevRandao).append(", ");
-    sb.append("excessDataGas=").append(excessDataGas).append(", ");
-    sb.append("nonce=").append(nonce);
+    sb.append("nonce=").append(nonce).append(", ");
     if (withdrawalsRoot != null) {
       sb.append("withdrawalsRoot=").append(withdrawalsRoot).append(", ");
+    }
+    if (excessDataGas != null) {
+      sb.append("excessDataGas=").append(excessDataGas);
     }
     return sb.append("}").toString();
   }

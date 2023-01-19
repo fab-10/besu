@@ -14,6 +14,7 @@
 ### Breaking Changes
 
 ### Additions and Improvements
+- Add `excess_data_gas` field to block header [#4958](https://github.com/hyperledger/besu/pull/4958)
 - Support for new DATAHASH opcode as part of EIP-4844
 
 ### Bug Fixes
