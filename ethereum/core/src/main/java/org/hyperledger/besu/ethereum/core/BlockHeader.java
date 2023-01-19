@@ -63,6 +63,7 @@ public class BlockHeader extends SealableBlockHeader
       final Wei baseFee,
       final Bytes32 mixHashOrPrevRandao,
       final long nonce,
+      final Hash withdrawalsRoot,
       final UInt256 excessDataGas,
       final BlockHeaderFunctions blockHeaderFunctions,
       final Optional<LogsBloomFilter> privateLogsBloom) {
@@ -82,6 +83,7 @@ public class BlockHeader extends SealableBlockHeader
         extraData,
         baseFee,
         mixHashOrPrevRandao,
+        withdrawalsRoot,
         excessDataGas);
     this.nonce = nonce;
     this.hash = Suppliers.memoize(() -> blockHeaderFunctions.hash(this));
@@ -106,6 +108,7 @@ public class BlockHeader extends SealableBlockHeader
       final Wei baseFee,
       final Bytes32 mixHashOrPrevRandao,
       final long nonce,
+      final Hash withdrawalsRoot,
       final UInt256 excessDataGas,
       final BlockHeaderFunctions blockHeaderFunctions) {
     super(
@@ -124,6 +127,7 @@ public class BlockHeader extends SealableBlockHeader
         extraData,
         baseFee,
         mixHashOrPrevRandao,
+        withdrawalsRoot,
         excessDataGas);
     this.nonce = nonce;
     this.hash = Suppliers.memoize(() -> blockHeaderFunctions.hash(this));
@@ -230,6 +234,9 @@ public class BlockHeader extends SealableBlockHeader
     if (baseFee != null) {
       out.writeUInt256Scalar(baseFee);
     }
+    if (withdrawalsRoot != null) {
+      out.writeBytes(withdrawalsRoot);
+    }
     if (excessDataGas != null) {
       out.writeUInt256Scalar(excessDataGas);
     }
@@ -255,6 +262,8 @@ public class BlockHeader extends SealableBlockHeader
     final Bytes32 mixHashOrPrevRandao = input.readBytes32();
     final long nonce = input.readLong();
     final Wei baseFee = !input.isEndOfCurrentList() ? Wei.of(input.readUInt256Scalar()) : null;
+    final Hash withdrawalHashRoot =
+        !input.isEndOfCurrentList() ? Hash.wrap(input.readBytes32()) : null;
     final UInt256 excessDataGas = !input.isEndOfCurrentList() ? input.readUInt256Scalar() : null;
     input.leaveList();
     return new BlockHeader(
@@ -274,6 +283,7 @@ public class BlockHeader extends SealableBlockHeader
         baseFee,
         mixHashOrPrevRandao,
         nonce,
+        withdrawalHashRoot,
         excessDataGas,
         blockHeaderFunctions);
   }
@@ -317,6 +327,9 @@ public class BlockHeader extends SealableBlockHeader
     sb.append("mixHashOrPrevRandao=").append(mixHashOrPrevRandao).append(", ");
     sb.append("excessDataGas=").append(excessDataGas).append(", ");
     sb.append("nonce=").append(nonce);
+    if (withdrawalsRoot != null) {
+      sb.append("withdrawalsRoot=").append(withdrawalsRoot).append(", ");
+    }
     return sb.append("}").toString();
   }
 
@@ -340,6 +353,10 @@ public class BlockHeader extends SealableBlockHeader
         pluginBlockHeader.getBaseFee().map(Wei::fromQuantity).orElse(null),
         pluginBlockHeader.getPrevRandao().orElse(null),
         pluginBlockHeader.getNonce(),
+        pluginBlockHeader
+            .getWithdrawalsRoot()
+            .map(h -> Hash.fromHexString(h.toHexString()))
+            .orElse(null),
         pluginBlockHeader.getExcessDataGas().orElse(null),
         blockHeaderFunctions);
   }

@@ -162,6 +162,7 @@ public class EthGasPriceTest {
                 Wei.ZERO,
                 Hash.EMPTY,
                 0,
+                null,
                 UInt256.ZERO,
                 null),
             new BlockBody(
@@ -200,6 +201,7 @@ public class EthGasPriceTest {
                 Wei.ZERO,
                 Hash.EMPTY,
                 0,
+                null,
                 UInt256.ZERO,
                 null),
             new BlockBody(List.of(), List.of())));
