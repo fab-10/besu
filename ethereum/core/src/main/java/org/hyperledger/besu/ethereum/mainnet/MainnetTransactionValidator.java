@@ -183,7 +183,7 @@ public class MainnetTransactionValidator {
     if (transaction.calculateUpfrontGasCost(transaction.getMaxGasPrice()).bitLength() > 256) {
       return ValidationResult.invalid(
           TransactionInvalidReason.UPFRONT_FEE_TOO_HIGH,
-          "Upfront transaction cost must be less than 2^256");
+          "Upfront transaction gas cost must be less than 2^256");
     }
 
     final long intrinsicGasCost =

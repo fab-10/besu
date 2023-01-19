@@ -743,6 +743,15 @@ public class Transaction
     }
   }
 
+  /**
+   * Calculates the up-front cost for the transaction.
+   *
+   * <p>The up-front cost is paid by the sender account before the transaction is executed. The
+   * sender must have the amount in its account balance to execute and some of this amount may be
+   * refunded after the transaction has executed.
+   *
+   * @return the up-front gas cost for the transaction
+   */
   public BigInteger calculateUpfrontGasCost(final Wei gasPrice) {
     return BigInteger.valueOf(getGasLimit())
         .multiply(gasPrice.getAsBigInteger())
