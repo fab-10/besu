@@ -43,7 +43,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalLong;
+import java.util.OptionalInt;
 import java.util.stream.Collectors;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -72,7 +72,7 @@ public class Transaction
 
   public static final BigInteger TWO = BigInteger.valueOf(2);
 
-  public static final long DATA_GAS_PER_BLOB = 131072; // 2^17
+  public static final int DATA_GAS_PER_BLOB = 131072; // 2^17
 
   private final long nonce;
 
@@ -485,12 +485,12 @@ public class Transaction
    *
    * @return optionally the total data gas used if this transaction if it supports blobs or nothing
    */
-  public OptionalLong getTotalDataGas() {
+  public OptionalInt getTotalDataGas() {
     if (transactionType.supportsBlob()) {
-      OptionalLong.of(DATA_GAS_PER_BLOB * versionedHashes.map(List::size).orElseThrow());
+      OptionalInt.of(DATA_GAS_PER_BLOB * versionedHashes.map(List::size).orElseThrow());
     }
 
-    return OptionalLong.empty();
+    return OptionalInt.empty();
   }
 
   /**

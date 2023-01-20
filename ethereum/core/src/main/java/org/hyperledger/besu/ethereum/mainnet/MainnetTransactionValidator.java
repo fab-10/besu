@@ -53,6 +53,7 @@ public class MainnetTransactionValidator {
   private final boolean goQuorumCompatibilityMode;
 
   private final int maxInitcodeSize;
+  private final int maxDataGasPerBlock;
 
   public MainnetTransactionValidator(
       final GasCalculator gasCalculator,
@@ -91,6 +92,26 @@ public class MainnetTransactionValidator {
       final Set<TransactionType> acceptedTransactionTypes,
       final boolean goQuorumCompatibilityMode,
       final int maxInitcodeSize) {
+    this(
+        gasCalculator,
+        FeeMarket.legacy(),
+        checkSignatureMalleability,
+        chainId,
+        acceptedTransactionTypes,
+        goQuorumCompatibilityMode,
+        maxInitcodeSize,
+        0);
+  }
+
+  public MainnetTransactionValidator(
+      final GasCalculator gasCalculator,
+      final FeeMarket feeMarket,
+      final boolean checkSignatureMalleability,
+      final Optional<BigInteger> chainId,
+      final Set<TransactionType> acceptedTransactionTypes,
+      final boolean goQuorumCompatibilityMode,
+      final int maxInitcodeSize,
+      final int maxDataGasPerBlock) {
     this.gasCalculator = gasCalculator;
     this.feeMarket = feeMarket;
     this.disallowSignatureMalleability = checkSignatureMalleability;
@@ -98,6 +119,7 @@ public class MainnetTransactionValidator {
     this.acceptedTransactionTypes = acceptedTransactionTypes;
     this.goQuorumCompatibilityMode = goQuorumCompatibilityMode;
     this.maxInitcodeSize = maxInitcodeSize;
+    this.maxDataGasPerBlock = maxDataGasPerBlock;
   }
 
   /**
@@ -140,6 +162,15 @@ public class MainnetTransactionValidator {
           String.format(
               "Initcode size of %d exceeds maximum size of %s",
               transaction.getPayload().size(), maxInitcodeSize));
+    }
+
+    if (transaction.getType().supportsBlob()) {
+      final int txTotalDataGas = transaction.getTotalDataGas().orElseThrow();
+      if (txTotalDataGas > maxDataGasPerBlock) {
+        return ValidationResult.invalid(
+            TransactionInvalidReason.TOTAL_DATA_GAS_TOO_HIGH,
+            "total data gas (" + txTotalDataGas +") exceeds max data gas per block (" + maxDataGasPerBlock + ")");
+      }
     }
 
     return validateCostAndFee(transaction, blockHeader, transactionValidationParams);

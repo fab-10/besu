@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.mainnet.feemarket;
 
 import org.hyperledger.besu.config.GenesisConfigFile;
+import org.hyperledger.besu.datatypes.DataGas;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.feemarket.TransactionPriceCalculator;
@@ -123,19 +124,20 @@ public class LondonFeeMarket implements BaseFeeMarket {
   }
 
   @Override
-  public Wei computeDataGasPrice(final long blockNumber, final UInt256 parentExcessDataGas) {
+  public Wei computeDataGasPrice(final long blockNumber, final DataGas parentExcessDataGas) {
     final var dataGasPrice =
         Wei.of(
             fakeExponential(
-                MIN_DATA_GAS_PRICE, parentExcessDataGas, DATA_GAS_PRICE_UPDATE_FRACTION));
+                MIN_DATA_GAS_PRICE,
+                parentExcessDataGas.toUInt256(),
+                DATA_GAS_PRICE_UPDATE_FRACTION));
     LOG.trace(
         "block #{} parentExcessDataGas: {} dataGasPrice: {}",
         blockNumber,
         parentExcessDataGas,
         dataGasPrice);
 
-    return Wei.of(
-        fakeExponential(MIN_DATA_GAS_PRICE, parentExcessDataGas, DATA_GAS_PRICE_UPDATE_FRACTION));
+    return dataGasPrice;
   }
 
   @Override

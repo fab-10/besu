@@ -42,7 +42,6 @@ import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.ethereum.trie.MerkleTrieException;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.evm.fluent.SimpleAccount;
-import org.hyperledger.besu.plugin.data.TransactionType;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -318,7 +317,7 @@ public class TransactionPool implements BlockAddedObserver {
               "Transaction gas limit of %s exceeds block gas limit of %s",
               transaction.getGasLimit(), chainHeadBlockHeader.getGasLimit()));
     }
-    if (transaction.getType().equals(TransactionType.EIP1559) && !feeMarket.implementsBaseFee()) {
+    if (transaction.getType().supports1559FeeMarket() && !feeMarket.implementsBaseFee()) {
       return ValidationResultAndAccount.invalid(
           TransactionInvalidReason.INVALID_TRANSACTION_FORMAT,
           "EIP-1559 transaction are not allowed yet");
@@ -336,9 +335,10 @@ public class TransactionPool implements BlockAddedObserver {
               .validateForSender(
                   transaction, senderAccount, TransactionValidationParams.transactionPool()));
     } catch (MerkleTrieException ex) {
-      LOG.debug(
+      debugLambda(
+          LOG,
           "MerkleTrieException while validating transaction for sender {}",
-          transaction.getSender());
+          transaction::getSender);
       return ValidationResultAndAccount.invalid(CHAIN_HEAD_WORLD_STATE_NOT_AVAILABLE);
     } catch (Exception ex) {
       return ValidationResultAndAccount.invalid(CHAIN_HEAD_WORLD_STATE_NOT_AVAILABLE);

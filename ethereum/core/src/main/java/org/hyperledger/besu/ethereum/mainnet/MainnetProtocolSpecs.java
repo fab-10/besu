@@ -83,6 +83,8 @@ public abstract class MainnetProtocolSpecs {
   public static final int SPURIOUS_DRAGON_CONTRACT_SIZE_LIMIT = 24576;
   public static final int SHANGHAI_INIT_CODE_SIZE_LIMIT = 2 * SPURIOUS_DRAGON_CONTRACT_SIZE_LIMIT;
 
+  public static final int CANCUN_MAX_DATA_GAS_PER_BLOCK = 524288;
+
   private static final Address RIPEMD160_PRECOMPILE =
       Address.fromHexString("0x0000000000000000000000000000000000000003");
 
@@ -719,6 +721,11 @@ public abstract class MainnetProtocolSpecs {
 
     final int contractSizeLimit =
         configContractSizeLimit.orElse(SPURIOUS_DRAGON_CONTRACT_SIZE_LIMIT);
+    final long londonForkBlockNumber = genesisConfigOptions.getLondonBlockNumber().orElse(0L);
+    final BaseFeeMarket londonFeeMarket =
+        genesisConfigOptions.isZeroBaseFee()
+            ? FeeMarket.zeroBaseFee(londonForkBlockNumber)
+            : FeeMarket.london(londonForkBlockNumber, genesisConfigOptions.getBaseFeePerGas());
 
     return shanghaiDefinition(
             chainId,
@@ -744,6 +751,20 @@ public abstract class MainnetProtocolSpecs {
                         MaxCodeSizeRule.of(contractSizeLimit), EOFValidationCodeRule.of(1, false)),
                     1,
                     SPURIOUS_DRAGON_FORCE_DELETE_WHEN_EMPTY_ADDRESSES))
+        .transactionValidatorBuilder(
+            gasCalculator ->
+                new MainnetTransactionValidator(
+                    gasCalculator,
+                    londonFeeMarket,
+                    true,
+                    chainId,
+                    Set.of(
+                        TransactionType.FRONTIER,
+                        TransactionType.ACCESS_LIST,
+                        TransactionType.EIP1559),
+                    quorumCompatibilityMode,
+                    SHANGHAI_INIT_CODE_SIZE_LIMIT,
+                    CANCUN_MAX_DATA_GAS_PER_BLOCK))
         .name("Cancun");
   }
 

@@ -444,6 +444,7 @@ public class BlockTransactionSelector {
   }
 
   private boolean transactionTooLargeForBlock(final Transaction transaction) {
+
     return transaction.getGasLimit()
         > processableBlockHeader.getGasLimit() - transactionSelectionResult.getCumulativeGasUsed();
   }
