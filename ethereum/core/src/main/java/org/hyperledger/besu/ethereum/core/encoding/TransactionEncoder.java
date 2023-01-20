@@ -17,6 +17,7 @@ package org.hyperledger.besu.ethereum.core.encoding;
 import static com.google.common.base.Preconditions.checkNotNull;
 
 import org.hyperledger.besu.datatypes.Address;
+import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.encoding.ssz.SignedBlobTransaction;
@@ -205,6 +206,12 @@ public class TransactionEncoder {
             accessListEntryRLPOutput.endList();
           });
     }
+  }
+
+  public static void writeBlobVersionedHashes(
+      final RLPOutput rlpOutput, final List<Hash> versionedHashes) {
+    // ToDo 4884: implement
+    throw new UnsupportedOperationException("ToDo 4844");
   }
 
   private static void writeSignatureAndV(final Transaction transaction, final RLPOutput out) {
