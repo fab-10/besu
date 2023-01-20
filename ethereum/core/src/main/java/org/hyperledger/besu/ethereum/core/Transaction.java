@@ -46,6 +46,7 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.stream.Collectors;
 
+import com.google.common.primitives.Longs;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -487,7 +488,7 @@ public class Transaction
    */
   public OptionalInt getTotalDataGas() {
     if (transactionType.supportsBlob()) {
-      OptionalInt.of(DATA_GAS_PER_BLOB * versionedHashes.map(List::size).orElseThrow());
+      return OptionalInt.of(DATA_GAS_PER_BLOB * versionedHashes.map(List::size).orElseThrow());
     }
 
     return OptionalInt.empty();
@@ -715,15 +716,6 @@ public class Transaction
     return getUpfrontGasCost(getMaxGasPrice(), getMaxFeePerDataGas().orElse(Wei.ZERO));
   }
 
-  public Wei getMaxGasPrice() {
-    return maxFeePerGas.orElseGet(
-        () ->
-            gasPrice.orElseThrow(
-                () ->
-                    new IllegalStateException(
-                        "Transaction requires either gasPrice or maxFeePerGas")));
-  }
-
   /**
    * Calculates the up-front cost for the gas and data gas the transaction can use.
    *
@@ -746,7 +738,7 @@ public class Transaction
   }
 
   private BigInteger calculateUpfrontGasCost(final Wei gasPrice, final Wei dataGasPrice) {
-    var cost = BigInteger.valueOf(getGasLimit()).multiply(gasPrice.getAsBigInteger());
+    var cost = new BigInteger(1, Longs.toByteArray(getGasLimit())).multiply(gasPrice.getAsBigInteger());
 
     if (transactionType.supportsBlob()) {
       cost =
@@ -772,6 +764,14 @@ public class Transaction
     return getMaxUpfrontGasCost().addExact(getValue());
   }
 
+  public Wei getMaxGasPrice() {
+    return maxFeePerGas.orElseGet(
+        () ->
+            gasPrice.orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "Transaction requires either gasPrice or maxFeePerGas")));
+  }
   /**
    * Calculates the effectiveGasPrice of a transaction on the basis of an {@code Optional<Long>}
    * baseFee and handles unwrapping Optional fee parameters. If baseFee is present, effective gas is
