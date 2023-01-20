@@ -169,7 +169,11 @@ public class MainnetTransactionValidator {
       if (txTotalDataGas > maxDataGasPerBlock) {
         return ValidationResult.invalid(
             TransactionInvalidReason.TOTAL_DATA_GAS_TOO_HIGH,
-            "total data gas (" + txTotalDataGas +") exceeds max data gas per block (" + maxDataGasPerBlock + ")");
+            "total data gas ("
+                + txTotalDataGas
+                + ") exceeds max data gas per block ("
+                + maxDataGasPerBlock
+                + ")");
       }
     }
 

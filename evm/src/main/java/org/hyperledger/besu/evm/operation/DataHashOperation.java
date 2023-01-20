@@ -16,7 +16,6 @@ package org.hyperledger.besu.evm.operation;
 
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.evm.EVM;
-import org.hyperledger.besu.evm.frame.ExceptionalHaltReason;
 import org.hyperledger.besu.evm.frame.MessageFrame;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
 
@@ -48,7 +47,7 @@ public class DataHashOperation extends AbstractOperation {
     } else {
       frame.pushStackItem(Bytes.EMPTY);
     }
-    return new OperationResult(3, ExceptionalHaltReason.NONE);
+    return new OperationResult(3, null);
   }
 
   @Override
