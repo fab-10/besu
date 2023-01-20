@@ -215,6 +215,11 @@ public class MainnetTransactionValidator {
       }
     }
 
+    if (transaction.getNonce() == MAX_NONCE) {
+      return ValidationResult.invalid(
+          TransactionInvalidReason.NONCE_OVERFLOW, "Nonce must be less than 2^64-1");
+    }
+
     final long intrinsicGasCost =
         gasCalculator.transactionIntrinsicGasCost(
                 transaction.getPayload(), transaction.isContractCreation())
@@ -226,6 +231,15 @@ public class MainnetTransactionValidator {
               "intrinsic gas cost %s exceeds gas limit %s",
               intrinsicGasCost, transaction.getGasLimit()));
     }
+
+    if (transaction.isContractCreation() && transaction.getPayload().size() > maxInitcodeSize) {
+      return ValidationResult.invalid(
+          TransactionInvalidReason.INITCODE_TOO_LARGE,
+          String.format(
+              "Initcode size of %d exceeds maximum size of %s",
+              transaction.getPayload().size(), maxInitcodeSize));
+    }
+
     return ValidationResult.valid();
   }
 

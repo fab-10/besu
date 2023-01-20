@@ -721,7 +721,7 @@ public class Transaction
             gasPrice.orElseThrow(
                 () ->
                     new IllegalStateException(
-                        String.format("Transaction requires either gasPrice or maxFeePerGas"))));
+                        "Transaction requires either gasPrice or maxFeePerGas")));
   }
 
   /**

@@ -352,6 +352,6 @@ public class GraphQLDataFetchers {
                 transaction.getSender(),
                 transaction.getChainId(),
                 Optional.ofNullable(transaction.getV()),
-                Optional.empty())));
+                transaction.getVersionedHashes())));
   }
 }

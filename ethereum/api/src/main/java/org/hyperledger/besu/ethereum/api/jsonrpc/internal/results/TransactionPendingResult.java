@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.results;
 
 import org.hyperledger.besu.datatypes.Address;
+import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
@@ -44,7 +45,8 @@ import com.fasterxml.jackson.annotation.JsonPropertyOrder;
   "value",
   "v",
   "r",
-  "s"
+  "s",
+  "blobVersionedHashes"
 })
 public class TransactionPendingResult implements TransactionResult {
 
@@ -78,6 +80,9 @@ public class TransactionPendingResult implements TransactionResult {
   private final String r;
   private final String s;
 
+  @JsonInclude(JsonInclude.Include.NON_NULL)
+  private final List<Hash> versionedHashes;
+
   public TransactionPendingResult(final Transaction transaction) {
     final TransactionType transactionType = transaction.getType();
     this.accessList = transaction.getAccessList().orElse(null);
@@ -106,6 +111,7 @@ public class TransactionPendingResult implements TransactionResult {
     this.v = Quantity.create(transaction.getV());
     this.r = Quantity.create(transaction.getR());
     this.s = Quantity.create(transaction.getS());
+    this.versionedHashes = transaction.getVersionedHashes().orElse(null);
   }
 
   @JsonGetter(value = "accessList")
@@ -216,5 +222,10 @@ public class TransactionPendingResult implements TransactionResult {
   @JsonGetter(value = "transactionIndex")
   public String getTransactionIndex() {
     return null;
+  }
+
+  @JsonGetter(value = "blobVersionedHashes")
+  public List<Hash> getVersionedHashes() {
+    return versionedHashes;
   }
 }
