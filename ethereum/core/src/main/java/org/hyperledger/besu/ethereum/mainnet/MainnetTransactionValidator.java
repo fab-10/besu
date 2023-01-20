@@ -94,7 +94,7 @@ public class MainnetTransactionValidator {
       final int maxInitcodeSize) {
     this(
         gasCalculator,
-        FeeMarket.legacy(),
+        feeMarket,
         checkSignatureMalleability,
         chainId,
         acceptedTransactionTypes,

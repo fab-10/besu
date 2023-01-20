@@ -14,11 +14,10 @@
  */
 package org.hyperledger.besu.ethereum.mainnet.feemarket;
 
+import org.hyperledger.besu.datatypes.DataGas;
 import org.hyperledger.besu.datatypes.Wei;
 
 import java.util.Optional;
-
-import org.apache.tuweni.units.bigints.UInt256;
 
 public class ZeroBaseFeeMarket extends LondonFeeMarket {
 
@@ -37,7 +36,7 @@ public class ZeroBaseFeeMarket extends LondonFeeMarket {
   }
 
   @Override
-  public Wei computeDataGasPrice(final long blockNumber, final UInt256 parentExcessDataGas) {
+  public Wei computeDataGasPrice(final long blockNumber, final DataGas parentExcessDataGas) {
     return Wei.ZERO;
   }
 

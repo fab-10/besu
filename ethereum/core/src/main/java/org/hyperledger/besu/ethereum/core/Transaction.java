@@ -953,16 +953,16 @@ public class Transaction
   }
 
   private static void eip1559PreimageFields(
-      long nonce,
-      Wei maxPriorityFeePerGas,
-      Wei maxFeePerGas,
-      long gasLimit,
-      Optional<Address> to,
-      Wei value,
-      Bytes payload,
-      Optional<BigInteger> chainId,
-      Optional<List<AccessListEntry>> accessList,
-      RLPOutput rlpOutput) {
+      final long nonce,
+      final Wei maxPriorityFeePerGas,
+      final Wei maxFeePerGas,
+      final long gasLimit,
+      final Optional<Address> to,
+      final Wei value,
+      final Bytes payload,
+      final Optional<BigInteger> chainId,
+      final Optional<List<AccessListEntry>> accessList,
+      final RLPOutput rlpOutput) {
     rlpOutput.writeBigIntegerScalar(chainId.orElseThrow());
     rlpOutput.writeLongScalar(nonce);
     rlpOutput.writeUInt256Scalar(maxPriorityFeePerGas);

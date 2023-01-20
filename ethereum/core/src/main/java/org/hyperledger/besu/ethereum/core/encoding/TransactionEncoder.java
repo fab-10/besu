@@ -211,7 +211,6 @@ public class TransactionEncoder {
   public static void writeBlobVersionedHashes(
       final RLPOutput rlpOutput, final List<Hash> versionedHashes) {
     // ToDo 4884: implement
-    throw new UnsupportedOperationException("ToDo 4844");
   }
 
   private static void writeSignatureAndV(final Transaction transaction, final RLPOutput out) {
