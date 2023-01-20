@@ -169,11 +169,9 @@ public class MainnetTransactionValidator {
       if (txTotalDataGas > maxDataGasPerBlock) {
         return ValidationResult.invalid(
             TransactionInvalidReason.TOTAL_DATA_GAS_TOO_HIGH,
-            "total data gas ("
-                + txTotalDataGas
-                + ") exceeds max data gas per block ("
-                + maxDataGasPerBlock
-                + ")");
+            String.format(
+                "total data gas %d exceeds max data gas per block %d",
+                txTotalDataGas, maxDataGasPerBlock));
       }
     }
 
@@ -230,14 +228,6 @@ public class MainnetTransactionValidator {
           String.format(
               "intrinsic gas cost %s exceeds gas limit %s",
               intrinsicGasCost, transaction.getGasLimit()));
-    }
-
-    if (transaction.isContractCreation() && transaction.getPayload().size() > maxInitcodeSize) {
-      return ValidationResult.invalid(
-          TransactionInvalidReason.INITCODE_TOO_LARGE,
-          String.format(
-              "Initcode size of %d exceeds maximum size of %s",
-              transaction.getPayload().size(), maxInitcodeSize));
     }
 
     return ValidationResult.valid();

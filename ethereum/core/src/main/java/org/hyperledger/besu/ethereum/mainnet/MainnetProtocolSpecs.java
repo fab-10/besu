@@ -751,6 +751,7 @@ public abstract class MainnetProtocolSpecs {
                         MaxCodeSizeRule.of(contractSizeLimit), EOFValidationCodeRule.of(1, false)),
                     1,
                     SPURIOUS_DRAGON_FORCE_DELETE_WHEN_EMPTY_ADDRESSES))
+        // change to check for max data gas per block for EIP-4844
         .transactionValidatorBuilder(
             gasCalculator ->
                 new MainnetTransactionValidator(

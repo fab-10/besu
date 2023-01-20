@@ -290,13 +290,15 @@ public class MainnetTransactionProcessor {
       final long previousNonce = senderMutableAccount.incrementNonce();
       final Wei transactionGasPrice =
           feeMarket.getTransactionPriceCalculator().price(transaction, blockHeader);
+      final Wei dataGasPrice =
+          feeMarket.getTransactionPriceCalculator().dataPrice(transaction, blockHeader);
       LOG.trace(
           "Incremented sender {} nonce ({} -> {})",
           senderAddress,
           previousNonce,
           sender.getNonce());
 
-      final Wei upfrontGasCost = transaction.getUpfrontGasCost(transactionGasPrice);
+      final Wei upfrontGasCost = transaction.getUpfrontGasCost(transactionGasPrice, dataGasPrice);
       final Wei previousBalance = senderMutableAccount.decrementBalance(upfrontGasCost);
       LOG.trace(
           "Deducted sender {} upfront gas cost {} ({} -> {})",

@@ -18,7 +18,6 @@ import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.feemarket.TransactionPriceCalculator;
-import org.hyperledger.besu.plugin.data.TransactionType;
 import org.hyperledger.besu.util.number.Percentage;
 
 public class TransactionReplacementByFeeMarketRule implements TransactionPoolReplacementRule {
@@ -73,9 +72,7 @@ public class TransactionReplacementByFeeMarketRule implements TransactionPoolRep
 
   private Wei priceOf(final Transaction transaction, final ProcessableBlockHeader blockHeader) {
     final TransactionPriceCalculator transactionPriceCalculator =
-        transaction.getType().equals(TransactionType.EIP1559)
-            ? EIP1559_CALCULATOR
-            : FRONTIER_CALCULATOR;
+        transaction.getType().supports1559FeeMarket() ? EIP1559_CALCULATOR : FRONTIER_CALCULATOR;
     return transactionPriceCalculator.price(transaction, blockHeader);
   }
 

@@ -438,7 +438,7 @@ public interface GasCalculator {
   long codeDepositGasCost(int codeSize);
 
   /**
-   * Returns the intrinsic gas cost of a transaction pauload, i.e. the cost deriving from its
+   * Returns the intrinsic gas cost of a transaction payload, i.e. the cost deriving from its
    * encoded binary representation when stored on-chain.
    *
    * @param transactionPayload The encoded transaction, as bytes
@@ -487,4 +487,8 @@ public interface GasCalculator {
    */
   // what would be the gas for a PMT with hash of all non-zeros
   long getMaximumTransactionCost(int size);
+
+  default Wei dataGasCost(final int totalDataGas, final Wei dataGasPrice) {
+    return Wei.ZERO;
+  }
 }

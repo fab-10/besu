@@ -223,7 +223,7 @@ public class Transaction
     this.v = v;
     this.versionedHashes = versionedHashes;
 
-    final var upfrontCost = calculateUpfrontGasCost(getMaxGasPrice());
+    final var upfrontCost = getMaxUpfrontGasCost();
     if (upfrontCost.bitLength() > 256) {
       throw new IllegalArgumentException("Upfront gas cost exceeds UInt256");
     }
@@ -711,8 +711,8 @@ public class Transaction
    *
    * @return the up-front cost for the gas the transaction can use.
    */
-  public Wei getUpfrontGasCost() {
-    return getUpfrontGasCost(getMaxGasPrice());
+  private Wei getMaxUpfrontGasCost() {
+    return getUpfrontGasCost(getMaxGasPrice(), getMaxFeePerDataGas().orElse(Wei.ZERO));
   }
 
   public Wei getMaxGasPrice() {
@@ -725,17 +725,18 @@ public class Transaction
   }
 
   /**
-   * Calculates the up-front cost for the gas the transaction can use.
+   * Calculates the up-front cost for the gas and data gas the transaction can use.
    *
    * @param gasPrice the gas price to use
+   * @param dataGasPrice the data gas price to use
    * @return the up-front cost for the gas the transaction can use.
    */
-  public Wei getUpfrontGasCost(final Wei gasPrice) {
+  public Wei getUpfrontGasCost(final Wei gasPrice, final Wei dataGasPrice) {
     if (gasPrice == null || gasPrice.isZero()) {
       return Wei.ZERO;
     }
 
-    final var cost = calculateUpfrontGasCost(gasPrice);
+    final var cost = calculateUpfrontGasCost(gasPrice, dataGasPrice);
 
     if (cost.bitLength() > 256) {
       return Wei.MAX_WEI;
@@ -744,13 +745,18 @@ public class Transaction
     }
   }
 
-  private BigInteger calculateUpfrontGasCost(final Wei gasPrice) {
-    return BigInteger.valueOf(getGasLimit())
-        .multiply(gasPrice.getAsBigInteger())
-        .add(
-            getMaxFeePerDataGas()
-                .map(wei -> wei.multiply(getTotalDataGas().orElseThrow()).getAsBigInteger())
-                .orElse(BigInteger.ZERO));
+  private BigInteger calculateUpfrontGasCost(final Wei gasPrice, final Wei dataGasPrice) {
+    var cost = BigInteger.valueOf(getGasLimit()).multiply(gasPrice.getAsBigInteger());
+
+    if (transactionType.supportsBlob()) {
+      cost =
+          cost.add(
+              dataGasPrice
+                  .getAsBigInteger()
+                  .multiply(BigInteger.valueOf(getTotalDataGas().getAsInt())));
+    }
+
+    return cost;
   }
 
   /**
@@ -763,7 +769,7 @@ public class Transaction
    * @return the up-front gas cost for the transaction
    */
   public Wei getUpfrontCost() {
-    return getUpfrontGasCost().addExact(getValue());
+    return getMaxUpfrontGasCost().addExact(getValue());
   }
 
   /**
