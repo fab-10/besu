@@ -40,7 +40,6 @@ import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.ScheduleBasedBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.mainnet.WithdrawalsProcessor;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.BaseFeeMarket;
-import org.hyperledger.besu.ethereum.mainnet.feemarket.DataFeeMarket;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.account.EvmAccount;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
@@ -203,8 +202,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
 
       throwIfStopped();
 
-      final DataGas newExcessDataGas =
-          computeExcessDataGas(processableBlockHeader, transactionResults, newProtocolSpec);
+      final DataGas newExcessDataGas = computeExcessDataGas(transactionResults, newProtocolSpec);
 
       throwIfStopped();
 
@@ -248,21 +246,18 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
   }
 
   private DataGas computeExcessDataGas(
-      ProcessableBlockHeader processableBlockHeader,
       BlockTransactionSelector.TransactionSelectionResults transactionResults,
       ProtocolSpec newProtocolSpec) {
-    final var feeMarket = newProtocolSpec.getFeeMarket();
-    if (feeMarket.implementsBaseFee()) {
-      final var dataFeeMarket = (DataFeeMarket) feeMarket;
+
+    if (newProtocolSpec.getFeeMarket().implementsBaseFee()) {
+      final var gasCalculator = newProtocolSpec.getGasCalculator();
       final int newBlobsCount =
           transactionResults.getTransactionsByType(TransactionType.BLOB).stream()
               .map(tx -> tx.getVersionedHashes().orElseThrow())
               .mapToInt(List::size)
               .sum();
-      return dataFeeMarket.computeExcessDataGas(
-          processableBlockHeader.getNumber(),
-          parentHeader.getExcessDataGas().orElse(DataGas.ZERO),
-          newBlobsCount);
+      return gasCalculator.computeExcessDataGas(
+          parentHeader.getExcessDataGas().orElse(DataGas.ZERO), newBlobsCount);
     }
     return null;
   }
@@ -290,7 +285,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
             minBlockOccupancyRatio,
             isCancelled::get,
             miningBeneficiary,
-            protocolSpec.getFeeMarket());
+            protocolSpec.getFeeMarket(), protocolSpec.getGasCalculator());
 
     if (transactions.isPresent()) {
       return selector.evaluateTransactions(transactions.get());

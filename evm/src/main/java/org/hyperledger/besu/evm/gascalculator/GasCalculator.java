@@ -15,6 +15,7 @@
 package org.hyperledger.besu.evm.gascalculator;
 
 import org.hyperledger.besu.datatypes.Address;
+import org.hyperledger.besu.datatypes.DataGas;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.evm.AccessListEntry;
 import org.hyperledger.besu.evm.account.Account;
@@ -488,11 +489,13 @@ public interface GasCalculator {
   // what would be the gas for a PMT with hash of all non-zeros
   long getMaximumTransactionCost(int size);
 
-  default Wei dataGasCost(final int totalDataGas, final Wei dataGasPrice) {
-    return Wei.ZERO;
-  }
-
-  default int getDataGasPerBlob() {
+  default int dataGasCost(final int totalDataGas) {
     return 0;
   }
+
+  default DataGas computeExcessDataGas(final DataGas parentExcessDataGas, final int newBlobs) {
+    return DataGas.ZERO;
+  }
+
+  default  long getDataGasLimit() { return 0; }
 }

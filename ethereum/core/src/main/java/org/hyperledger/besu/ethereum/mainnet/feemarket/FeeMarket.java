@@ -30,10 +30,6 @@ public interface FeeMarket {
     return false;
   }
 
-  default int getDataGasPerBlock() {
-    return 0;
-  }
-
   TransactionPriceCalculator getTransactionPriceCalculator();
 
   boolean satisfiesFloorTxFee(Transaction txn);
@@ -50,10 +46,10 @@ public interface FeeMarket {
   static BaseFeeMarket cancun(
       final long londonForkBlockNumber,
       final Optional<Wei> baseFeePerGasOverride,
-      final int dataGasPerBlob,
-      final int targetDataGasPerBlock) {
+      final int minDataGasPrice,
+      final int dataGasPriceUpdateFraction) {
     return new CancunFeeMarket(
-        londonForkBlockNumber, baseFeePerGasOverride, dataGasPerBlob, targetDataGasPerBlock);
+        londonForkBlockNumber, baseFeePerGasOverride, minDataGasPrice, dataGasPriceUpdateFraction);
   }
 
   static BaseFeeMarket zeroBaseFee(final long londonForkBlockNumber) {

@@ -35,6 +35,7 @@ import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.ethereum.vm.BlockHashLookup;
 import org.hyperledger.besu.evm.account.EvmAccount;
+import org.hyperledger.besu.evm.gascalculator.GasCalculator;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.plugin.data.TransactionType;
 
@@ -79,125 +80,6 @@ public class BlockTransactionSelector {
 
   private final Wei minTransactionGasPrice;
   private final Double minBlockOccupancyRatio;
-
-  public static class TransactionValidationResult {
-    private final Transaction transaction;
-    private final ValidationResult<TransactionInvalidReason> validationResult;
-
-    public TransactionValidationResult(
-        final Transaction transaction,
-        final ValidationResult<TransactionInvalidReason> validationResult) {
-      this.transaction = transaction;
-      this.validationResult = validationResult;
-    }
-
-    public Transaction getTransaction() {
-      return transaction;
-    }
-
-    public ValidationResult<TransactionInvalidReason> getValidationResult() {
-      return validationResult;
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      TransactionValidationResult that = (TransactionValidationResult) o;
-      return Objects.equals(transaction, that.transaction)
-          && Objects.equals(validationResult, that.validationResult);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(transaction, validationResult);
-    }
-  }
-
-  public static class TransactionSelectionResults {
-
-    private final Map<TransactionType, List<Transaction>> transactionsByType = new HashMap<>();
-    private final List<TransactionReceipt> receipts = Lists.newArrayList();
-    private final List<TransactionValidationResult> invalidTransactions = Lists.newArrayList();
-    private long cumulativeGasUsed = 0;
-
-    private void update(
-        final Transaction transaction, final TransactionReceipt receipt, final long gasUsed) {
-      transactionsByType
-          .computeIfAbsent(transaction.getType(), type -> new ArrayList<>())
-          .add(transaction);
-      receipts.add(receipt);
-      cumulativeGasUsed += gasUsed;
-      traceLambda(
-          LOG,
-          "New selected transaction {}, total transactions {}, cumulative gas used {}",
-          transaction::toTraceLog,
-          () -> transactionsByType.values().stream().mapToInt(List::size).sum(),
-          () -> cumulativeGasUsed);
-    }
-
-    private void updateWithInvalidTransaction(
-        final Transaction transaction,
-        final ValidationResult<TransactionInvalidReason> validationResult) {
-      invalidTransactions.add(new TransactionValidationResult(transaction, validationResult));
-    }
-
-    public List<Transaction> getTransactions() {
-      return streamAllTransactions().collect(Collectors.toList());
-    }
-
-    public List<Transaction> getTransactionsByType(final TransactionType type) {
-      return transactionsByType.getOrDefault(type, List.of());
-    }
-
-    public List<TransactionReceipt> getReceipts() {
-      return receipts;
-    }
-
-    public long getCumulativeGasUsed() {
-      return cumulativeGasUsed;
-    }
-
-    public List<TransactionValidationResult> getInvalidTransactions() {
-      return invalidTransactions;
-    }
-
-    private Stream<Transaction> streamAllTransactions() {
-      return transactionsByType.values().stream().flatMap(List::stream);
-    }
-
-    @Override
-    public boolean equals(final Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-      TransactionSelectionResults that = (TransactionSelectionResults) o;
-      return cumulativeGasUsed == that.cumulativeGasUsed
-          && transactionsByType.equals(that.transactionsByType)
-          && receipts.equals(that.receipts)
-          && invalidTransactions.equals(that.invalidTransactions);
-    }
-
-    @Override
-    public int hashCode() {
-      return Objects.hash(transactionsByType, receipts, invalidTransactions, cumulativeGasUsed);
-    }
-
-    public String toTraceLog() {
-      return "cumulativeGasUsed="
-          + cumulativeGasUsed
-          + ", transactions="
-          + streamAllTransactions().map(Transaction::toTraceLog).collect(Collectors.joining("; "));
-    }
-  }
-
   private final Supplier<Boolean> isCancelled;
   private final MainnetTransactionProcessor transactionProcessor;
   private final ProcessableBlockHeader processableBlockHeader;
@@ -207,22 +89,23 @@ public class BlockTransactionSelector {
   private final AbstractBlockProcessor.TransactionReceiptFactory transactionReceiptFactory;
   private final Address miningBeneficiary;
   private final FeeMarket feeMarket;
+  private final GasCalculator gasCalculator;
 
   private final TransactionSelectionResults transactionSelectionResult =
       new TransactionSelectionResults();
 
   public BlockTransactionSelector(
-      final MainnetTransactionProcessor transactionProcessor,
-      final Blockchain blockchain,
-      final MutableWorldState worldState,
-      final PendingTransactions pendingTransactions,
-      final ProcessableBlockHeader processableBlockHeader,
-      final AbstractBlockProcessor.TransactionReceiptFactory transactionReceiptFactory,
-      final Wei minTransactionGasPrice,
-      final Double minBlockOccupancyRatio,
-      final Supplier<Boolean> isCancelled,
-      final Address miningBeneficiary,
-      final FeeMarket feeMarket) {
+          final MainnetTransactionProcessor transactionProcessor,
+          final Blockchain blockchain,
+          final MutableWorldState worldState,
+          final PendingTransactions pendingTransactions,
+          final ProcessableBlockHeader processableBlockHeader,
+          final AbstractBlockProcessor.TransactionReceiptFactory transactionReceiptFactory,
+          final Wei minTransactionGasPrice,
+          final Double minBlockOccupancyRatio,
+          final Supplier<Boolean> isCancelled,
+          final Address miningBeneficiary,
+          final FeeMarket feeMarket, final GasCalculator gasCalculator) {
     this.transactionProcessor = transactionProcessor;
     this.blockchain = blockchain;
     this.worldState = worldState;
@@ -234,6 +117,7 @@ public class BlockTransactionSelector {
     this.minBlockOccupancyRatio = minBlockOccupancyRatio;
     this.miningBeneficiary = miningBeneficiary;
     this.feeMarket = feeMarket;
+    this.gasCalculator = gasCalculator;
   }
 
   /*
@@ -292,6 +176,9 @@ public class BlockTransactionSelector {
     if (transactionCurrentPriceBelowMin(transaction)) {
       return TransactionSelectionResult.CONTINUE;
     }
+    if(transactionDataPriceBelowMin(transaction)) {
+      return TransactionSelectionResult.CONTINUE;
+    }
 
     final WorldUpdater worldStateUpdater = worldState.updater();
     final BlockHashLookup blockHashLookup = new BlockHashLookup(processableBlockHeader, blockchain);
@@ -343,6 +230,16 @@ public class BlockTransactionSelector {
           transaction, effectiveResult.getValidationResult());
     }
     return TransactionSelectionResult.CONTINUE;
+  }
+
+  private boolean transactionDataPriceBelowMin(final Transaction transaction) {
+    if(feeMarket.implementsBaseFee()) {
+      if(transaction.getMaxFeePerDataGas().orElseThrow().lessThan(
+      feeMarket.getTransactionPriceCalculator().dataPrice(transaction, processableBlockHeader))) {
+        return true;
+      }
+    }
+    return false;
   }
 
   private boolean transactionCurrentPriceBelowMin(final Transaction transaction) {
@@ -431,8 +328,10 @@ public class BlockTransactionSelector {
         transaction.isGoQuorumPrivateTransaction(
             transactionProcessor.getTransactionValidator().getGoQuorumCompatibilityMode());
 
+    final long dataGasUsed = gasCalculator.dataGasCost(transaction.getBlobCount());
+
     final long gasUsedByTransaction =
-        isGoQuorumPrivateTransaction ? 0 : transaction.getGasLimit() - result.getGasRemaining();
+        isGoQuorumPrivateTransaction ? 0 : transaction.getGasLimit() + dataGasUsed - result.getGasRemaining();
 
     final long cumulativeGasUsed =
         transactionSelectionResult.getCumulativeGasUsed() + gasUsedByTransaction;
@@ -441,7 +340,7 @@ public class BlockTransactionSelector {
         transaction,
         transactionReceiptFactory.create(
             transaction.getType(), result, worldState, cumulativeGasUsed),
-        gasUsedByTransaction);
+        gasUsedByTransaction, dataGasUsed);
   }
 
   private boolean isIncorrectNonce(final ValidationResult<TransactionInvalidReason> result) {
@@ -459,8 +358,13 @@ public class BlockTransactionSelector {
   }
 
   private boolean transactionTooLargeForBlock(final Transaction transaction) {
+    final var dataGasUsed = gasCalculator.dataGasCost(transaction.getBlobCount());
 
-    return transaction.getGasLimit()
+    if(dataGasUsed > gasCalculator.getDataGasLimit() - transactionSelectionResult.getCumulativeDataGasUsed()) {
+      return true;
+    }
+
+    return transaction.getGasLimit() + dataGasUsed
         > processableBlockHeader.getGasLimit() - transactionSelectionResult.getCumulativeGasUsed();
   }
 
@@ -476,4 +380,133 @@ public class BlockTransactionSelector {
         occupancyRatio);
     return occupancyRatio >= minBlockOccupancyRatio;
   }
+
+  public static class TransactionValidationResult {
+    private final Transaction transaction;
+    private final ValidationResult<TransactionInvalidReason> validationResult;
+
+    public TransactionValidationResult(
+            final Transaction transaction,
+            final ValidationResult<TransactionInvalidReason> validationResult) {
+      this.transaction = transaction;
+      this.validationResult = validationResult;
+    }
+
+    public Transaction getTransaction() {
+      return transaction;
+    }
+
+    public ValidationResult<TransactionInvalidReason> getValidationResult() {
+      return validationResult;
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      TransactionValidationResult that = (TransactionValidationResult) o;
+      return Objects.equals(transaction, that.transaction)
+              && Objects.equals(validationResult, that.validationResult);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(transaction, validationResult);
+    }
+  }
+
+  public static class TransactionSelectionResults {
+
+    private final Map<TransactionType, List<Transaction>> transactionsByType = new HashMap<>();
+    private final List<TransactionReceipt> receipts = Lists.newArrayList();
+    private final List<TransactionValidationResult> invalidTransactions = Lists.newArrayList();
+    private long cumulativeGasUsed = 0;
+    private long cumulativeDataGasUsed = 0;
+
+    private void update(
+            final Transaction transaction, final TransactionReceipt receipt, final long gasUsed, final long dataGasUsed) {
+      transactionsByType
+              .computeIfAbsent(transaction.getType(), type -> new ArrayList<>())
+              .add(transaction);
+      receipts.add(receipt);
+      cumulativeGasUsed += gasUsed;
+      cumulativeDataGasUsed += dataGasUsed;
+      traceLambda(
+              LOG,
+              "New selected transaction {}, total transactions {}, cumulative gas used {}, cumulative data gas used {}",
+              transaction::toTraceLog,
+              () -> transactionsByType.values().stream().mapToInt(List::size).sum(),
+              () -> cumulativeGasUsed, () -> cumulativeDataGasUsed);
+    }
+
+    private void updateWithInvalidTransaction(
+            final Transaction transaction,
+            final ValidationResult<TransactionInvalidReason> validationResult) {
+      invalidTransactions.add(new TransactionValidationResult(transaction, validationResult));
+    }
+
+    public List<Transaction> getTransactions() {
+      return streamAllTransactions().collect(Collectors.toList());
+    }
+
+    public List<Transaction> getTransactionsByType(final TransactionType type) {
+      return transactionsByType.getOrDefault(type, List.of());
+    }
+
+    public List<TransactionReceipt> getReceipts() {
+      return receipts;
+    }
+
+    public long getCumulativeGasUsed() {
+      return cumulativeGasUsed;
+    }
+
+    public long getCumulativeDataGasUsed() {
+      return cumulativeDataGasUsed;
+    }
+
+
+    public List<TransactionValidationResult> getInvalidTransactions() {
+      return invalidTransactions;
+    }
+
+    private Stream<Transaction> streamAllTransactions() {
+      return transactionsByType.values().stream().flatMap(List::stream);
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+      TransactionSelectionResults that = (TransactionSelectionResults) o;
+      return cumulativeGasUsed == that.cumulativeGasUsed
+              && cumulativeDataGasUsed == that.cumulativeDataGasUsed
+              && transactionsByType.equals(that.transactionsByType)
+              && receipts.equals(that.receipts)
+              && invalidTransactions.equals(that.invalidTransactions);
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(transactionsByType, receipts, invalidTransactions, cumulativeGasUsed, cumulativeDataGasUsed);
+    }
+
+    public String toTraceLog() {
+      return "cumulativeGasUsed="
+              + cumulativeGasUsed
+              + ", cumulativeDataGasUsed="
+              + cumulativeDataGasUsed
+              + ", transactions="
+              + streamAllTransactions().map(Transaction::toTraceLog).collect(Collectors.joining("; "));
+    }
+  }
+
 }

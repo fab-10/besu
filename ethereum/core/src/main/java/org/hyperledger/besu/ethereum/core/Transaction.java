@@ -473,13 +473,8 @@ public class Transaction
     return gasLimit;
   }
 
-  /**
-   * Returns the total data gas used.
-   *
-   * @return optionally the total data gas used if this transaction if it supports blobs or nothing
-   */
-  public int getTotalDataGas(final int dataGasPerBlob) {
-    return dataGasPerBlob * versionedHashes.map(List::size).orElseThrow();
+  public int getBlobCount() {
+    return versionedHashes.orElseThrow().size();
   }
 
   /**
@@ -712,13 +707,12 @@ public class Transaction
    * @param dataGasPrice the data gas price to use
    * @return the up-front cost for the gas the transaction can use.
    */
-  public Wei getUpfrontGasCost(
-      final Wei gasPrice, final Wei dataGasPrice, final int dataGasPerBlock) {
+  public Wei getUpfrontGasCost(final Wei gasPrice, final Wei dataGasPrice, final int totalDataGas) {
     if (gasPrice == null || gasPrice.isZero()) {
       return Wei.ZERO;
     }
 
-    final var cost = calculateUpfrontGasCost(gasPrice, dataGasPrice, dataGasPerBlock);
+    final var cost = calculateUpfrontGasCost(gasPrice, dataGasPrice, totalDataGas);
 
     if (cost.bitLength() > 256) {
       return Wei.MAX_WEI;
@@ -727,17 +721,20 @@ public class Transaction
     }
   }
 
-  public BigInteger calculateUpfrontGasCost(
-      final Wei gasPrice, final Wei dataGasPrice, final int dataGasPerBlock) {
+  public boolean upfrontGasCostTooHigh(final int totalDataGas) {
+    return calculateUpfrontGasCost(
+                getMaxGasPrice(), getMaxFeePerDataGas().orElse(Wei.ZERO), totalDataGas)
+            .bitLength()
+        > 256;
+  }
+
+  private BigInteger calculateUpfrontGasCost(
+      final Wei gasPrice, final Wei dataGasPrice, final int totalDataGas) {
     var cost =
         new BigInteger(1, Longs.toByteArray(getGasLimit())).multiply(gasPrice.getAsBigInteger());
 
     if (transactionType.supportsBlob()) {
-      cost =
-          cost.add(
-              dataGasPrice
-                  .getAsBigInteger()
-                  .multiply(BigInteger.valueOf(getTotalDataGas(dataGasPerBlock))));
+      cost = cost.add(dataGasPrice.getAsBigInteger().multiply(BigInteger.valueOf(totalDataGas)));
     }
 
     return cost;
@@ -752,8 +749,8 @@ public class Transaction
    *
    * @return the up-front gas cost for the transaction
    */
-  public Wei getUpfrontCost(final int dataGasPerBlock) {
-    return getMaxUpfrontGasCost(dataGasPerBlock).addExact(getValue());
+  public Wei getUpfrontCost(final int totalDataGas) {
+    return getMaxUpfrontGasCost(totalDataGas).addExact(getValue());
   }
 
   public Wei getMaxGasPrice() {

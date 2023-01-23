@@ -255,7 +255,7 @@ public abstract class AbstractBlockTransactionSelectorTest {
             0.8,
             this::isCancelled,
             miningBeneficiary,
-            FeeMarket.london(0L));
+            FeeMarket.london(0L), protocolSpec.getGasCalculator());
 
     // this should fill up all the block space
     final Transaction fillingLegacyTx =
@@ -452,7 +452,7 @@ public abstract class AbstractBlockTransactionSelectorTest {
             0.8,
             this::isCancelled,
             miningBeneficiary,
-            getFeeMarket());
+            getFeeMarket(), protocolSpec.getGasCalculator());
     return selector;
   }
 

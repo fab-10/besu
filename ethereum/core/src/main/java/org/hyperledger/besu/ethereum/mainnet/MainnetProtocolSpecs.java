@@ -84,9 +84,8 @@ public abstract class MainnetProtocolSpecs {
   public static final int SPURIOUS_DRAGON_CONTRACT_SIZE_LIMIT = 24576;
   public static final int SHANGHAI_INIT_CODE_SIZE_LIMIT = 2 * SPURIOUS_DRAGON_CONTRACT_SIZE_LIMIT;
 
-  public static final int CANCUN_DATA_GAS_PER_BLOB = 131072; // 2^17
-  public static final int CANCUN_TARGET_DATA_GAS_PER_BLOCK = 262144; // 2^18
-  public static final int CANCUN_MAX_DATA_GAS_PER_BLOCK = 524288; // 2^19
+  private static final int CANCUN_MIN_DATA_GAS_PRICE = 1;
+  private static final int CANCUN_DATA_GAS_PRICE_UPDATE_FRACTION = 2225652;
 
   private static final Address RIPEMD160_PRECOMPILE =
       Address.fromHexString("0x0000000000000000000000000000000000000003");
@@ -731,8 +730,8 @@ public abstract class MainnetProtocolSpecs {
             : FeeMarket.cancun(
                 londonForkBlockNumber,
                 genesisConfigOptions.getBaseFeePerGas(),
-                CANCUN_DATA_GAS_PER_BLOB,
-                CANCUN_TARGET_DATA_GAS_PER_BLOCK);
+                CANCUN_MIN_DATA_GAS_PRICE,
+                CANCUN_DATA_GAS_PRICE_UPDATE_FRACTION);
 
     return shanghaiDefinition(
             chainId,
@@ -773,8 +772,7 @@ public abstract class MainnetProtocolSpecs {
                         TransactionType.ACCESS_LIST,
                         TransactionType.EIP1559),
                     quorumCompatibilityMode,
-                    SHANGHAI_INIT_CODE_SIZE_LIMIT,
-                    CANCUN_MAX_DATA_GAS_PER_BLOCK))
+                    SHANGHAI_INIT_CODE_SIZE_LIMIT))
         .name("Cancun");
   }
 

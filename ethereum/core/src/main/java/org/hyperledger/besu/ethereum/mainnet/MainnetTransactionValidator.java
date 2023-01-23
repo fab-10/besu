@@ -23,7 +23,6 @@ import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionFilter;
-import org.hyperledger.besu.ethereum.mainnet.feemarket.DataFeeMarket;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.account.Account;
@@ -54,7 +53,6 @@ public class MainnetTransactionValidator {
   private final boolean goQuorumCompatibilityMode;
 
   private final int maxInitcodeSize;
-  private final int maxDataGasPerBlock;
 
   public MainnetTransactionValidator(
       final GasCalculator gasCalculator,
@@ -93,26 +91,6 @@ public class MainnetTransactionValidator {
       final Set<TransactionType> acceptedTransactionTypes,
       final boolean goQuorumCompatibilityMode,
       final int maxInitcodeSize) {
-    this(
-        gasCalculator,
-        feeMarket,
-        checkSignatureMalleability,
-        chainId,
-        acceptedTransactionTypes,
-        goQuorumCompatibilityMode,
-        maxInitcodeSize,
-        0);
-  }
-
-  public MainnetTransactionValidator(
-      final GasCalculator gasCalculator,
-      final FeeMarket feeMarket,
-      final boolean checkSignatureMalleability,
-      final Optional<BigInteger> chainId,
-      final Set<TransactionType> acceptedTransactionTypes,
-      final boolean goQuorumCompatibilityMode,
-      final int maxInitcodeSize,
-      final int maxDataGasPerBlock) {
     this.gasCalculator = gasCalculator;
     this.feeMarket = feeMarket;
     this.disallowSignatureMalleability = checkSignatureMalleability;
@@ -120,7 +98,6 @@ public class MainnetTransactionValidator {
     this.acceptedTransactionTypes = acceptedTransactionTypes;
     this.goQuorumCompatibilityMode = goQuorumCompatibilityMode;
     this.maxInitcodeSize = maxInitcodeSize;
-    this.maxDataGasPerBlock = maxDataGasPerBlock;
   }
 
   /**
@@ -166,14 +143,13 @@ public class MainnetTransactionValidator {
     }
 
     if (transaction.getType().supportsBlob()) {
-      final DataFeeMarket dataFeeMarket = (DataFeeMarket) feeMarket;
-      final int txTotalDataGas = transaction.getTotalDataGas(dataFeeMarket.getDataGasPerBlock());
-      if (txTotalDataGas > maxDataGasPerBlock) {
+      final long txTotalDataGas = gasCalculator.dataGasCost(transaction.getBlobCount());
+      if (txTotalDataGas > gasCalculator.getDataGasLimit()) {
         return ValidationResult.invalid(
             TransactionInvalidReason.TOTAL_DATA_GAS_TOO_HIGH,
             String.format(
                 "total data gas %d exceeds max data gas per block %d",
-                txTotalDataGas, maxDataGasPerBlock));
+                txTotalDataGas, gasCalculator.getDataGasLimit()));
       }
     }
 
@@ -220,13 +196,7 @@ public class MainnetTransactionValidator {
           TransactionInvalidReason.NONCE_OVERFLOW, "Nonce must be less than 2^64-1");
     }
 
-    if (transaction
-            .calculateUpfrontGasCost(
-                transaction.getMaxGasPrice(),
-                transaction.getMaxFeePerDataGas().orElse(Wei.ZERO),
-                feeMarket.getDataGasPerBlock())
-            .bitLength()
-        > 256) {
+    if (transaction.upfrontGasCostTooHigh(gasCalculator.dataGasCost(transaction.getBlobCount()))) {
       return ValidationResult.invalid(
           TransactionInvalidReason.UPFRONT_FEE_TOO_HIGH, "Upfront fee must be less than 2^256");
     }
@@ -260,7 +230,8 @@ public class MainnetTransactionValidator {
       if (sender.getCodeHash() != null) codeHash = sender.getCodeHash();
     }
 
-    final Wei upfrontCost = transaction.getUpfrontCost(feeMarket.getDataGasPerBlock());
+    final Wei upfrontCost =
+        transaction.getUpfrontCost(gasCalculator.dataGasCost(transaction.getBlobCount()));
     if (upfrontCost.compareTo(senderBalance) > 0) {
       return ValidationResult.invalid(
           TransactionInvalidReason.UPFRONT_COST_EXCEEDS_BALANCE,

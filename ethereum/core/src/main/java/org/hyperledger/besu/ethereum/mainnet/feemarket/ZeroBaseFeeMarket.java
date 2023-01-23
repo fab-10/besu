@@ -14,12 +14,11 @@
  */
 package org.hyperledger.besu.ethereum.mainnet.feemarket;
 
-import org.hyperledger.besu.datatypes.DataGas;
 import org.hyperledger.besu.datatypes.Wei;
 
 import java.util.Optional;
 
-public class ZeroBaseFeeMarket extends LondonFeeMarket implements DataFeeMarket {
+public class ZeroBaseFeeMarket extends LondonFeeMarket {
 
   public ZeroBaseFeeMarket(final long londonForkBlockNumber) {
     super(londonForkBlockNumber, Optional.of(Wei.ZERO));
@@ -43,11 +42,5 @@ public class ZeroBaseFeeMarket extends LondonFeeMarket implements DataFeeMarket 
   @Override
   public boolean implementsDataFee() {
     return true;
-  }
-
-  @Override
-  public DataGas computeExcessDataGas(
-      final long blockNumber, final DataGas parentExcessDataGas, final int newBlobs) {
-    return DataGas.ZERO;
   }
 }

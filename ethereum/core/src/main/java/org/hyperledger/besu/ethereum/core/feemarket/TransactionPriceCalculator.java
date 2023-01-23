@@ -26,9 +26,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public interface TransactionPriceCalculator {
-  BigInteger MIN_DATA_GAS_PRICE = BigInteger.ONE;
-  BigInteger DATA_GAS_PRICE_UPDATE_FRACTION = BigInteger.valueOf(2225652L);
-
   Wei price(Transaction transaction, ProcessableBlockHeader blockHeader);
 
   default Wei dataPrice(final Transaction transaction, final ProcessableBlockHeader blockHeader) {
@@ -64,8 +61,15 @@ public interface TransactionPriceCalculator {
     }
   }
 
-  class EIP4844 extends EIP1559 {
-    private static final Logger LOG = LoggerFactory.getLogger(EIP4844.class);
+  class DataBlob extends EIP1559 {
+    private static final Logger LOG = LoggerFactory.getLogger(DataBlob.class);
+    private final BigInteger minDataGasPrice;
+    private final BigInteger dataGasPriceUpdateFraction;
+
+    public DataBlob(final int minDataGasPrice, final int dataGasPriceUpdateFraction) {
+      this.minDataGasPrice = BigInteger.valueOf(minDataGasPrice);
+      this.dataGasPriceUpdateFraction = BigInteger.valueOf(dataGasPriceUpdateFraction);
+    }
 
     @Override
     public Wei dataPrice(final Transaction transaction, final ProcessableBlockHeader blockHeader) {
@@ -74,9 +78,7 @@ public interface TransactionPriceCalculator {
       final var dataGasPrice =
           Wei.of(
               fakeExponential(
-                  MIN_DATA_GAS_PRICE,
-                  excessDataGas.toBigInteger(),
-                  DATA_GAS_PRICE_UPDATE_FRACTION));
+                  minDataGasPrice, excessDataGas.toBigInteger(), dataGasPriceUpdateFraction));
       traceLambda(
           LOG,
           "block #{} parentExcessDataGas: {} dataGasPrice: {}",
