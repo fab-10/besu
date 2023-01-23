@@ -14,20 +14,18 @@
  */
 package org.hyperledger.besu.ethereum.core.feemarket;
 
+import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
+
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
-import org.hyperledger.besu.ethereum.mainnet.feemarket.LondonFeeMarket;
-import org.hyperledger.besu.util.Slf4jLambdaHelper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.math.BigInteger;
 
-import static org.hyperledger.besu.util.Slf4jLambdaHelper.traceLambda;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public interface TransactionPriceCalculator {
-  Logger LOG = LoggerFactory.getLogger(TransactionPriceCalculator.class);
   BigInteger MIN_DATA_GAS_PRICE = BigInteger.ONE;
   BigInteger DATA_GAS_PRICE_UPDATE_FRACTION = BigInteger.valueOf(2225652L);
 
@@ -38,71 +36,69 @@ public interface TransactionPriceCalculator {
   }
 
   class Frontier implements TransactionPriceCalculator {
-      @Override
-      public Wei price(final Transaction transaction, final ProcessableBlockHeader blockHeader) {
-        return transaction.getGasPrice().orElse(Wei.ZERO);
-      }
-
-      @Override
-      public Wei dataPrice(
-          final Transaction transaction, final ProcessableBlockHeader blockHeader) {
-        return Wei.ZERO;
-      }
+    @Override
+    public Wei price(final Transaction transaction, final ProcessableBlockHeader blockHeader) {
+      return transaction.getGasPrice().orElse(Wei.ZERO);
     }
 
+    @Override
+    public Wei dataPrice(final Transaction transaction, final ProcessableBlockHeader blockHeader) {
+      return Wei.ZERO;
+    }
+  }
 
   class EIP1559 implements TransactionPriceCalculator {
-      @Override
-      public Wei price(Transaction transaction, ProcessableBlockHeader blockHeader) {
-        final Wei baseFee = blockHeader.getBaseFee().orElseThrow();
-        if (!transaction.getType().supports1559FeeMarket()) {
-          return transaction.getGasPrice().orElse(Wei.ZERO);
-        }
-        final Wei maxPriorityFeePerGas = transaction.getMaxPriorityFeePerGas().orElseThrow();
-        final Wei maxFeePerGas = transaction.getMaxFeePerGas().orElseThrow();
-        Wei price = maxPriorityFeePerGas.add(baseFee);
-        if (price.compareTo(maxFeePerGas) > 0) {
-          price = maxFeePerGas;
-        }
-        return price;
+    @Override
+    public Wei price(final Transaction transaction, final ProcessableBlockHeader blockHeader) {
+      final Wei baseFee = blockHeader.getBaseFee().orElseThrow();
+      if (!transaction.getType().supports1559FeeMarket()) {
+        return transaction.getGasPrice().orElse(Wei.ZERO);
       }
+      final Wei maxPriorityFeePerGas = transaction.getMaxPriorityFeePerGas().orElseThrow();
+      final Wei maxFeePerGas = transaction.getMaxFeePerGas().orElseThrow();
+      Wei price = maxPriorityFeePerGas.add(baseFee);
+      if (price.compareTo(maxFeePerGas) > 0) {
+        price = maxFeePerGas;
+      }
+      return price;
     }
-
+  }
 
   class EIP4844 extends EIP1559 {
     private static final Logger LOG = LoggerFactory.getLogger(EIP4844.class);
-      @Override
-      public Wei dataPrice(Transaction transaction, ProcessableBlockHeader blockHeader) {
-        final var excessDataGas = blockHeader.getExcessDataGas().orElseThrow();
 
-        final var dataGasPrice =
-                Wei.of(
-                        fakeExponential(
-                                MIN_DATA_GAS_PRICE,
-                                excessDataGas.toBigInteger(),
-                                DATA_GAS_PRICE_UPDATE_FRACTION));
-        traceLambda(LOG,
-                "block #{} parentExcessDataGas: {} dataGasPrice: {}",
-                blockHeader::getNumber,
-                excessDataGas::toShortHexString,
-                dataGasPrice::toHexString);
+    @Override
+    public Wei dataPrice(final Transaction transaction, final ProcessableBlockHeader blockHeader) {
+      final var excessDataGas = blockHeader.getExcessDataGas().orElseThrow();
 
-        return dataGasPrice;
+      final var dataGasPrice =
+          Wei.of(
+              fakeExponential(
+                  MIN_DATA_GAS_PRICE,
+                  excessDataGas.toBigInteger(),
+                  DATA_GAS_PRICE_UPDATE_FRACTION));
+      traceLambda(
+          LOG,
+          "block #{} parentExcessDataGas: {} dataGasPrice: {}",
+          blockHeader::getNumber,
+          excessDataGas::toShortHexString,
+          dataGasPrice::toHexString);
+
+      return dataGasPrice;
+    }
+
+    private BigInteger fakeExponential(
+        final BigInteger factor, final BigInteger numerator, final BigInteger denominator) {
+      BigInteger i = BigInteger.ONE;
+      BigInteger output = BigInteger.ZERO;
+      BigInteger numeratorAccumulator = factor.multiply(denominator);
+      while (numeratorAccumulator.compareTo(BigInteger.ZERO) > 0) {
+        output = output.add(numeratorAccumulator);
+        numeratorAccumulator =
+            (numeratorAccumulator.multiply(numerator)).divide(denominator.multiply(i));
+        i = i.add(BigInteger.ONE);
       }
-
-      private BigInteger fakeExponential(
-              final BigInteger factor, final BigInteger numerator, final BigInteger denominator) {
-        BigInteger i = BigInteger.ONE;
-        BigInteger output = BigInteger.ZERO;
-        BigInteger numeratorAccumulator = factor.multiply(denominator);
-        while (numeratorAccumulator.compareTo(BigInteger.ZERO) > 0) {
-          output = output.add(numeratorAccumulator);
-          numeratorAccumulator =
-                  (numeratorAccumulator.multiply(numerator)).divide(denominator.multiply(i));
-          i.add(BigInteger.ONE);
-        }
-        return output.divide(denominator);
-      }
+      return output.divide(denominator);
+    }
   }
-
 }

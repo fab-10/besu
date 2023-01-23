@@ -14,7 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.mainnet.feemarket;
 
-import org.hyperledger.besu.datatypes.DataGas;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 
@@ -53,8 +52,6 @@ public interface BaseFeeMarket extends FeeMarket {
       final Wei parentBaseFee,
       final long parentBlockGasUsed,
       final long targetGasUsed);
-
-  Wei computeDataGasPrice(long blockNumber, DataGas parentExcessDataGas);
 
   ValidationMode baseFeeValidationMode(final long blockNumber);
 

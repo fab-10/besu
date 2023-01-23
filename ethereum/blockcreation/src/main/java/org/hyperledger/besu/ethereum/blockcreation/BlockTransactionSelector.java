@@ -36,13 +36,18 @@ import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.ethereum.vm.BlockHashLookup;
 import org.hyperledger.besu.evm.account.EvmAccount;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
+import org.hyperledger.besu.plugin.data.TransactionType;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CancellationException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import com.google.common.collect.Lists;
 import org.apache.tuweni.bytes.Bytes;
@@ -115,21 +120,23 @@ public class BlockTransactionSelector {
 
   public static class TransactionSelectionResults {
 
-    private final List<Transaction> transactions = Lists.newArrayList();
+    private final Map<TransactionType, List<Transaction>> transactionsByType = new HashMap<>();
     private final List<TransactionReceipt> receipts = Lists.newArrayList();
     private final List<TransactionValidationResult> invalidTransactions = Lists.newArrayList();
     private long cumulativeGasUsed = 0;
 
     private void update(
         final Transaction transaction, final TransactionReceipt receipt, final long gasUsed) {
-      transactions.add(transaction);
+      transactionsByType
+          .computeIfAbsent(transaction.getType(), type -> new ArrayList<>())
+          .add(transaction);
       receipts.add(receipt);
       cumulativeGasUsed += gasUsed;
       traceLambda(
           LOG,
           "New selected transaction {}, total transactions {}, cumulative gas used {}",
           transaction::toTraceLog,
-          transactions::size,
+          () -> transactionsByType.values().stream().mapToInt(List::size).sum(),
           () -> cumulativeGasUsed);
     }
 
@@ -140,7 +147,11 @@ public class BlockTransactionSelector {
     }
 
     public List<Transaction> getTransactions() {
-      return transactions;
+      return streamAllTransactions().collect(Collectors.toList());
+    }
+
+    public List<Transaction> getTransactionsByType(final TransactionType type) {
+      return transactionsByType.getOrDefault(type, List.of());
     }
 
     public List<TransactionReceipt> getReceipts() {
@@ -155,6 +166,10 @@ public class BlockTransactionSelector {
       return invalidTransactions;
     }
 
+    private Stream<Transaction> streamAllTransactions() {
+      return transactionsByType.values().stream().flatMap(List::stream);
+    }
+
     @Override
     public boolean equals(final Object o) {
       if (this == o) {
@@ -165,21 +180,21 @@ public class BlockTransactionSelector {
       }
       TransactionSelectionResults that = (TransactionSelectionResults) o;
       return cumulativeGasUsed == that.cumulativeGasUsed
-          && transactions.equals(that.transactions)
+          && transactionsByType.equals(that.transactionsByType)
           && receipts.equals(that.receipts)
           && invalidTransactions.equals(that.invalidTransactions);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(transactions, receipts, invalidTransactions, cumulativeGasUsed);
+      return Objects.hash(transactionsByType, receipts, invalidTransactions, cumulativeGasUsed);
     }
 
     public String toTraceLog() {
       return "cumulativeGasUsed="
           + cumulativeGasUsed
           + ", transactions="
-          + transactions.stream().map(Transaction::toTraceLog).collect(Collectors.joining("; "));
+          + streamAllTransactions().map(Transaction::toTraceLog).collect(Collectors.joining("; "));
     }
   }
 

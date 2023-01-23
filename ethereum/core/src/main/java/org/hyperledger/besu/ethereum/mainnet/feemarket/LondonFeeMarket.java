@@ -15,12 +15,10 @@
 package org.hyperledger.besu.ethereum.mainnet.feemarket;
 
 import org.hyperledger.besu.config.GenesisConfigFile;
-import org.hyperledger.besu.datatypes.DataGas;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.feemarket.TransactionPriceCalculator;
 
-import java.math.BigInteger;
 import java.util.Optional;
 
 import org.apache.tuweni.units.bigints.UInt256s;
@@ -48,7 +46,7 @@ public class LondonFeeMarket implements BaseFeeMarket {
 
   public LondonFeeMarket(
       final long londonForkBlockNumber, final Optional<Wei> baseFeePerGasOverride) {
-    this.txPriceCalculator = TransactionPriceCalculator.eip1559();
+    this.txPriceCalculator = new TransactionPriceCalculator.EIP1559();
     this.londonForkBlockNumber = londonForkBlockNumber;
     this.baseFeeInitialValue = baseFeePerGasOverride.orElse(DEFAULT_BASEFEE_INITIAL_VALUE);
     this.baseFeeFloor = baseFeeInitialValue.isZero() ? Wei.ZERO : DEFAULT_BASEFEE_FLOOR;
@@ -122,23 +120,6 @@ public class LondonFeeMarket implements BaseFeeMarket {
   }
 
   @Override
-  public Wei computeDataGasPrice(final long blockNumber, final DataGas parentExcessDataGas) {
-    final var dataGasPrice =
-        Wei.of(
-            fakeExponential(
-                MIN_DATA_GAS_PRICE,
-                parentExcessDataGas.toBigInteger(),
-                DATA_GAS_PRICE_UPDATE_FRACTION));
-    LOG.trace(
-        "block #{} parentExcessDataGas: {} dataGasPrice: {}",
-        blockNumber,
-        parentExcessDataGas,
-        dataGasPrice);
-
-    return dataGasPrice;
-  }
-
-  @Override
   public ValidationMode baseFeeValidationMode(final long blockNumber) {
     return londonForkBlockNumber == blockNumber ? ValidationMode.INITIAL : ValidationMode.ONGOING;
   }
@@ -151,19 +132,5 @@ public class LondonFeeMarket implements BaseFeeMarket {
   @Override
   public boolean isBeforeForkBlock(final long blockNumber) {
     return londonForkBlockNumber > blockNumber;
-  }
-
-  private BigInteger fakeExponential(
-      final BigInteger factor, final BigInteger numerator, final BigInteger denominator) {
-    BigInteger i = BigInteger.ONE;
-    BigInteger output = BigInteger.ZERO;
-    BigInteger numeratorAccumulator = factor.multiply(denominator);
-    while (numeratorAccumulator.compareTo(BigInteger.ZERO) > 0) {
-      output = output.add(numeratorAccumulator);
-      numeratorAccumulator =
-          (numeratorAccumulator.multiply(numerator)).divide(denominator.multiply(i));
-      i.add(BigInteger.ONE);
-    }
-    return output.divide(denominator);
   }
 }

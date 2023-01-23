@@ -1,5 +1,5 @@
 /*
- * Copyright contributors to Hyperledger Besu.
+ * Copyright ConsenSys AG.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -12,20 +12,10 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-package org.hyperledger.besu.evm.gascalculator;
+package org.hyperledger.besu.ethereum.mainnet.feemarket;
 
-import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.datatypes.DataGas;
 
-/** The Cancun gas calculator. */
-public class CancunGasCalculator extends LondonGasCalculator {
-
-  @Override
-  public int getDataGasPerBlob() {
-    return super.getDataGasPerBlob();
-  }
-
-  @Override
-  public Wei dataGasCost(final int totalDataGas, final Wei dataGasPrice) {
-    return dataGasPrice.multiply(totalDataGas);
-  }
+public interface DataFeeMarket extends BaseFeeMarket {
+  DataGas computeExcessDataGas(long blockNumber, DataGas parentExcessDataGas, int newBlobs);
 }

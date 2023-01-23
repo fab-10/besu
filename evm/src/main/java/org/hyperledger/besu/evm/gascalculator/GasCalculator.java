@@ -491,4 +491,8 @@ public interface GasCalculator {
   default Wei dataGasCost(final int totalDataGas, final Wei dataGasPrice) {
     return Wei.ZERO;
   }
+
+  default int getDataGasPerBlob() {
+    return 0;
+  }
 }

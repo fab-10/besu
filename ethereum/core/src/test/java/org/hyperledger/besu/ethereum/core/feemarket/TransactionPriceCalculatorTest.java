@@ -40,9 +40,9 @@ import org.junit.runners.Parameterized;
 public class TransactionPriceCalculatorTest {
 
   private static final TransactionPriceCalculator FRONTIER_CALCULATOR =
-      TransactionPriceCalculator.frontier();
+      new TransactionPriceCalculator.Frontier();
   private static final TransactionPriceCalculator EIP_1559_CALCULATOR =
-      TransactionPriceCalculator.eip1559();
+      new TransactionPriceCalculator.EIP1559();
 
   private final TransactionPriceCalculator transactionPriceCalculator;
   private final TransactionType transactionType;

@@ -738,7 +738,8 @@ public class Transaction
   }
 
   private BigInteger calculateUpfrontGasCost(final Wei gasPrice, final Wei dataGasPrice) {
-    var cost = new BigInteger(1, Longs.toByteArray(getGasLimit())).multiply(gasPrice.getAsBigInteger());
+    var cost =
+        new BigInteger(1, Longs.toByteArray(getGasLimit())).multiply(gasPrice.getAsBigInteger());
 
     if (transactionType.supportsBlob()) {
       cost =

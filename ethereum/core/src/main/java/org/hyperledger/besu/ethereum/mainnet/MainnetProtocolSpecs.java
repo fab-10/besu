@@ -45,6 +45,7 @@ import org.hyperledger.besu.evm.contractvalidation.PrefixCodeRule;
 import org.hyperledger.besu.evm.frame.MessageFrame;
 import org.hyperledger.besu.evm.gascalculator.BerlinGasCalculator;
 import org.hyperledger.besu.evm.gascalculator.ByzantiumGasCalculator;
+import org.hyperledger.besu.evm.gascalculator.CancunGasCalculator;
 import org.hyperledger.besu.evm.gascalculator.ConstantinopleGasCalculator;
 import org.hyperledger.besu.evm.gascalculator.FrontierGasCalculator;
 import org.hyperledger.besu.evm.gascalculator.HomesteadGasCalculator;
@@ -83,7 +84,9 @@ public abstract class MainnetProtocolSpecs {
   public static final int SPURIOUS_DRAGON_CONTRACT_SIZE_LIMIT = 24576;
   public static final int SHANGHAI_INIT_CODE_SIZE_LIMIT = 2 * SPURIOUS_DRAGON_CONTRACT_SIZE_LIMIT;
 
-  public static final int CANCUN_MAX_DATA_GAS_PER_BLOCK = 524288;
+  public static final int CANCUN_DATA_GAS_PER_BLOB = 131072; // 2^17
+  public static final int CANCUN_TARGET_DATA_GAS_PER_BLOCK = 262144; // 2^18
+  public static final int CANCUN_MAX_DATA_GAS_PER_BLOCK = 524288; // 2^19
 
   private static final Address RIPEMD160_PRECOMPILE =
       Address.fromHexString("0x0000000000000000000000000000000000000003");
@@ -725,7 +728,11 @@ public abstract class MainnetProtocolSpecs {
     final BaseFeeMarket londonFeeMarket =
         genesisConfigOptions.isZeroBaseFee()
             ? FeeMarket.zeroBaseFee(londonForkBlockNumber)
-            : FeeMarket.london(londonForkBlockNumber, genesisConfigOptions.getBaseFeePerGas());
+            : FeeMarket.cancun(
+                londonForkBlockNumber,
+                genesisConfigOptions.getBaseFeePerGas(),
+                CANCUN_DATA_GAS_PER_BLOB,
+                CANCUN_TARGET_DATA_GAS_PER_BLOCK);
 
     return shanghaiDefinition(
             chainId,
@@ -735,6 +742,8 @@ public abstract class MainnetProtocolSpecs {
             genesisConfigOptions,
             quorumCompatibilityMode,
             evmConfiguration)
+        // gas calculator for EIP-4844 data gas
+        .gasCalculator(CancunGasCalculator::new)
         // EVM changes to support EOF EIPs (3670, 4200, 4750, 5450)
         .evmBuilder(
             (gasCalculator, jdCacheConfig) ->

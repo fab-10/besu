@@ -19,7 +19,7 @@ import org.hyperledger.besu.datatypes.Wei;
 
 import java.util.Optional;
 
-public class ZeroBaseFeeMarket extends LondonFeeMarket {
+public class ZeroBaseFeeMarket extends LondonFeeMarket implements DataFeeMarket {
 
   public ZeroBaseFeeMarket(final long londonForkBlockNumber) {
     super(londonForkBlockNumber, Optional.of(Wei.ZERO));
@@ -36,12 +36,18 @@ public class ZeroBaseFeeMarket extends LondonFeeMarket {
   }
 
   @Override
-  public Wei computeDataGasPrice(final long blockNumber, final DataGas parentExcessDataGas) {
-    return Wei.ZERO;
+  public ValidationMode baseFeeValidationMode(final long blockNumber) {
+    return ValidationMode.NONE;
   }
 
   @Override
-  public ValidationMode baseFeeValidationMode(final long blockNumber) {
-    return ValidationMode.NONE;
+  public boolean implementsDataFee() {
+    return true;
+  }
+
+  @Override
+  public DataGas computeExcessDataGas(
+      final long blockNumber, final DataGas parentExcessDataGas, final int newBlobs) {
+    return DataGas.ZERO;
   }
 }
