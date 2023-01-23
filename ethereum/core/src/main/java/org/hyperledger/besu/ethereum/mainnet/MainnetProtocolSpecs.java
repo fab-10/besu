@@ -773,6 +773,7 @@ public abstract class MainnetProtocolSpecs {
                         TransactionType.EIP1559),
                     quorumCompatibilityMode,
                     SHANGHAI_INIT_CODE_SIZE_LIMIT))
+        .precompileContractRegistryBuilder(MainnetPrecompiledContractRegistries::cancun)
         .name("Cancun");
   }
 
