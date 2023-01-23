@@ -23,6 +23,7 @@ import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionFilter;
+import org.hyperledger.besu.ethereum.mainnet.feemarket.DataFeeMarket;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.account.Account;
@@ -165,7 +166,8 @@ public class MainnetTransactionValidator {
     }
 
     if (transaction.getType().supportsBlob()) {
-      final int txTotalDataGas = transaction.getTotalDataGas().orElseThrow();
+      final DataFeeMarket dataFeeMarket = (DataFeeMarket) feeMarket;
+      final int txTotalDataGas = transaction.getTotalDataGas(dataFeeMarket.getDataGasPerBlock());
       if (txTotalDataGas > maxDataGasPerBlock) {
         return ValidationResult.invalid(
             TransactionInvalidReason.TOTAL_DATA_GAS_TOO_HIGH,
@@ -218,6 +220,17 @@ public class MainnetTransactionValidator {
           TransactionInvalidReason.NONCE_OVERFLOW, "Nonce must be less than 2^64-1");
     }
 
+    if (transaction
+            .calculateUpfrontGasCost(
+                transaction.getMaxGasPrice(),
+                transaction.getMaxFeePerDataGas().orElse(Wei.ZERO),
+                feeMarket.getDataGasPerBlock())
+            .bitLength()
+        > 256) {
+      return ValidationResult.invalid(
+          TransactionInvalidReason.UPFRONT_FEE_TOO_HIGH, "Upfront fee must be less than 2^256");
+    }
+
     final long intrinsicGasCost =
         gasCalculator.transactionIntrinsicGasCost(
                 transaction.getPayload(), transaction.isContractCreation())
@@ -247,12 +260,13 @@ public class MainnetTransactionValidator {
       if (sender.getCodeHash() != null) codeHash = sender.getCodeHash();
     }
 
-    if (transaction.getUpfrontCost().compareTo(senderBalance) > 0) {
+    final Wei upfrontCost = transaction.getUpfrontCost(feeMarket.getDataGasPerBlock());
+    if (upfrontCost.compareTo(senderBalance) > 0) {
       return ValidationResult.invalid(
           TransactionInvalidReason.UPFRONT_COST_EXCEEDS_BALANCE,
           String.format(
               "transaction up-front cost %s exceeds transaction sender account balance %s",
-              transaction.getUpfrontCost(), senderBalance));
+              upfrontCost, senderBalance));
     }
 
     if (transaction.getNonce() < senderNonce) {

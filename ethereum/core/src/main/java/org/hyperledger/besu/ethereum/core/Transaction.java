@@ -43,7 +43,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.OptionalInt;
 import java.util.stream.Collectors;
 
 import com.google.common.primitives.Longs;
@@ -72,8 +71,6 @@ public class Transaction
   public static final BigInteger REPLAY_PROTECTED_V_MIN = BigInteger.valueOf(36);
 
   public static final BigInteger TWO = BigInteger.valueOf(2);
-
-  public static final int DATA_GAS_PER_BLOB = 131072; // 2^17
 
   private final long nonce;
 
@@ -223,11 +220,6 @@ public class Transaction
     this.chainId = chainId;
     this.v = v;
     this.versionedHashes = versionedHashes;
-
-    final var upfrontCost = getMaxUpfrontGasCost();
-    if (upfrontCost.bitLength() > 256) {
-      throw new IllegalArgumentException("Upfront gas cost exceeds UInt256");
-    }
   }
 
   public Transaction(
@@ -486,12 +478,8 @@ public class Transaction
    *
    * @return optionally the total data gas used if this transaction if it supports blobs or nothing
    */
-  public OptionalInt getTotalDataGas() {
-    if (transactionType.supportsBlob()) {
-      return OptionalInt.of(DATA_GAS_PER_BLOB * versionedHashes.map(List::size).orElseThrow());
-    }
-
-    return OptionalInt.empty();
+  public int getTotalDataGas(final int dataGasPerBlob) {
+    return dataGasPerBlob * versionedHashes.map(List::size).orElseThrow();
   }
 
   /**
@@ -712,8 +700,9 @@ public class Transaction
    *
    * @return the up-front cost for the gas the transaction can use.
    */
-  private Wei getMaxUpfrontGasCost() {
-    return getUpfrontGasCost(getMaxGasPrice(), getMaxFeePerDataGas().orElse(Wei.ZERO));
+  private Wei getMaxUpfrontGasCost(final int dataGasPerBlock) {
+    return getUpfrontGasCost(
+        getMaxGasPrice(), getMaxFeePerDataGas().orElse(Wei.ZERO), dataGasPerBlock);
   }
 
   /**
@@ -723,12 +712,13 @@ public class Transaction
    * @param dataGasPrice the data gas price to use
    * @return the up-front cost for the gas the transaction can use.
    */
-  public Wei getUpfrontGasCost(final Wei gasPrice, final Wei dataGasPrice) {
+  public Wei getUpfrontGasCost(
+      final Wei gasPrice, final Wei dataGasPrice, final int dataGasPerBlock) {
     if (gasPrice == null || gasPrice.isZero()) {
       return Wei.ZERO;
     }
 
-    final var cost = calculateUpfrontGasCost(gasPrice, dataGasPrice);
+    final var cost = calculateUpfrontGasCost(gasPrice, dataGasPrice, dataGasPerBlock);
 
     if (cost.bitLength() > 256) {
       return Wei.MAX_WEI;
@@ -737,7 +727,8 @@ public class Transaction
     }
   }
 
-  private BigInteger calculateUpfrontGasCost(final Wei gasPrice, final Wei dataGasPrice) {
+  public BigInteger calculateUpfrontGasCost(
+      final Wei gasPrice, final Wei dataGasPrice, final int dataGasPerBlock) {
     var cost =
         new BigInteger(1, Longs.toByteArray(getGasLimit())).multiply(gasPrice.getAsBigInteger());
 
@@ -746,7 +737,7 @@ public class Transaction
           cost.add(
               dataGasPrice
                   .getAsBigInteger()
-                  .multiply(BigInteger.valueOf(getTotalDataGas().getAsInt())));
+                  .multiply(BigInteger.valueOf(getTotalDataGas(dataGasPerBlock))));
     }
 
     return cost;
@@ -761,8 +752,8 @@ public class Transaction
    *
    * @return the up-front gas cost for the transaction
    */
-  public Wei getUpfrontCost() {
-    return getMaxUpfrontGasCost().addExact(getValue());
+  public Wei getUpfrontCost(final int dataGasPerBlock) {
+    return getMaxUpfrontGasCost(dataGasPerBlock).addExact(getValue());
   }
 
   public Wei getMaxGasPrice() {

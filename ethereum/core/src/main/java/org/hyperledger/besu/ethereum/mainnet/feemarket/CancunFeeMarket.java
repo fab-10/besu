@@ -70,4 +70,9 @@ public class CancunFeeMarket extends LondonFeeMarket implements DataFeeMarket {
     }
     return currentExcessDataGas.add(targetDataGasPerBlock);
   }
+
+  @Override
+  public int getDataGasPerBlock() {
+    return dataGasPerBlob;
+  }
 }

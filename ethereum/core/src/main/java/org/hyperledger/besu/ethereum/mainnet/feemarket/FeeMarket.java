@@ -30,6 +30,10 @@ public interface FeeMarket {
     return false;
   }
 
+  default int getDataGasPerBlock() {
+    return 0;
+  }
+
   TransactionPriceCalculator getTransactionPriceCalculator();
 
   boolean satisfiesFloorTxFee(Transaction txn);

@@ -298,7 +298,9 @@ public class MainnetTransactionProcessor {
           previousNonce,
           sender.getNonce());
 
-      final Wei upfrontGasCost = transaction.getUpfrontGasCost(transactionGasPrice, dataGasPrice);
+      final Wei upfrontGasCost =
+          transaction.getUpfrontGasCost(
+              transactionGasPrice, dataGasPrice, feeMarket.getDataGasPerBlock());
       final Wei previousBalance = senderMutableAccount.decrementBalance(upfrontGasCost);
       LOG.trace(
           "Deducted sender {} upfront gas cost {} ({} -> {})",
