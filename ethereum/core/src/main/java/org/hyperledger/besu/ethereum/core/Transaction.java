@@ -701,6 +701,15 @@ public class Transaction
   }
 
   /**
+   * Check if the upfront gas cost is over the max allowed
+   *
+   * @return true is upfront data cost overflow uint256 max value
+   */
+  public boolean isUpfrontGasCostTooHigh() {
+    return calculateUpfrontGasCost(getMaxGasPrice()).bitLength() > 256;
+  }
+
+  /**
    * Calculates the up-front cost for the gas and data gas the transaction can use.
    *
    * @param gasPrice the gas price to use
@@ -719,13 +728,6 @@ public class Transaction
     } else {
       return Wei.of(cost);
     }
-  }
-
-  public boolean upfrontGasCostTooHigh(final int totalDataGas) {
-    return calculateUpfrontGasCost(
-                getMaxGasPrice(), getMaxFeePerDataGas().orElse(Wei.ZERO), totalDataGas)
-            .bitLength()
-        > 256;
   }
 
   private BigInteger calculateUpfrontGasCost(
@@ -753,6 +755,11 @@ public class Transaction
     return getMaxUpfrontGasCost(totalDataGas).addExact(getValue());
   }
 
+  /**
+   * Return the maximum fee per gas the sender is willing to pay for this transaction.
+   *
+   * @return max fee per gas in wei
+   */
   public Wei getMaxGasPrice() {
     return maxFeePerGas.orElseGet(
         () ->
