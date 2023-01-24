@@ -95,17 +95,18 @@ public class BlockTransactionSelector {
       new TransactionSelectionResults();
 
   public BlockTransactionSelector(
-          final MainnetTransactionProcessor transactionProcessor,
-          final Blockchain blockchain,
-          final MutableWorldState worldState,
-          final PendingTransactions pendingTransactions,
-          final ProcessableBlockHeader processableBlockHeader,
-          final AbstractBlockProcessor.TransactionReceiptFactory transactionReceiptFactory,
-          final Wei minTransactionGasPrice,
-          final Double minBlockOccupancyRatio,
-          final Supplier<Boolean> isCancelled,
-          final Address miningBeneficiary,
-          final FeeMarket feeMarket, final GasCalculator gasCalculator) {
+      final MainnetTransactionProcessor transactionProcessor,
+      final Blockchain blockchain,
+      final MutableWorldState worldState,
+      final PendingTransactions pendingTransactions,
+      final ProcessableBlockHeader processableBlockHeader,
+      final AbstractBlockProcessor.TransactionReceiptFactory transactionReceiptFactory,
+      final Wei minTransactionGasPrice,
+      final Double minBlockOccupancyRatio,
+      final Supplier<Boolean> isCancelled,
+      final Address miningBeneficiary,
+      final FeeMarket feeMarket,
+      final GasCalculator gasCalculator) {
     this.transactionProcessor = transactionProcessor;
     this.blockchain = blockchain;
     this.worldState = worldState;
@@ -176,7 +177,7 @@ public class BlockTransactionSelector {
     if (transactionCurrentPriceBelowMin(transaction)) {
       return TransactionSelectionResult.CONTINUE;
     }
-    if(transactionDataPriceBelowMin(transaction)) {
+    if (transactionDataPriceBelowMin(transaction)) {
       return TransactionSelectionResult.CONTINUE;
     }
 
@@ -233,9 +234,14 @@ public class BlockTransactionSelector {
   }
 
   private boolean transactionDataPriceBelowMin(final Transaction transaction) {
-    if(feeMarket.implementsBaseFee()) {
-      if(transaction.getMaxFeePerDataGas().orElseThrow().lessThan(
-      feeMarket.getTransactionPriceCalculator().dataPrice(transaction, processableBlockHeader))) {
+    if (feeMarket.implementsBaseFee()) {
+      if (transaction
+          .getMaxFeePerDataGas()
+          .orElseThrow()
+          .lessThan(
+              feeMarket
+                  .getTransactionPriceCalculator()
+                  .dataPrice(transaction, processableBlockHeader))) {
         return true;
       }
     }
@@ -331,7 +337,9 @@ public class BlockTransactionSelector {
     final long dataGasUsed = gasCalculator.dataGasCost(transaction.getBlobCount());
 
     final long gasUsedByTransaction =
-        isGoQuorumPrivateTransaction ? 0 : transaction.getGasLimit() + dataGasUsed - result.getGasRemaining();
+        isGoQuorumPrivateTransaction
+            ? 0
+            : transaction.getGasLimit() + dataGasUsed - result.getGasRemaining();
 
     final long cumulativeGasUsed =
         transactionSelectionResult.getCumulativeGasUsed() + gasUsedByTransaction;
@@ -340,7 +348,8 @@ public class BlockTransactionSelector {
         transaction,
         transactionReceiptFactory.create(
             transaction.getType(), result, worldState, cumulativeGasUsed),
-        gasUsedByTransaction, dataGasUsed);
+        gasUsedByTransaction,
+        dataGasUsed);
   }
 
   private boolean isIncorrectNonce(final ValidationResult<TransactionInvalidReason> result) {
@@ -360,7 +369,8 @@ public class BlockTransactionSelector {
   private boolean transactionTooLargeForBlock(final Transaction transaction) {
     final var dataGasUsed = gasCalculator.dataGasCost(transaction.getBlobCount());
 
-    if(dataGasUsed > gasCalculator.getDataGasLimit() - transactionSelectionResult.getCumulativeDataGasUsed()) {
+    if (dataGasUsed
+        > gasCalculator.getDataGasLimit() - transactionSelectionResult.getCumulativeDataGasUsed()) {
       return true;
     }
 
@@ -386,8 +396,8 @@ public class BlockTransactionSelector {
     private final ValidationResult<TransactionInvalidReason> validationResult;
 
     public TransactionValidationResult(
-            final Transaction transaction,
-            final ValidationResult<TransactionInvalidReason> validationResult) {
+        final Transaction transaction,
+        final ValidationResult<TransactionInvalidReason> validationResult) {
       this.transaction = transaction;
       this.validationResult = validationResult;
     }
@@ -410,7 +420,7 @@ public class BlockTransactionSelector {
       }
       TransactionValidationResult that = (TransactionValidationResult) o;
       return Objects.equals(transaction, that.transaction)
-              && Objects.equals(validationResult, that.validationResult);
+          && Objects.equals(validationResult, that.validationResult);
     }
 
     @Override
@@ -428,24 +438,28 @@ public class BlockTransactionSelector {
     private long cumulativeDataGasUsed = 0;
 
     private void update(
-            final Transaction transaction, final TransactionReceipt receipt, final long gasUsed, final long dataGasUsed) {
+        final Transaction transaction,
+        final TransactionReceipt receipt,
+        final long gasUsed,
+        final long dataGasUsed) {
       transactionsByType
-              .computeIfAbsent(transaction.getType(), type -> new ArrayList<>())
-              .add(transaction);
+          .computeIfAbsent(transaction.getType(), type -> new ArrayList<>())
+          .add(transaction);
       receipts.add(receipt);
       cumulativeGasUsed += gasUsed;
       cumulativeDataGasUsed += dataGasUsed;
       traceLambda(
-              LOG,
-              "New selected transaction {}, total transactions {}, cumulative gas used {}, cumulative data gas used {}",
-              transaction::toTraceLog,
-              () -> transactionsByType.values().stream().mapToInt(List::size).sum(),
-              () -> cumulativeGasUsed, () -> cumulativeDataGasUsed);
+          LOG,
+          "New selected transaction {}, total transactions {}, cumulative gas used {}, cumulative data gas used {}",
+          transaction::toTraceLog,
+          () -> transactionsByType.values().stream().mapToInt(List::size).sum(),
+          () -> cumulativeGasUsed,
+          () -> cumulativeDataGasUsed);
     }
 
     private void updateWithInvalidTransaction(
-            final Transaction transaction,
-            final ValidationResult<TransactionInvalidReason> validationResult) {
+        final Transaction transaction,
+        final ValidationResult<TransactionInvalidReason> validationResult) {
       invalidTransactions.add(new TransactionValidationResult(transaction, validationResult));
     }
 
@@ -469,7 +483,6 @@ public class BlockTransactionSelector {
       return cumulativeDataGasUsed;
     }
 
-
     public List<TransactionValidationResult> getInvalidTransactions() {
       return invalidTransactions;
     }
@@ -488,25 +501,29 @@ public class BlockTransactionSelector {
       }
       TransactionSelectionResults that = (TransactionSelectionResults) o;
       return cumulativeGasUsed == that.cumulativeGasUsed
-              && cumulativeDataGasUsed == that.cumulativeDataGasUsed
-              && transactionsByType.equals(that.transactionsByType)
-              && receipts.equals(that.receipts)
-              && invalidTransactions.equals(that.invalidTransactions);
+          && cumulativeDataGasUsed == that.cumulativeDataGasUsed
+          && transactionsByType.equals(that.transactionsByType)
+          && receipts.equals(that.receipts)
+          && invalidTransactions.equals(that.invalidTransactions);
     }
 
     @Override
     public int hashCode() {
-      return Objects.hash(transactionsByType, receipts, invalidTransactions, cumulativeGasUsed, cumulativeDataGasUsed);
+      return Objects.hash(
+          transactionsByType,
+          receipts,
+          invalidTransactions,
+          cumulativeGasUsed,
+          cumulativeDataGasUsed);
     }
 
     public String toTraceLog() {
       return "cumulativeGasUsed="
-              + cumulativeGasUsed
-              + ", cumulativeDataGasUsed="
-              + cumulativeDataGasUsed
-              + ", transactions="
-              + streamAllTransactions().map(Transaction::toTraceLog).collect(Collectors.joining("; "));
+          + cumulativeGasUsed
+          + ", cumulativeDataGasUsed="
+          + cumulativeDataGasUsed
+          + ", transactions="
+          + streamAllTransactions().map(Transaction::toTraceLog).collect(Collectors.joining("; "));
     }
   }
-
 }

@@ -497,5 +497,7 @@ public interface GasCalculator {
     return DataGas.ZERO;
   }
 
-  default  long getDataGasLimit() { return 0; }
+  default long getDataGasLimit() {
+    return 0;
+  }
 }
