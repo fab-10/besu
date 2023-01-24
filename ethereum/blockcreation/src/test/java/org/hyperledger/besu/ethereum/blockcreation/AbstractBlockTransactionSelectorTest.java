@@ -50,6 +50,7 @@ import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.ethereum.referencetests.ReferenceTestBlockchain;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
+import org.hyperledger.besu.evm.gascalculator.LondonGasCalculator;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
 import org.hyperledger.besu.evm.worldstate.WorldState;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
@@ -256,7 +257,7 @@ public abstract class AbstractBlockTransactionSelectorTest {
             this::isCancelled,
             miningBeneficiary,
             FeeMarket.london(0L),
-            protocolSpec.getGasCalculator());
+            new LondonGasCalculator());
 
     // this should fill up all the block space
     final Transaction fillingLegacyTx =
@@ -454,7 +455,7 @@ public abstract class AbstractBlockTransactionSelectorTest {
             this::isCancelled,
             miningBeneficiary,
             getFeeMarket(),
-            protocolSpec.getGasCalculator());
+            new LondonGasCalculator());
     return selector;
   }
 
