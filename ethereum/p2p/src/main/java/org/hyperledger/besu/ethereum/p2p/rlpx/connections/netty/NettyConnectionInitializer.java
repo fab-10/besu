@@ -207,7 +207,7 @@ public class NettyConnectionInitializer
                 timeoutHandler(
                     connectionFuture,
                     "Timed out waiting to establish connection with peer: " + peer.getId()));
-        addAdditionalOutboundHandlers(ch, peer);
+        addAdditionalOutboundHandlers(ch);
         ch.pipeline().addLast(outboundHandler(peer, connectionFuture));
       }
     };
@@ -271,7 +271,7 @@ public class NettyConnectionInitializer
         () -> connectionFuture.completeExceptionally(new TimeoutException(s)));
   }
 
-  void addAdditionalOutboundHandlers(final Channel ch, final Peer peer)
+  void addAdditionalOutboundHandlers(final Channel ch)
       throws GeneralSecurityException, IOException {}
 
   void addAdditionalInboundHandlers(final Channel ch)

@@ -32,7 +32,6 @@ public class TLSConfiguration {
   private final Path trustStorePasswordPath;
   private final Path crlPath;
   private final String[] allowedProtocols;
-  private final Boolean clientHelloSniHeaderEnabled;
 
   private TLSConfiguration(
       final String keyStoreType,
@@ -44,8 +43,7 @@ public class TLSConfiguration {
       final Supplier<String> trustStorePasswordSupplier,
       final Path trustStorePasswordPath,
       final Path crlPath,
-      final String[] allowedProtocols,
-      final Boolean clientHelloSniHeaderEnabled) {
+      final String[] allowedProtocols) {
     this.keyStoreType = keyStoreType;
     this.keyStorePath = keyStorePath;
     this.keyStorePasswordSupplier = keyStorePasswordSupplier;
@@ -56,7 +54,6 @@ public class TLSConfiguration {
     this.trustStorePasswordPath = trustStorePasswordPath;
     this.crlPath = crlPath;
     this.allowedProtocols = allowedProtocols;
-    this.clientHelloSniHeaderEnabled = clientHelloSniHeaderEnabled;
   }
 
   public String getKeyStoreType() {
@@ -99,10 +96,6 @@ public class TLSConfiguration {
     return allowedProtocols;
   }
 
-  public Boolean getClientHelloSniHeaderEnabled() {
-    return clientHelloSniHeaderEnabled;
-  }
-
   public static final class Builder {
     private String keyStoreType;
     private Path keyStorePath;
@@ -114,7 +107,6 @@ public class TLSConfiguration {
     private Path trustStorePasswordPath;
     private Path crlPath;
     private String[] allowedProtocols;
-    private Boolean clientHelloSniHeaderEnabled;
 
     private Builder() {}
 
@@ -173,11 +165,6 @@ public class TLSConfiguration {
       return this;
     }
 
-    public Builder withClientHelloSniEnabled(final Boolean clientHelloSniHeaderEnabled) {
-      this.clientHelloSniHeaderEnabled = clientHelloSniHeaderEnabled;
-      return this;
-    }
-
     public TLSConfiguration build() {
       requireNonNull(keyStoreType, "Key Store Type must not be null");
       requireNonNull(keyStorePasswordSupplier, "Key Store password supplier must not be null");
@@ -191,8 +178,7 @@ public class TLSConfiguration {
           trustStorePasswordSupplier,
           trustStorePasswordPath,
           crlPath,
-          allowedProtocols,
-          clientHelloSniHeaderEnabled);
+          allowedProtocols);
     }
   }
 }

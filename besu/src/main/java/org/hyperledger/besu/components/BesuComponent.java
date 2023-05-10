@@ -21,7 +21,6 @@ import org.hyperledger.besu.ethereum.bonsai.cache.CachedMerkleTrieLoader;
 import org.hyperledger.besu.ethereum.bonsai.cache.CachedMerkleTrieLoaderModule;
 import org.hyperledger.besu.metrics.MetricsSystemModule;
 import org.hyperledger.besu.metrics.ObservableMetricsSystem;
-import org.hyperledger.besu.services.BesuPluginContextImpl;
 
 import javax.inject.Named;
 import javax.inject.Singleton;
@@ -35,8 +34,7 @@ import org.slf4j.Logger;
     modules = {
       BesuCommandModule.class,
       MetricsSystemModule.class,
-      CachedMerkleTrieLoaderModule.class,
-      BesuPluginContextModule.class
+      CachedMerkleTrieLoaderModule.class
     })
 public interface BesuComponent {
 
@@ -68,12 +66,4 @@ public interface BesuComponent {
    */
   @Named("besuCommandLogger")
   Logger getBesuCommandLogger();
-
-  /**
-   * Besu plugin context for doing plugin service discovery.
-   *
-   * @return BesuComponent
-   */
-  @Named("besuPluginContext")
-  BesuPluginContextImpl getBesuPluginContext();
 }

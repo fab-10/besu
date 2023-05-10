@@ -18,18 +18,18 @@ package org.hyperledger.besu.ethereum.bonsai.trielog;
 
 import static com.google.common.base.Preconditions.checkState;
 
-import org.hyperledger.besu.datatypes.AccountValue;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.datatypes.StorageSlotKey;
 import org.hyperledger.besu.ethereum.bonsai.BonsaiValue;
-import org.hyperledger.besu.plugin.services.trielogs.TrieLog;
+import org.hyperledger.besu.ethereum.bonsai.worldview.StorageSlotKey;
+import org.hyperledger.besu.ethereum.worldstate.StateTrieAccountValue;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.TreeMap;
+import java.util.stream.Stream;
 
 import org.apache.commons.lang3.builder.EqualsBuilder;
 import org.apache.commons.lang3.builder.HashCodeBuilder;
@@ -43,13 +43,11 @@ import org.apache.tuweni.units.bigints.UInt256;
  * <p>In this particular formulation only the "Leaves" are tracked" Future layers may track patrica
  * trie changes as well.
  */
-@SuppressWarnings("unchecked")
-public class TrieLogLayer implements TrieLog {
+public class TrieLogLayer {
 
   protected Hash blockHash;
-  protected Optional<Long> blockNumber = Optional.empty();
 
-  Map<Address, BonsaiValue<AccountValue>> getAccounts() {
+  Map<Address, BonsaiValue<StateTrieAccountValue>> getAccounts() {
     return accounts;
   }
 
@@ -61,7 +59,7 @@ public class TrieLogLayer implements TrieLog {
     return storage;
   }
 
-  protected final Map<Address, BonsaiValue<AccountValue>> accounts;
+  protected final Map<Address, BonsaiValue<StateTrieAccountValue>> accounts;
   protected final Map<Address, BonsaiValue<Bytes>> code;
   protected final Map<Address, Map<StorageSlotKey, BonsaiValue<UInt256>>> storage;
   protected boolean frozen = false;
@@ -74,12 +72,10 @@ public class TrieLogLayer implements TrieLog {
   }
 
   /** Locks the layer so no new changes can be added; */
-  @Override
-  public void freeze() {
-    frozen = true; // The code never bothered me anyway 🥶
+  void freeze() {
+    frozen = true; // The code never bothered me anyway
   }
 
-  @Override
   public Hash getBlockHash() {
     return blockHash;
   }
@@ -90,19 +86,10 @@ public class TrieLogLayer implements TrieLog {
     return this;
   }
 
-  @Override
-  public Optional<Long> getBlockNumber() {
-    return blockNumber;
-  }
-
-  public TrieLogLayer setBlockNumber(final long blockNumber) {
-    checkState(!frozen, "Layer is Frozen");
-    this.blockNumber = Optional.of(blockNumber);
-    return this;
-  }
-
   public TrieLogLayer addAccountChange(
-      final Address address, final AccountValue oldValue, final AccountValue newValue) {
+      final Address address,
+      final StateTrieAccountValue oldValue,
+      final StateTrieAccountValue newValue) {
     checkState(!frozen, "Layer is Frozen");
     accounts.put(address, new BonsaiValue<>(oldValue, newValue));
     return this;
@@ -127,71 +114,64 @@ public class TrieLogLayer implements TrieLog {
     return this;
   }
 
-  @Override
-  public Map<Address, BonsaiValue<AccountValue>> getAccountChanges() {
-    return accounts;
+  public Stream<Map.Entry<Address, BonsaiValue<StateTrieAccountValue>>> streamAccountChanges() {
+    return accounts.entrySet().stream();
   }
 
-  @Override
-  public Map<Address, BonsaiValue<Bytes>> getCodeChanges() {
-    return code;
+  public Stream<Map.Entry<Address, BonsaiValue<Bytes>>> streamCodeChanges() {
+    return code.entrySet().stream();
   }
 
-  @Override
-  public Map<Address, Map<StorageSlotKey, BonsaiValue<UInt256>>> getStorageChanges() {
-    return storage;
+  public Stream<Map.Entry<Address, Map<StorageSlotKey, BonsaiValue<UInt256>>>>
+      streamStorageChanges() {
+    return storage.entrySet().stream();
   }
 
   public boolean hasStorageChanges(final Address address) {
     return storage.containsKey(address);
   }
 
-  @Override
-  public Map<StorageSlotKey, BonsaiValue<UInt256>> getStorageChanges(final Address address) {
-    return storage.getOrDefault(address, Map.of());
+  public Stream<Map.Entry<StorageSlotKey, BonsaiValue<UInt256>>> streamStorageChanges(
+      final Address address) {
+    return storage.getOrDefault(address, Map.of()).entrySet().stream();
   }
 
-  @Override
   public Optional<Bytes> getPriorCode(final Address address) {
     return Optional.ofNullable(code.get(address)).map(BonsaiValue::getPrior);
   }
 
-  @Override
   public Optional<Bytes> getCode(final Address address) {
     return Optional.ofNullable(code.get(address)).map(BonsaiValue::getUpdated);
   }
 
-  @Override
-  public Optional<UInt256> getPriorStorageByStorageSlotKey(
+  Optional<UInt256> getPriorStorageByStorageSlotKey(
       final Address address, final StorageSlotKey storageSlotKey) {
     return Optional.ofNullable(storage.get(address))
         .map(i -> i.get(storageSlotKey))
         .map(BonsaiValue::getPrior);
   }
 
-  @Override
-  public Optional<UInt256> getStorageByStorageSlotKey(
+  Optional<UInt256> getStorageByStorageSlotKey(
       final Address address, final StorageSlotKey storageSlotKey) {
     return Optional.ofNullable(storage.get(address))
         .map(i -> i.get(storageSlotKey))
         .map(BonsaiValue::getUpdated);
   }
 
-  @Override
-  public Optional<AccountValue> getPriorAccount(final Address address) {
+  public Optional<StateTrieAccountValue> getPriorAccount(final Address address) {
     return Optional.ofNullable(accounts.get(address)).map(BonsaiValue::getPrior);
   }
 
-  @Override
-  public Optional<AccountValue> getAccount(final Address address) {
+  public Optional<StateTrieAccountValue> getAccount(final Address address) {
     return Optional.ofNullable(accounts.get(address)).map(BonsaiValue::getUpdated);
   }
 
   public String dump() {
     final StringBuilder sb = new StringBuilder();
-    sb.append("TrieLog{" + "blockHash=").append(blockHash).append(frozen).append('}');
+    sb.append("TrieLogLayer{" + "blockHash=").append(blockHash).append(frozen).append('}');
     sb.append("accounts\n");
-    for (final Map.Entry<Address, BonsaiValue<AccountValue>> account : accounts.entrySet()) {
+    for (final Map.Entry<Address, BonsaiValue<StateTrieAccountValue>> account :
+        accounts.entrySet()) {
       sb.append(" : ").append(account.getKey()).append("\n");
       if (Objects.equals(account.getValue().getPrior(), account.getValue().getUpdated())) {
         sb.append("   = ").append(account.getValue().getUpdated()).append("\n");

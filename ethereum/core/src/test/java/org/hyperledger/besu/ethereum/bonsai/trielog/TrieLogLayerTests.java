@@ -15,11 +15,10 @@
  */
 package org.hyperledger.besu.ethereum.bonsai.trielog;
 
-import org.hyperledger.besu.datatypes.AccountValue;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.datatypes.StorageSlotKey;
 import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.ethereum.bonsai.worldview.StorageSlotKey;
 import org.hyperledger.besu.ethereum.worldstate.StateTrieAccountValue;
 
 import java.util.Optional;
@@ -67,11 +66,11 @@ public class TrieLogLayerTests {
 
     Assertions.assertThat(trieLogLayer).isEqualTo(otherTrieLogLayer);
 
-    Optional<AccountValue> priorAccount = trieLogLayer.getPriorAccount(address);
+    Optional<StateTrieAccountValue> priorAccount = trieLogLayer.getPriorAccount(address);
     Assertions.assertThat(priorAccount).isPresent();
     Assertions.assertThat(priorAccount.get()).isEqualTo(oldValue);
 
-    Optional<AccountValue> updatedAccount = trieLogLayer.getAccount(address);
+    Optional<StateTrieAccountValue> updatedAccount = trieLogLayer.getAccount(address);
     Assertions.assertThat(updatedAccount).isPresent();
     Assertions.assertThat(updatedAccount.get()).isEqualTo(newValue);
   }

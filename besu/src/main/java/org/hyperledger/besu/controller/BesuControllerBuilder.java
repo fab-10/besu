@@ -1022,8 +1022,7 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
             blockchain,
             Optional.of(dataStorageConfiguration.getBonsaiMaxLayersToLoad()),
             cachedMerkleTrieLoader,
-            metricsSystem,
-            besuComponent.getBesuPluginContext());
+            metricsSystem);
 
       case FOREST:
       default:

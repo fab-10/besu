@@ -73,8 +73,7 @@ public class InMemoryKeyValueStorageProvider extends KeyValueStorageProvider {
         inMemoryKeyValueStorageProvider,
         blockchain,
         cachedMerkleTrieLoader,
-        new NoOpMetricsSystem(),
-        null);
+        new NoOpMetricsSystem());
   }
 
   public static MutableWorldState createInMemoryWorldState() {

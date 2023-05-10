@@ -23,6 +23,7 @@ import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.bonsai.cache.CachedMerkleTrieLoader;
 import org.hyperledger.besu.ethereum.bonsai.cache.CachedWorldStorageManager;
 import org.hyperledger.besu.ethereum.bonsai.storage.BonsaiWorldStateKeyValueStorage;
+import org.hyperledger.besu.ethereum.bonsai.trielog.TrieLogLayer;
 import org.hyperledger.besu.ethereum.bonsai.trielog.TrieLogManager;
 import org.hyperledger.besu.ethereum.bonsai.worldview.BonsaiWorldState;
 import org.hyperledger.besu.ethereum.bonsai.worldview.BonsaiWorldStateUpdateAccumulator;
@@ -39,8 +40,6 @@ import org.hyperledger.besu.ethereum.worldstate.StateTrieAccountValue;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 import org.hyperledger.besu.evm.worldstate.WorldState;
 import org.hyperledger.besu.metrics.ObservableMetricsSystem;
-import org.hyperledger.besu.plugin.BesuContext;
-import org.hyperledger.besu.plugin.services.trielogs.TrieLog;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -71,16 +70,14 @@ public class BonsaiWorldStateProvider implements WorldStateArchive {
       final StorageProvider provider,
       final Blockchain blockchain,
       final CachedMerkleTrieLoader cachedMerkleTrieLoader,
-      final ObservableMetricsSystem metricsSystem,
-      final BesuContext pluginContext) {
+      final ObservableMetricsSystem metricsSystem) {
     this(
         (BonsaiWorldStateKeyValueStorage)
             provider.createWorldStateStorage(DataStorageFormat.BONSAI),
         blockchain,
         Optional.empty(),
         cachedMerkleTrieLoader,
-        metricsSystem,
-        pluginContext);
+        metricsSystem);
   }
 
   public BonsaiWorldStateProvider(
@@ -88,8 +85,7 @@ public class BonsaiWorldStateProvider implements WorldStateArchive {
       final Blockchain blockchain,
       final Optional<Long> maxLayersToLoad,
       final CachedMerkleTrieLoader cachedMerkleTrieLoader,
-      final ObservableMetricsSystem metricsSystem,
-      final BesuContext pluginContext) {
+      final ObservableMetricsSystem metricsSystem) {
 
     // TODO: de-dup constructors
     this.trieLogManager =
@@ -98,8 +94,7 @@ public class BonsaiWorldStateProvider implements WorldStateArchive {
             blockchain,
             worldStateStorage,
             metricsSystem,
-            maxLayersToLoad.orElse(RETAINED_LAYERS),
-            pluginContext);
+            maxLayersToLoad.orElse(RETAINED_LAYERS));
     this.blockchain = blockchain;
     this.worldStateStorage = worldStateStorage;
     this.persistedState = new BonsaiWorldState(this, worldStateStorage);
@@ -194,8 +189,8 @@ public class BonsaiWorldStateProvider implements WorldStateArchive {
         final Optional<BlockHeader> maybePersistedHeader =
             blockchain.getBlockHeader(mutableState.blockHash()).map(BlockHeader.class::cast);
 
-        final List<TrieLog> rollBacks = new ArrayList<>();
-        final List<TrieLog> rollForwards = new ArrayList<>();
+        final List<TrieLogLayer> rollBacks = new ArrayList<>();
+        final List<TrieLogLayer> rollForwards = new ArrayList<>();
         if (maybePersistedHeader.isEmpty()) {
           trieLogManager.getTrieLogLayer(mutableState.blockHash()).ifPresent(rollBacks::add);
         } else {
@@ -237,7 +232,7 @@ public class BonsaiWorldStateProvider implements WorldStateArchive {
         final BonsaiWorldStateUpdateAccumulator bonsaiUpdater =
             (BonsaiWorldStateUpdateAccumulator) mutableState.updater();
         try {
-          for (final TrieLog rollBack : rollBacks) {
+          for (final TrieLogLayer rollBack : rollBacks) {
             LOG.debug("Attempting Rollback of {}", rollBack.getBlockHash());
             bonsaiUpdater.rollBack(rollBack);
           }

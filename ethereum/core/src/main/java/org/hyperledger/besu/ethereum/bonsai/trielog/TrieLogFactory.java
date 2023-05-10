@@ -1,5 +1,5 @@
 /*
- * Copyright contributors to Hyperledger Besu.
+ * Copyright Hyperledger Besu Contributors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -15,21 +15,14 @@
  */
 package org.hyperledger.besu.ethereum.bonsai.trielog;
 
-public class TrieLogAddedEvent {
+import org.hyperledger.besu.datatypes.Hash;
+import org.hyperledger.besu.ethereum.bonsai.worldview.BonsaiWorldStateUpdateAccumulator;
 
-  private final TrieLogLayer layer;
+/** Interface for serializing and deserializing {@link TrieLogLayer} objects. */
+public interface TrieLogFactory<T extends TrieLogLayer> {
+  T create(BonsaiWorldStateUpdateAccumulator accumulator, final Hash blockHash);
 
-  public TrieLogAddedEvent(final TrieLogLayer layer) {
-    this.layer = layer;
-  }
+  T deserialize(final byte[] bytes);
 
-  public TrieLogLayer getLayer() {
-    return layer;
-  }
-
-  @FunctionalInterface
-  interface TrieLogAddedObserver {
-
-    void onTrieLogAdded(TrieLogAddedEvent event);
-  }
+  byte[] serialize(final T layer);
 }

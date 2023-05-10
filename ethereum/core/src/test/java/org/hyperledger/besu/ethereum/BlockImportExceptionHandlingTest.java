@@ -89,7 +89,7 @@ public class BlockImportExceptionHandlingTest {
       // do we need to also test with a DefaultWorldStateArchive?
       spy(
           new BonsaiWorldStateProvider(
-              storageProvider, blockchain, cachedMerkleTrieLoader, new NoOpMetricsSystem(), null));
+              storageProvider, blockchain, cachedMerkleTrieLoader, new NoOpMetricsSystem()));
 
   private final BonsaiWorldState persisted =
       spy(

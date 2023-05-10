@@ -96,13 +96,6 @@ public class P2PTLSConfigOptions {
       description = "Certificate revocation list for the P2P service.")
   private final Path p2pCrlFile = null;
 
-  @Option(
-      names = {"--Xp2p-tls-clienthello-sni"},
-      hidden = true,
-      description =
-          "Whether to send a SNI header in the TLS ClientHello message (default: ${DEFAULT-VALUE})")
-  private final Boolean p2pTlsClientHelloSniHeaderEnabled = false;
-
   /**
    * Generate P2p tls configuration.
    *
@@ -139,7 +132,6 @@ public class P2PTLSConfigOptions {
                     : new FileBasedPasswordProvider(p2pTLSTrustStorePasswordFile))
             .withTrustStorePasswordPath(p2pTLSTrustStorePasswordFile)
             .withCrlPath(p2pCrlFile)
-            .withClientHelloSniEnabled(p2pTlsClientHelloSniHeaderEnabled)
             .build());
   }
 
