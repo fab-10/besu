@@ -19,11 +19,14 @@ import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.bonsai.cache.CachedBonsaiWorldView;
 import org.hyperledger.besu.ethereum.bonsai.storage.BonsaiWorldStateKeyValueStorage;
 import org.hyperledger.besu.ethereum.bonsai.storage.BonsaiWorldStateKeyValueStorage.BonsaiUpdater;
-import org.hyperledger.besu.ethereum.bonsai.trielog.TrieLogAddedEvent.TrieLogAddedObserver;
 import org.hyperledger.besu.ethereum.bonsai.worldview.BonsaiWorldState;
 import org.hyperledger.besu.ethereum.bonsai.worldview.BonsaiWorldStateUpdateAccumulator;
 import org.hyperledger.besu.ethereum.chain.Blockchain;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.plugin.BesuContext;
+import org.hyperledger.besu.plugin.services.trielogs.TrieLog;
+import org.hyperledger.besu.plugin.services.trielogs.TrieLogEvent.TrieLogObserver;
+import org.hyperledger.besu.plugin.services.trielogs.TrieLogFactory;
 import org.hyperledger.besu.util.Subscribers;
 
 import java.util.Map;
@@ -42,21 +45,24 @@ public abstract class AbstractTrieLogManager implements TrieLogManager {
 
   protected final Map<Bytes32, CachedBonsaiWorldView> cachedWorldStatesByHash;
   protected final long maxLayersToLoad;
-  private final Subscribers<TrieLogAddedObserver> trieLogAddedObservers = Subscribers.create();
+  protected final Subscribers<TrieLogObserver> trieLogObservers = Subscribers.create();
 
-  // TODO plumb factory from plugin service:
-  TrieLogFactory<TrieLogLayer> trieLogFactory = new TrieLogFactoryImpl();
+  protected final TrieLogFactory trieLogFactory;
 
   protected AbstractTrieLogManager(
       final Blockchain blockchain,
       final BonsaiWorldStateKeyValueStorage worldStateStorage,
       final long maxLayersToLoad,
-      final Map<Bytes32, CachedBonsaiWorldView> cachedWorldStatesByHash) {
+      final Map<Bytes32, CachedBonsaiWorldView> cachedWorldStatesByHash,
+      final BesuContext pluginContext) {
     this.blockchain = blockchain;
     this.rootWorldStateStorage = worldStateStorage;
     this.cachedWorldStatesByHash = cachedWorldStatesByHash;
     this.maxLayersToLoad = maxLayersToLoad;
+    this.trieLogFactory = setupTrieLogFactory(pluginContext);
   }
+
+  protected abstract TrieLogFactory setupTrieLogFactory(final BesuContext pluginContext);
 
   @Override
   public synchronized void saveTrieLog(
@@ -71,11 +77,11 @@ public abstract class AbstractTrieLogManager implements TrieLogManager {
       final BonsaiUpdater stateUpdater = forWorldState.getWorldStateStorage().updater();
       boolean success = false;
       try {
-        final TrieLogLayer trieLog = prepareTrieLog(forBlockHeader, localUpdater);
+        final TrieLog trieLog = prepareTrieLog(forBlockHeader, localUpdater);
         persistTrieLog(forBlockHeader, forWorldStateRootHash, trieLog, stateUpdater);
 
         // notify trie log added observers, synchronously
-        trieLogAddedObservers.forEach(o -> o.onTrieLogAdded(new TrieLogAddedEvent(trieLog)));
+        trieLogObservers.forEach(o -> o.onTrieLogAdded(new TrieLogAddedEvent(trieLog)));
 
         success = true;
       } finally {
@@ -89,13 +95,13 @@ public abstract class AbstractTrieLogManager implements TrieLogManager {
   }
 
   @VisibleForTesting
-  TrieLogLayer prepareTrieLog(
+  TrieLog prepareTrieLog(
       final BlockHeader blockHeader, final BonsaiWorldStateUpdateAccumulator localUpdater) {
     LOG.atDebug()
         .setMessage("Adding layered world state for {}")
         .addArgument(blockHeader::toLogString)
         .log();
-    final TrieLogLayer trieLog = localUpdater.generateTrieLog(blockHeader.getBlockHash());
+    final TrieLog trieLog = localUpdater.generateTrieLog(blockHeader);
     trieLog.freeze();
     return trieLog;
   }
@@ -117,7 +123,7 @@ public abstract class AbstractTrieLogManager implements TrieLogManager {
   private void persistTrieLog(
       final BlockHeader blockHeader,
       final Hash worldStateRootHash,
-      final TrieLogLayer trieLog,
+      final TrieLog trieLog,
       final BonsaiUpdater stateUpdater) {
     LOG.atDebug()
         .setMessage("Persisting trie log for block hash {} and world state root {}")
@@ -141,17 +147,17 @@ public abstract class AbstractTrieLogManager implements TrieLogManager {
   }
 
   @Override
-  public Optional<TrieLogLayer> getTrieLogLayer(final Hash blockHash) {
+  public Optional<TrieLog> getTrieLogLayer(final Hash blockHash) {
     return rootWorldStateStorage.getTrieLog(blockHash).map(trieLogFactory::deserialize);
   }
 
   @Override
-  public synchronized long subscribe(final TrieLogAddedObserver sub) {
-    return trieLogAddedObservers.subscribe(sub);
+  public synchronized long subscribe(final TrieLogObserver sub) {
+    return trieLogObservers.subscribe(sub);
   }
 
   @Override
   public synchronized void unsubscribe(final long id) {
-    trieLogAddedObservers.unsubscribe(id);
+    trieLogObservers.unsubscribe(id);
   }
 }
