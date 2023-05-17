@@ -20,19 +20,18 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
 public interface BlockchainStorage {
 
-  Optional<Hash> getChainHead();
-
-  Collection<Hash> getForkHeads();
-
-  Optional<Hash> getFinalized();
-
-  Optional<Hash> getSafeBlock();
+  //  Optional<Hash> getChainHead();
+  //
+  //  Collection<Hash> getForkHeads();
+  //
+  //  Optional<Hash> getFinalized();
+  //
+  //  Optional<Hash> getSafeBlock();
 
   Optional<BlockHeader> getBlockHeader(Hash blockHash);
 
@@ -61,14 +60,14 @@ public interface BlockchainStorage {
     void putBlockHash(long blockNumber, Hash blockHash);
 
     void putTotalDifficulty(Hash blockHash, Difficulty totalDifficulty);
-
-    void setChainHead(Hash blockHash);
-
-    void setForkHeads(Collection<Hash> forkHeadHashes);
-
-    void setFinalized(Hash blockHash);
-
-    void setSafeBlock(Hash blockHash);
+    //
+    //    void setChainHead(Hash blockHash);
+    //
+    //    void setForkHeads(Collection<Hash> forkHeadHashes);
+    //
+    //    void setFinalized(Hash blockHash);
+    //
+    //    void setSafeBlock(Hash blockHash);
 
     void removeBlockHash(long blockNumber);
 

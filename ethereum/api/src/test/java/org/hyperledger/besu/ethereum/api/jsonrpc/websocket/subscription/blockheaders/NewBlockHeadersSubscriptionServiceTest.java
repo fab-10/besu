@@ -29,12 +29,14 @@ import org.hyperledger.besu.ethereum.api.query.BlockchainQueries;
 import org.hyperledger.besu.ethereum.chain.BlockchainStorage;
 import org.hyperledger.besu.ethereum.chain.DefaultBlockchain;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
+import org.hyperledger.besu.ethereum.chain.VariablesStorage;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator.BlockOptions;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStoragePrefixedKeyBlockchainStorage;
+import org.hyperledger.besu.ethereum.storage.keyvalue.VariablesKeyValueStorage;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.services.kvstore.InMemoryKeyValueStorage;
 
@@ -58,12 +60,15 @@ public class NewBlockHeadersSubscriptionServiceTest {
 
   private final BlockResultFactory blockResultFactory = new BlockResultFactory();
   private final BlockDataGenerator gen = new BlockDataGenerator();
+  private final VariablesStorage variablesStorage =
+      new VariablesKeyValueStorage(new InMemoryKeyValueStorage());
   private final BlockchainStorage blockchainStorage =
       new KeyValueStoragePrefixedKeyBlockchainStorage(
           new InMemoryKeyValueStorage(), new MainnetBlockHeaderFunctions());
   private final Block genesisBlock = gen.genesisBlock();
   private final MutableBlockchain blockchain =
-      DefaultBlockchain.createMutable(genesisBlock, blockchainStorage, new NoOpMetricsSystem(), 0);
+      DefaultBlockchain.createMutable(
+          genesisBlock, variablesStorage, blockchainStorage, new NoOpMetricsSystem(), 0);
 
   @Spy
   private final SubscriptionManager subscriptionManagerSpy =

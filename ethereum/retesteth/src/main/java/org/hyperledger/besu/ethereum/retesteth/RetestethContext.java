@@ -55,6 +55,7 @@ import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.ScheduleBasedBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStoragePrefixedKeyBlockchainStorage;
+import org.hyperledger.besu.ethereum.storage.keyvalue.VariablesKeyValueStorage;
 import org.hyperledger.besu.ethereum.storage.keyvalue.WorldStateKeyValueStorage;
 import org.hyperledger.besu.ethereum.storage.keyvalue.WorldStatePreimageKeyValueStorage;
 import org.hyperledger.besu.ethereum.worldstate.DefaultWorldStateArchive;
@@ -253,10 +254,13 @@ public class RetestethContext {
 
   private static MutableBlockchain createInMemoryBlockchain(
       final Block genesisBlock, final BlockHeaderFunctions blockHeaderFunctions) {
-    final InMemoryKeyValueStorage keyValueStorage = new InMemoryKeyValueStorage();
+    final InMemoryKeyValueStorage variablesKeyValueStorage = new InMemoryKeyValueStorage();
+    final InMemoryKeyValueStorage blockchainKeyValueStorage = new InMemoryKeyValueStorage();
     return DefaultBlockchain.createMutable(
         genesisBlock,
-        new KeyValueStoragePrefixedKeyBlockchainStorage(keyValueStorage, blockHeaderFunctions),
+        new VariablesKeyValueStorage(variablesKeyValueStorage),
+        new KeyValueStoragePrefixedKeyBlockchainStorage(
+            blockchainKeyValueStorage, blockHeaderFunctions),
         new NoOpMetricsSystem(),
         100);
   }

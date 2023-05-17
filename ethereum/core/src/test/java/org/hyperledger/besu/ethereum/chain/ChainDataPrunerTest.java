@@ -21,6 +21,7 @@ import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStoragePrefixedKeyBlockchainStorage;
+import org.hyperledger.besu.ethereum.storage.keyvalue.VariablesKeyValueStorage;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.services.kvstore.InMemoryKeyValueStorage;
 
@@ -49,7 +50,11 @@ public class ChainDataPrunerTest {
     Block genesisBlock = gen.genesisBlock();
     final MutableBlockchain blockchain =
         DefaultBlockchain.createMutable(
-            genesisBlock, blockchainStorage, new NoOpMetricsSystem(), 0);
+            genesisBlock,
+            new VariablesKeyValueStorage(new InMemoryKeyValueStorage()),
+            blockchainStorage,
+            new NoOpMetricsSystem(),
+            0);
     blockchain.observeBlockAdded(chainDataPruner);
 
     // Generate & Import 1000 blocks
@@ -85,7 +90,11 @@ public class ChainDataPrunerTest {
     Block genesisBlock = gen.genesisBlock();
     final MutableBlockchain blockchain =
         DefaultBlockchain.createMutable(
-            genesisBlock, blockchainStorage, new NoOpMetricsSystem(), 0);
+            genesisBlock,
+            new VariablesKeyValueStorage(new InMemoryKeyValueStorage()),
+            blockchainStorage,
+            new NoOpMetricsSystem(),
+            0);
     blockchain.observeBlockAdded(chainDataPruner);
 
     List<Block> canonicalChain = gen.blockSequence(genesisBlock, 1000);

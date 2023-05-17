@@ -21,6 +21,7 @@ import org.hyperledger.besu.ethereum.chain.Blockchain;
 import org.hyperledger.besu.ethereum.chain.BlockchainStorage;
 import org.hyperledger.besu.ethereum.chain.DefaultBlockchain;
 import org.hyperledger.besu.ethereum.chain.GenesisState;
+import org.hyperledger.besu.ethereum.chain.VariablesStorage;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.MutableWorldState;
 import org.hyperledger.besu.ethereum.storage.keyvalue.WorldStateKeyValueStorage;
@@ -47,9 +48,11 @@ public class BlockchainModule {
   @Provides
   Blockchain provideBlockchain(
       @Named("GenesisBlock") final Block genesisBlock,
+      final VariablesStorage variablesStorage,
       final BlockchainStorage blockchainStorage,
       final MetricsSystem metricsSystem) {
-    return DefaultBlockchain.createMutable(genesisBlock, blockchainStorage, metricsSystem, 0);
+    return DefaultBlockchain.createMutable(
+        genesisBlock, variablesStorage, blockchainStorage, metricsSystem, 0);
   }
 
   @Provides

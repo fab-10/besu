@@ -25,18 +25,19 @@ import org.hyperledger.besu.ethereum.chain.Blockchain;
 import org.hyperledger.besu.ethereum.chain.BlockchainStorage;
 import org.hyperledger.besu.ethereum.chain.DefaultBlockchain;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
+import org.hyperledger.besu.ethereum.chain.VariablesStorage;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator.BlockOptions;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStoragePrefixedKeyBlockchainStorage;
+import org.hyperledger.besu.ethereum.storage.keyvalue.VariablesKeyValueStorage;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.services.kvstore.InMemoryKeyValueStorage;
 import org.hyperledger.besu.testutil.MockExecutorService;
 
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 
 import org.junit.Test;
@@ -57,12 +58,15 @@ public class PrunerTest {
   private final Block genesisBlock = gen.genesisBlock();
 
   @Test
-  public void shouldMarkCorrectBlockAndSweep() throws ExecutionException, InterruptedException {
+  public void shouldMarkCorrectBlockAndSweep() {
+    final VariablesStorage variablesStorage =
+        new VariablesKeyValueStorage(new InMemoryKeyValueStorage());
     final BlockchainStorage blockchainStorage =
         new KeyValueStoragePrefixedKeyBlockchainStorage(
             new InMemoryKeyValueStorage(), new MainnetBlockHeaderFunctions());
     final MutableBlockchain blockchain =
-        DefaultBlockchain.createMutable(genesisBlock, blockchainStorage, metricsSystem, 0);
+        DefaultBlockchain.createMutable(
+            genesisBlock, variablesStorage, blockchainStorage, metricsSystem, 0);
 
     final Pruner pruner =
         new Pruner(markSweepPruner, blockchain, new PrunerConfiguration(0, 1), mockExecutorService);
@@ -79,11 +83,14 @@ public class PrunerTest {
 
   @Test
   public void shouldOnlySweepAfterBlockConfirmationPeriodAndRetentionPeriodEnds() {
+    final VariablesStorage variablesStorage =
+        new VariablesKeyValueStorage(new InMemoryKeyValueStorage());
     final BlockchainStorage blockchainStorage =
         new KeyValueStoragePrefixedKeyBlockchainStorage(
             new InMemoryKeyValueStorage(), new MainnetBlockHeaderFunctions());
     final MutableBlockchain blockchain =
-        DefaultBlockchain.createMutable(genesisBlock, blockchainStorage, metricsSystem, 0);
+        DefaultBlockchain.createMutable(
+            genesisBlock, variablesStorage, blockchainStorage, metricsSystem, 0);
 
     final Pruner pruner =
         new Pruner(markSweepPruner, blockchain, new PrunerConfiguration(1, 2), mockExecutorService);
@@ -105,11 +112,14 @@ public class PrunerTest {
 
   @Test
   public void abortsPruningWhenFullyMarkedBlockNoLongerOnCanonicalChain() {
+    final VariablesStorage variablesStorage =
+        new VariablesKeyValueStorage(new InMemoryKeyValueStorage());
     final BlockchainStorage blockchainStorage =
         new KeyValueStoragePrefixedKeyBlockchainStorage(
             new InMemoryKeyValueStorage(), new MainnetBlockHeaderFunctions());
     final MutableBlockchain blockchain =
-        DefaultBlockchain.createMutable(genesisBlock, blockchainStorage, metricsSystem, 0);
+        DefaultBlockchain.createMutable(
+            genesisBlock, variablesStorage, blockchainStorage, metricsSystem, 0);
 
     // start pruner so it can start handling block added events
     final Pruner pruner =
@@ -175,11 +185,14 @@ public class PrunerTest {
 
   @Test
   public void shouldCleanUpPruningStrategyOnShutdown() throws InterruptedException {
+    final VariablesStorage variablesStorage =
+        new VariablesKeyValueStorage(new InMemoryKeyValueStorage());
     final BlockchainStorage blockchainStorage =
         new KeyValueStoragePrefixedKeyBlockchainStorage(
             new InMemoryKeyValueStorage(), new MainnetBlockHeaderFunctions());
     final MutableBlockchain blockchain =
-        DefaultBlockchain.createMutable(genesisBlock, blockchainStorage, metricsSystem, 0);
+        DefaultBlockchain.createMutable(
+            genesisBlock, variablesStorage, blockchainStorage, metricsSystem, 0);
 
     final Pruner pruner =
         new Pruner(markSweepPruner, blockchain, new PrunerConfiguration(0, 1), mockExecutorService);

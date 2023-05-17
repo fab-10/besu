@@ -21,7 +21,6 @@ import static java.util.stream.Collectors.joining;
 import static java.util.stream.Collectors.toList;
 
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.ethereum.chain.BlockchainStorage.Updater;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockBody;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -60,6 +59,7 @@ public class DefaultBlockchain implements MutableBlockchain {
   private final Comparator<BlockHeader> heaviestChainBlockChoiceRule =
       Comparator.comparing(this::calculateTotalDifficulty);
 
+  protected final VariablesStorage variablesStorage;
   protected final BlockchainStorage blockchainStorage;
 
   private final Subscribers<BlockAddedObserver> blockAddedObservers = Subscribers.create();
@@ -75,26 +75,36 @@ public class DefaultBlockchain implements MutableBlockchain {
 
   private DefaultBlockchain(
       final Optional<Block> genesisBlock,
+      final VariablesStorage variablesStorage,
       final BlockchainStorage blockchainStorage,
       final MetricsSystem metricsSystem,
       final long reorgLoggingThreshold) {
-    this(genesisBlock, blockchainStorage, metricsSystem, reorgLoggingThreshold, null);
+    this(
+        genesisBlock,
+        variablesStorage,
+        blockchainStorage,
+        metricsSystem,
+        reorgLoggingThreshold,
+        null);
   }
 
   private DefaultBlockchain(
       final Optional<Block> genesisBlock,
+      final VariablesStorage variablesStorage,
       final BlockchainStorage blockchainStorage,
       final MetricsSystem metricsSystem,
       final long reorgLoggingThreshold,
       final String dataDirectory) {
     checkNotNull(genesisBlock);
+    checkNotNull(variablesStorage);
     checkNotNull(blockchainStorage);
     checkNotNull(metricsSystem);
 
+    this.variablesStorage = variablesStorage;
     this.blockchainStorage = blockchainStorage;
     genesisBlock.ifPresent(block -> this.setGenesis(block, dataDirectory));
 
-    final Hash chainHead = blockchainStorage.getChainHead().get();
+    final Hash chainHead = variablesStorage.getChainHead().get();
     chainHeader = blockchainStorage.getBlockHeader(chainHead).get();
     totalDifficulty = blockchainStorage.getTotalDifficulty(chainHead).get();
     final BlockBody chainHeadBody = blockchainStorage.getBlockBody(chainHead).get();
@@ -148,16 +158,22 @@ public class DefaultBlockchain implements MutableBlockchain {
 
   public static MutableBlockchain createMutable(
       final Block genesisBlock,
+      final VariablesStorage variablesStorage,
       final BlockchainStorage blockchainStorage,
       final MetricsSystem metricsSystem,
       final long reorgLoggingThreshold) {
     checkNotNull(genesisBlock);
     return new DefaultBlockchain(
-        Optional.of(genesisBlock), blockchainStorage, metricsSystem, reorgLoggingThreshold);
+        Optional.of(genesisBlock),
+        variablesStorage,
+        blockchainStorage,
+        metricsSystem,
+        reorgLoggingThreshold);
   }
 
   public static MutableBlockchain createMutable(
       final Block genesisBlock,
+      final VariablesStorage variablesStorage,
       final BlockchainStorage blockchainStorage,
       final MetricsSystem metricsSystem,
       final long reorgLoggingThreshold,
@@ -165,6 +181,7 @@ public class DefaultBlockchain implements MutableBlockchain {
     checkNotNull(genesisBlock);
     return new DefaultBlockchain(
         Optional.of(genesisBlock),
+        variablesStorage,
         blockchainStorage,
         metricsSystem,
         reorgLoggingThreshold,
@@ -172,18 +189,25 @@ public class DefaultBlockchain implements MutableBlockchain {
   }
 
   public static Blockchain create(
+      final VariablesStorage variablesStorage,
       final BlockchainStorage blockchainStorage,
       final MetricsSystem metricsSystem,
       final long reorgLoggingThreshold) {
     checkArgument(
-        validateStorageNonEmpty(blockchainStorage), "Cannot create Blockchain from empty storage");
+        validateStorageNonEmpty(variablesStorage, blockchainStorage),
+        "Cannot create Blockchain from empty storage");
     return new DefaultBlockchain(
-        Optional.empty(), blockchainStorage, metricsSystem, reorgLoggingThreshold);
+        Optional.empty(),
+        variablesStorage,
+        blockchainStorage,
+        metricsSystem,
+        reorgLoggingThreshold);
   }
 
-  private static boolean validateStorageNonEmpty(final BlockchainStorage blockchainStorage) {
+  private static boolean validateStorageNonEmpty(
+      final VariablesStorage variablesStorage, final BlockchainStorage blockchainStorage) {
     // Run a few basic checks to make sure data looks available and consistent
-    return blockchainStorage
+    return variablesStorage
             .getChainHead()
             .flatMap(blockchainStorage::getTotalDifficulty)
             .isPresent()
@@ -197,12 +221,12 @@ public class DefaultBlockchain implements MutableBlockchain {
 
   @Override
   public Optional<Hash> getFinalized() {
-    return blockchainStorage.getFinalized();
+    return variablesStorage.getFinalized();
   }
 
   @Override
   public Optional<Hash> getSafeBlock() {
-    return blockchainStorage.getSafeBlock();
+    return variablesStorage.getSafeBlock();
   }
 
   @Override
@@ -315,24 +339,26 @@ public class DefaultBlockchain implements MutableBlockchain {
     final Hash hash = block.getHash();
     final Difficulty td = calculateTotalDifficulty(block.getHeader());
 
-    final BlockchainStorage.Updater updater = blockchainStorage.updater();
+    final VariablesStorage.Updater variablesUpdater = variablesStorage.updater();
+    final BlockchainStorage.Updater chainUpdater = blockchainStorage.updater();
 
-    updater.putBlockHeader(hash, block.getHeader());
-    updater.putBlockBody(hash, block.getBody());
-    updater.putTransactionReceipts(hash, receipts);
-    updater.putTotalDifficulty(hash, td);
+    chainUpdater.putBlockHeader(hash, block.getHeader());
+    chainUpdater.putBlockBody(hash, block.getBody());
+    chainUpdater.putTransactionReceipts(hash, receipts);
+    chainUpdater.putTotalDifficulty(hash, td);
 
     final BlockAddedEvent blockAddedEvent;
     if (storeOnly) {
       blockAddedEvent = handleStoreOnly(blockWithReceipts);
     } else {
-      blockAddedEvent = updateCanonicalChainData(updater, blockWithReceipts);
+      blockAddedEvent = updateCanonicalChainData(variablesUpdater, chainUpdater, blockWithReceipts);
       if (blockAddedEvent.isNewCanonicalHead()) {
         updateCacheForNewCanonicalHead(block, td);
       }
     }
 
-    updater.commit();
+    chainUpdater.commit();
+    variablesUpdater.commit();
     blockAddedObservers.forEach(observer -> observer.onBlockAdded(blockAddedEvent));
   }
 
@@ -360,7 +386,7 @@ public class DefaultBlockchain implements MutableBlockchain {
   @Override
   public synchronized void unsafeSetChainHead(
       final BlockHeader blockHeader, final Difficulty totalDifficulty) {
-    final BlockchainStorage.Updater updater = blockchainStorage.updater();
+    final VariablesStorage.Updater updater = variablesStorage.updater();
     this.chainHeader = blockHeader;
     this.totalDifficulty = totalDifficulty;
     updater.setChainHead(blockHeader.getBlockHash());
@@ -381,10 +407,12 @@ public class DefaultBlockchain implements MutableBlockchain {
   }
 
   private BlockAddedEvent updateCanonicalChainData(
-      final BlockchainStorage.Updater updater, final BlockWithReceipts blockWithReceipts) {
+      final VariablesStorage.Updater variablesUpdater,
+      final BlockchainStorage.Updater chainUpdater,
+      final BlockWithReceipts blockWithReceipts) {
 
     final Block newBlock = blockWithReceipts.getBlock();
-    final Hash chainHead = blockchainStorage.getChainHead().orElse(null);
+    final Hash chainHead = variablesStorage.getChainHead().orElse(null);
 
     if (newBlock.getHeader().getNumber() != BlockHeader.GENESIS_BLOCK_NUMBER && chainHead == null) {
       throw new IllegalStateException("Blockchain is missing chain head.");
@@ -392,18 +420,18 @@ public class DefaultBlockchain implements MutableBlockchain {
 
     try {
       if (newBlock.getHeader().getParentHash().equals(chainHead) || chainHead == null) {
-        return handleNewHead(updater, blockWithReceipts);
+        return handleNewHead(variablesUpdater, chainUpdater, blockWithReceipts);
       } else if (blockChoiceRule.compare(newBlock.getHeader(), chainHeader) > 0) {
         // New block represents a chain reorganization
-        return handleChainReorg(updater, blockWithReceipts);
+        return handleChainReorg(variablesUpdater, chainUpdater, blockWithReceipts);
       } else {
         // New block represents a fork
-        return handleFork(updater, newBlock);
+        return handleFork(variablesUpdater, newBlock);
       }
     } catch (final NoSuchElementException e) {
       // Any Optional.get() calls in this block should be present, missing data means data
       // corruption or a bug.
-      updater.rollback();
+      chainUpdater.rollback();
       throw new IllegalStateException("Blockchain is missing data that should be present.", e);
     }
   }
@@ -413,14 +441,16 @@ public class DefaultBlockchain implements MutableBlockchain {
   }
 
   private BlockAddedEvent handleNewHead(
-      final Updater updater, final BlockWithReceipts blockWithReceipts) {
+      final VariablesStorage.Updater variablesUpdater,
+      final BlockchainStorage.Updater blockchainUpdater,
+      final BlockWithReceipts blockWithReceipts) {
     // This block advances the chain, update the chain head
     final Hash newBlockHash = blockWithReceipts.getHash();
 
-    updater.putBlockHash(blockWithReceipts.getNumber(), newBlockHash);
-    updater.setChainHead(newBlockHash);
+    blockchainUpdater.putBlockHash(blockWithReceipts.getNumber(), newBlockHash);
+    variablesUpdater.setChainHead(newBlockHash);
     indexTransactionForBlock(
-        updater, newBlockHash, blockWithReceipts.getBlock().getBody().getTransactions());
+        blockchainUpdater, newBlockHash, blockWithReceipts.getBlock().getBody().getTransactions());
     return BlockAddedEvent.createForHeadAdvancement(
         blockWithReceipts.getBlock(),
         LogWithMetadata.generate(
@@ -428,8 +458,8 @@ public class DefaultBlockchain implements MutableBlockchain {
         blockWithReceipts.getReceipts());
   }
 
-  private BlockAddedEvent handleFork(final BlockchainStorage.Updater updater, final Block fork) {
-    final Collection<Hash> forkHeads = blockchainStorage.getForkHeads();
+  private BlockAddedEvent handleFork(final VariablesStorage.Updater updater, final Block fork) {
+    final Collection<Hash> forkHeads = variablesStorage.getForkHeads();
 
     // Check to see if this block advances any existing fork.
     // This block will replace its parent
@@ -445,13 +475,15 @@ public class DefaultBlockchain implements MutableBlockchain {
   }
 
   private BlockAddedEvent handleChainReorg(
-      final BlockchainStorage.Updater updater, final BlockWithReceipts newChainHeadWithReceipts) {
+      final VariablesStorage.Updater variablesUpdater,
+      final BlockchainStorage.Updater chainUpdater,
+      final BlockWithReceipts newChainHeadWithReceipts) {
     final BlockWithReceipts oldChainWithReceipts = getBlockWithReceipts(chainHeader).get();
     BlockWithReceipts currentOldChainWithReceipts = oldChainWithReceipts;
     BlockWithReceipts currentNewChainWithReceipts = newChainHeadWithReceipts;
 
     // Update chain head
-    updater.setChainHead(currentNewChainWithReceipts.getHeader().getHash());
+    variablesUpdater.setChainHead(currentNewChainWithReceipts.getHeader().getHash());
 
     // Track transactions and logs to be added and removed
     final Map<Hash, List<Transaction>> newTransactions = new HashMap<>();
@@ -463,7 +495,7 @@ public class DefaultBlockchain implements MutableBlockchain {
       // If new chain is longer than old chain, walk back until we meet the old chain by number
       // adding indexing for new chain along the way.
       final Hash blockHash = currentNewChainWithReceipts.getHash();
-      updater.putBlockHash(currentNewChainWithReceipts.getNumber(), blockHash);
+      chainUpdater.putBlockHash(currentNewChainWithReceipts.getNumber(), blockHash);
 
       newTransactions.put(
           blockHash, currentNewChainWithReceipts.getBlock().getBody().getTransactions());
@@ -475,7 +507,7 @@ public class DefaultBlockchain implements MutableBlockchain {
     while (currentOldChainWithReceipts.getNumber() > currentNewChainWithReceipts.getNumber()) {
       // If oldChain is longer than new chain, walk back until we meet the new chain by number,
       // updating as we go.
-      updater.removeBlockHash(currentOldChainWithReceipts.getNumber());
+      chainUpdater.removeBlockHash(currentOldChainWithReceipts.getNumber());
 
       removedTransactions.addAll(
           currentOldChainWithReceipts.getBlock().getBody().getTransactions());
@@ -487,7 +519,7 @@ public class DefaultBlockchain implements MutableBlockchain {
     while (!currentOldChainWithReceipts.getHash().equals(currentNewChainWithReceipts.getHash())) {
       // Walk back until we meet the common ancestor between the two chains, updating as we go.
       final Hash newBlockHash = currentNewChainWithReceipts.getHash();
-      updater.putBlockHash(currentNewChainWithReceipts.getNumber(), newBlockHash);
+      chainUpdater.putBlockHash(currentNewChainWithReceipts.getNumber(), newBlockHash);
 
       newTransactions.put(
           newBlockHash, currentNewChainWithReceipts.getBlock().getBody().getTransactions());
@@ -504,14 +536,14 @@ public class DefaultBlockchain implements MutableBlockchain {
     // Update indexed transactions
     newTransactions.forEach(
         (blockHash, transactionsInBlock) -> {
-          indexTransactionForBlock(updater, blockHash, transactionsInBlock);
+          indexTransactionForBlock(chainUpdater, blockHash, transactionsInBlock);
           // Don't remove transactions that are being re-indexed.
           removedTransactions.removeAll(transactionsInBlock);
         });
-    clearIndexedTransactionsForBlock(updater, removedTransactions);
+    clearIndexedTransactionsForBlock(chainUpdater, removedTransactions);
 
     // Update tracked forks
-    final Collection<Hash> forks = blockchainStorage.getForkHeads();
+    final Collection<Hash> forks = variablesStorage.getForkHeads();
     // Old head is now a fork
     forks.add(oldChainWithReceipts.getHash());
     // Remove new chain head's parent if it was tracked as a fork
@@ -520,7 +552,7 @@ public class DefaultBlockchain implements MutableBlockchain {
             .filter(f -> f.equals(newChainHeadWithReceipts.getHeader().getParentHash()))
             .findAny();
     parentFork.ifPresent(forks::remove);
-    updater.setForkHeads(forks);
+    variablesUpdater.setForkHeads(forks);
 
     maybeLogReorg(newChainHeadWithReceipts, oldChainWithReceipts, commonAncestorWithReceipts);
 
@@ -570,14 +602,16 @@ public class DefaultBlockchain implements MutableBlockchain {
 
   @Override
   public boolean rewindToBlock(final Hash blockHash) {
-    final BlockchainStorage.Updater updater = blockchainStorage.updater();
+    final VariablesStorage.Updater variablesUpdater = variablesStorage.updater();
+    final BlockchainStorage.Updater chainUpdater = blockchainStorage.updater();
     try {
       final BlockHeader oldBlockHeader = blockchainStorage.getBlockHeader(blockHash).get();
       final BlockWithReceipts blockWithReceipts = getBlockWithReceipts(oldBlockHeader).get();
       final Block block = blockWithReceipts.getBlock();
 
-      var reorgEvent = handleChainReorg(updater, blockWithReceipts);
-      updater.commit();
+      var reorgEvent = handleChainReorg(variablesUpdater, chainUpdater, blockWithReceipts);
+      chainUpdater.commit();
+      variablesUpdater.commit();
       blockAddedObservers.forEach(o -> o.onBlockAdded(reorgEvent));
 
       updateCacheForNewCanonicalHead(block, calculateTotalDifficulty(block.getHeader()));
@@ -585,7 +619,8 @@ public class DefaultBlockchain implements MutableBlockchain {
     } catch (final NoSuchElementException e) {
       // Any Optional.get() calls in this block should be present, missing data means data
       // corruption or a bug.
-      updater.rollback();
+      variablesUpdater.rollback();
+      chainUpdater.rollback();
       throw new IllegalStateException("Blockchain is missing data that should be present.", e);
     }
   }
@@ -596,35 +631,39 @@ public class DefaultBlockchain implements MutableBlockchain {
         chainHeader.getHash().equals(blockHeader.getParentHash()),
         "Supplied block header is not a child of the current chain head.");
 
-    final BlockchainStorage.Updater updater = blockchainStorage.updater();
+    final VariablesStorage.Updater variablesUpdater = variablesStorage.updater();
+    final BlockchainStorage.Updater chainUpdater = blockchainStorage.updater();
 
     try {
       final BlockWithReceipts blockWithReceipts = getBlockWithReceipts(blockHeader).get();
 
-      BlockAddedEvent newHeadEvent = handleNewHead(updater, blockWithReceipts);
+      BlockAddedEvent newHeadEvent =
+          handleNewHead(variablesUpdater, chainUpdater, blockWithReceipts);
       updateCacheForNewCanonicalHead(
           blockWithReceipts.getBlock(), calculateTotalDifficulty(blockHeader));
-      updater.commit();
+      chainUpdater.commit();
+      variablesUpdater.commit();
       blockAddedObservers.forEach(observer -> observer.onBlockAdded(newHeadEvent));
       return true;
     } catch (final NoSuchElementException e) {
       // Any Optional.get() calls in this block should be present, missing data means data
       // corruption or a bug.
-      updater.rollback();
+      variablesUpdater.rollback();
+      chainUpdater.rollback();
       throw new IllegalStateException("Blockchain is missing data that should be present.", e);
     }
   }
 
   @Override
   public void setFinalized(final Hash blockHash) {
-    final var updater = blockchainStorage.updater();
+    final var updater = variablesStorage.updater();
     updater.setFinalized(blockHash);
     updater.commit();
   }
 
   @Override
   public void setSafeBlock(final Hash blockHash) {
-    final var updater = blockchainStorage.updater();
+    final var updater = variablesStorage.updater();
     updater.setSafeBlock(blockHash);
     updater.commit();
   }
@@ -654,25 +693,27 @@ public class DefaultBlockchain implements MutableBlockchain {
 
   @VisibleForTesting
   Set<Hash> getForks() {
-    return new HashSet<>(blockchainStorage.getForkHeads());
+    return new HashSet<>(variablesStorage.getForkHeads());
   }
 
   private void setGenesis(final Block genesisBlock, final String dataDirectory) {
     checkArgument(
         genesisBlock.getHeader().getNumber() == BlockHeader.GENESIS_BLOCK_NUMBER,
         "Invalid genesis block.");
-    final Optional<Hash> maybeHead = blockchainStorage.getChainHead();
+    final Optional<Hash> maybeHead = variablesStorage.getChainHead();
     if (maybeHead.isEmpty()) {
       // Initialize blockchain store with genesis block.
-      final BlockchainStorage.Updater updater = blockchainStorage.updater();
+      final VariablesStorage.Updater variablesUpdater = variablesStorage.updater();
+      final BlockchainStorage.Updater chainUpdater = blockchainStorage.updater();
       final Hash hash = genesisBlock.getHash();
-      updater.putBlockHeader(hash, genesisBlock.getHeader());
-      updater.putBlockBody(hash, genesisBlock.getBody());
-      updater.putTransactionReceipts(hash, emptyList());
-      updater.putTotalDifficulty(hash, calculateTotalDifficulty(genesisBlock.getHeader()));
-      updater.putBlockHash(genesisBlock.getHeader().getNumber(), hash);
-      updater.setChainHead(hash);
-      updater.commit();
+      chainUpdater.putBlockHeader(hash, genesisBlock.getHeader());
+      chainUpdater.putBlockBody(hash, genesisBlock.getBody());
+      chainUpdater.putTransactionReceipts(hash, emptyList());
+      chainUpdater.putTotalDifficulty(hash, calculateTotalDifficulty(genesisBlock.getHeader()));
+      chainUpdater.putBlockHash(genesisBlock.getHeader().getNumber(), hash);
+      variablesUpdater.setChainHead(hash);
+      chainUpdater.commit();
+      variablesUpdater.commit();
     } else {
       // Verify genesis block is consistent with stored blockchain.
       final Optional<Hash> genesisHash = getBlockHashByNumber(BlockHeader.GENESIS_BLOCK_NUMBER);

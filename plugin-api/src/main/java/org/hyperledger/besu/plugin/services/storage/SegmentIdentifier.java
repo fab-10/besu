@@ -22,7 +22,6 @@ import org.hyperledger.besu.plugin.Unstable;
  */
 @Unstable
 public interface SegmentIdentifier {
-
   /**
    * Name for the segment consistent throughout the lifetime of the segment.
    *
@@ -47,4 +46,6 @@ public interface SegmentIdentifier {
   default boolean includeInDatabaseVersion(final int version) {
     return true;
   }
+
+  default boolean containsStaticData() { return false; }
 }

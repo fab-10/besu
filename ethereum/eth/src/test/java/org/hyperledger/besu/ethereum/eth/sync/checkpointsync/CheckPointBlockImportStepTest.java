@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.ethereum.chain.DefaultBlockchain;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
+import org.hyperledger.besu.ethereum.chain.VariablesStorage;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockBody;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
@@ -27,6 +28,7 @@ import org.hyperledger.besu.ethereum.core.BlockWithReceipts;
 import org.hyperledger.besu.ethereum.eth.sync.fastsync.checkpoint.Checkpoint;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStoragePrefixedKeyBlockchainStorage;
+import org.hyperledger.besu.ethereum.storage.keyvalue.VariablesKeyValueStorage;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.services.kvstore.InMemoryKeyValueStorage;
 
@@ -43,16 +45,18 @@ public class CheckPointBlockImportStepTest {
   private final Checkpoint checkpoint = mock(Checkpoint.class);
   private MutableBlockchain blockchain;
   private CheckpointBlockImportStep checkPointHeaderImportStep;
+  private VariablesStorage variablesStorage;
   private KeyValueStoragePrefixedKeyBlockchainStorage blockchainStorage;
 
   @Before
   public void setup() {
+    variablesStorage = new VariablesKeyValueStorage(new InMemoryKeyValueStorage());
     blockchainStorage =
         new KeyValueStoragePrefixedKeyBlockchainStorage(
             new InMemoryKeyValueStorage(), new MainnetBlockHeaderFunctions());
     blockchain =
         DefaultBlockchain.createMutable(
-            generateBlock(0), blockchainStorage, mock(MetricsSystem.class), 0);
+            generateBlock(0), variablesStorage, blockchainStorage, mock(MetricsSystem.class), 0);
     checkPointHeaderImportStep =
         new CheckpointBlockImportStep(checkPointSource, checkpoint, blockchain);
   }

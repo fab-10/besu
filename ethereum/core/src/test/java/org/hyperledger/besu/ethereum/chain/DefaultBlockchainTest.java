@@ -28,6 +28,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStoragePrefixedKeyBlockchainStorage;
+import org.hyperledger.besu.ethereum.storage.keyvalue.VariablesKeyValueStorage;
 import org.hyperledger.besu.metrics.MetricsSystemFactory;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.metrics.prometheus.MetricsConfiguration;
@@ -164,7 +165,8 @@ public class DefaultBlockchainTest {
     // Create read only chain
     final Blockchain blockchain =
         DefaultBlockchain.create(
-            createStorage(kvStore),
+            createVariablesStorage(kvStore),
+            createBlockchainStorage(kvStore),
             MetricsSystemFactory.create(MetricsConfiguration.builder().enabled(true).build()),
             0);
 
@@ -944,7 +946,11 @@ public class DefaultBlockchainTest {
     assertThat(blockchain.getChainHead().getTotalDifficulty()).isEqualTo(td);
   }
 
-  private BlockchainStorage createStorage(final KeyValueStorage kvStore) {
+  private VariablesStorage createVariablesStorage(final KeyValueStorage kvStore) {
+    return new VariablesKeyValueStorage(kvStore);
+  }
+
+  private BlockchainStorage createBlockchainStorage(final KeyValueStorage kvStore) {
     return new KeyValueStoragePrefixedKeyBlockchainStorage(
         kvStore, new MainnetBlockHeaderFunctions());
   }
@@ -953,17 +959,30 @@ public class DefaultBlockchainTest {
       final KeyValueStorage kvStore, final Block genesisBlock) {
     return (DefaultBlockchain)
         DefaultBlockchain.createMutable(
-            genesisBlock, createStorage(kvStore), new NoOpMetricsSystem(), 0);
+            genesisBlock,
+            createVariablesStorage(kvStore),
+            createBlockchainStorage(kvStore),
+            new NoOpMetricsSystem(),
+            0);
   }
 
   private DefaultBlockchain createMutableBlockchain(
       final KeyValueStorage kvStore, final Block genesisBlock, final String dataDirectory) {
     return (DefaultBlockchain)
         DefaultBlockchain.createMutable(
-            genesisBlock, createStorage(kvStore), new NoOpMetricsSystem(), 0, dataDirectory);
+            genesisBlock,
+            createVariablesStorage(kvStore),
+            createBlockchainStorage(kvStore),
+            new NoOpMetricsSystem(),
+            0,
+            dataDirectory);
   }
 
   private Blockchain createBlockchain(final KeyValueStorage kvStore) {
-    return DefaultBlockchain.create(createStorage(kvStore), new NoOpMetricsSystem(), 0);
+    return DefaultBlockchain.create(
+        createVariablesStorage(kvStore),
+        createBlockchainStorage(kvStore),
+        new NoOpMetricsSystem(),
+        0);
   }
 }

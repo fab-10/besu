@@ -24,6 +24,7 @@ import org.hyperledger.besu.ethereum.privacy.storage.PrivateStateKeyValueStorage
 import org.hyperledger.besu.ethereum.privacy.storage.PrivateStateStorage;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStoragePrefixedKeyBlockchainStorage;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStorageProvider;
+import org.hyperledger.besu.ethereum.storage.keyvalue.VariablesKeyValueStorage;
 import org.hyperledger.besu.ethereum.storage.keyvalue.WorldStateKeyValueStorage;
 import org.hyperledger.besu.ethereum.storage.keyvalue.WorldStatePreimageKeyValueStorage;
 import org.hyperledger.besu.ethereum.worldstate.DataStorageFormat;
@@ -49,10 +50,13 @@ public class InMemoryKeyValueStorageProvider extends KeyValueStorageProvider {
 
   public static MutableBlockchain createInMemoryBlockchain(
       final Block genesisBlock, final BlockHeaderFunctions blockHeaderFunctions) {
-    final InMemoryKeyValueStorage keyValueStorage = new InMemoryKeyValueStorage();
+    final InMemoryKeyValueStorage variblesKeyValueStorage = new InMemoryKeyValueStorage();
+    final InMemoryKeyValueStorage blockchainkeyValueStorage = new InMemoryKeyValueStorage();
     return DefaultBlockchain.createMutable(
         genesisBlock,
-        new KeyValueStoragePrefixedKeyBlockchainStorage(keyValueStorage, blockHeaderFunctions),
+        new VariablesKeyValueStorage(variblesKeyValueStorage),
+        new KeyValueStoragePrefixedKeyBlockchainStorage(
+            blockchainkeyValueStorage, blockHeaderFunctions),
         new NoOpMetricsSystem(),
         0);
   }

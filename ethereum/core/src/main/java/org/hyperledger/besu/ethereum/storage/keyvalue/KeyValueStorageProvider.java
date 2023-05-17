@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.storage.keyvalue;
 
 import org.hyperledger.besu.ethereum.bonsai.storage.BonsaiWorldStateKeyValueStorage;
 import org.hyperledger.besu.ethereum.chain.BlockchainStorage;
+import org.hyperledger.besu.ethereum.chain.VariablesStorage;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ScheduleBasedBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.storage.StorageProvider;
@@ -48,18 +49,6 @@ public class KeyValueStorageProvider implements StorageProvider {
       final Function<SegmentIdentifier, KeyValueStorage> storageCreator,
       final KeyValueStorage worldStatePreimageStorage,
       final boolean segmentIsolationSupported,
-      final ObservableMetricsSystem metricsSystem) {
-    this.storageCreator = storageCreator;
-    this.worldStatePreimageStorage = worldStatePreimageStorage;
-    this.isWorldStateIterable = segmentIsolationSupported;
-    this.isWorldStateSnappable = SNAPSHOT_ISOLATION_UNSUPPORTED;
-    this.metricsSystem = metricsSystem;
-  }
-
-  public KeyValueStorageProvider(
-      final Function<SegmentIdentifier, KeyValueStorage> storageCreator,
-      final KeyValueStorage worldStatePreimageStorage,
-      final boolean segmentIsolationSupported,
       final boolean storageSnapshotIsolationSupported,
       final ObservableMetricsSystem metricsSystem) {
     this.storageCreator = storageCreator;
@@ -67,6 +56,12 @@ public class KeyValueStorageProvider implements StorageProvider {
     this.isWorldStateIterable = segmentIsolationSupported;
     this.isWorldStateSnappable = storageSnapshotIsolationSupported;
     this.metricsSystem = metricsSystem;
+  }
+
+  @Override
+  public VariablesStorage createVariablesStorage() {
+    return new VariablesKeyValueStorage(
+        getStorageBySegmentIdentifier(KeyValueSegmentIdentifier.VARIABLES));
   }
 
   @Override
