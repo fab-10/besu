@@ -46,22 +46,23 @@ public enum KeyValueSegmentIdentifier implements SegmentIdentifier {
   private final boolean containsStaticData;
 
   KeyValueSegmentIdentifier(final byte[] id) {
-    this(id,  new int[]{0,1,2});
+    this(id, new int[] {0, 1, 2});
   }
 
   KeyValueSegmentIdentifier(final byte[] id, final boolean staticData) {
-    this(id, new int[]{0,1,2}, staticData);
+    this(id, new int[] {0, 1, 2}, staticData);
   }
+
   KeyValueSegmentIdentifier(final byte[] id, final int[] versionList) {
     this(id, versionList, false);
   }
 
-  KeyValueSegmentIdentifier(final byte[] id, final int[] versionList, final boolean containsStaticData) {
+  KeyValueSegmentIdentifier(
+      final byte[] id, final int[] versionList, final boolean containsStaticData) {
     this.id = id;
     this.versionList = versionList;
     this.containsStaticData = containsStaticData;
   }
-
 
   @Override
   public String getName() {

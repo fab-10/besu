@@ -47,5 +47,7 @@ public interface SegmentIdentifier {
     return true;
   }
 
-  default boolean containsStaticData() { return false; }
+  default boolean containsStaticData() {
+    return false;
+  }
 }

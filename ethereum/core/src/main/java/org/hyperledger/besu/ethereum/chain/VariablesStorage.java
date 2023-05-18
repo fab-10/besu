@@ -19,6 +19,8 @@ import org.hyperledger.besu.datatypes.Hash;
 import java.util.Collection;
 import java.util.Optional;
 
+import org.apache.tuweni.bytes.Bytes;
+
 public interface VariablesStorage {
   Optional<Hash> getChainHead();
 
@@ -27,6 +29,8 @@ public interface VariablesStorage {
   Optional<Hash> getFinalized();
 
   Optional<Hash> getSafeBlock();
+
+  Optional<Bytes> getLocalEnrSeqno();
 
   Updater updater();
 
@@ -39,6 +43,8 @@ public interface VariablesStorage {
     void setFinalized(Hash blockHash);
 
     void setSafeBlock(Hash blockHash);
+
+    void setLocalEnrSeqno(Bytes nodeRecord);
 
     void commit();
 

@@ -151,10 +151,7 @@ public abstract class RocksDBColumnarKeyValueStorage
                       .noneMatch(existed -> Arrays.equals(existed, ignorableSegment.getId())))
           .forEach(trimmedSegments::remove);
       columnDescriptors =
-          trimmedSegments.stream()
-              .map(
-this::createColumnDescriptor)
-              .collect(Collectors.toList());
+          trimmedSegments.stream().map(this::createColumnDescriptor).collect(Collectors.toList());
       columnDescriptors.add(
           new ColumnFamilyDescriptor(
               DEFAULT_COLUMN.getBytes(StandardCharsets.UTF_8),
@@ -173,21 +170,21 @@ this::createColumnDescriptor)
   }
 
   private ColumnFamilyDescriptor createColumnDescriptor(final SegmentIdentifier segment) {
-    final var options =             new ColumnFamilyOptions()
+    final var options =
+        new ColumnFamilyOptions()
             .setTtl(0)
             .setCompressionType(CompressionType.LZ4_COMPRESSION)
             .setTableFormatConfig(createBlockBasedTableConfig(configuration));
 
-    if(segment.containsStaticData()) {
-      options.setEnableBlobFiles(true)
-              .setEnableBlobGarbageCollection(false)
-              .setMinBlobSize(100)
-              .setBlobCompressionType(CompressionType.LZ4_COMPRESSION);
+    if (segment.containsStaticData()) {
+      options
+          .setEnableBlobFiles(true)
+          .setEnableBlobGarbageCollection(false)
+          .setMinBlobSize(100)
+          .setBlobCompressionType(CompressionType.LZ4_COMPRESSION);
     }
 
-    return new ColumnFamilyDescriptor(
-            segment.getId(),
-options);
+    return new ColumnFamilyDescriptor(segment.getId(), options);
   }
 
   private void setGlobalOptions(final RocksDBConfiguration configuration, final Statistics stats) {
@@ -228,14 +225,16 @@ options);
   }
 
   BlockBasedTableConfig createBlockBasedTableConfig(final RocksDBConfiguration config) {
-    final LRUCache cache = new LRUCache(config.isHighSpec() ? ROCKSDB_BLOCKCACHE_SIZE_HIGH_SPEC : config.getCacheCapacity());
+    final LRUCache cache =
+        new LRUCache(
+            config.isHighSpec() ? ROCKSDB_BLOCKCACHE_SIZE_HIGH_SPEC : config.getCacheCapacity());
     return new BlockBasedTableConfig()
-            .setFormatVersion(ROCKSDB_FORMAT_VERSION)
-            .setBlockCache(cache)
-            .setFilterPolicy(new BloomFilter(10, false))
-            .setPartitionFilters(true)
-            .setCacheIndexAndFilterBlocks(false)
-            .setBlockSize(ROCKSDB_BLOCK_SIZE);
+        .setFormatVersion(ROCKSDB_FORMAT_VERSION)
+        .setBlockCache(cache)
+        .setFilterPolicy(new BloomFilter(10, false))
+        .setPartitionFilters(true)
+        .setCacheIndexAndFilterBlocks(false)
+        .setBlockSize(ROCKSDB_BLOCK_SIZE);
   }
 
   @Override

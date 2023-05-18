@@ -38,6 +38,9 @@ public class VariablesKeyValueStorage implements VariablesStorage {
       Bytes.wrap("finalizedBlockHash".getBytes(StandardCharsets.UTF_8));
   private static final Bytes SAFE_BLOCK_HASH_KEY =
       Bytes.wrap("safeBlockHash".getBytes(StandardCharsets.UTF_8));
+
+  private static final Bytes SEQ_NO_STORE_KEY =
+      Bytes.wrap("local-enr-seqno".getBytes(StandardCharsets.UTF_8));
   final KeyValueStorage variables;
 
   public VariablesKeyValueStorage(final KeyValueStorage variables) {
@@ -64,6 +67,11 @@ public class VariablesKeyValueStorage implements VariablesStorage {
   @Override
   public Optional<Hash> getSafeBlock() {
     return getVariable(SAFE_BLOCK_HASH_KEY).map(this::bytesToHash);
+  }
+
+  @Override
+  public Optional<Bytes> getLocalEnrSeqno() {
+    return getVariable(SEQ_NO_STORE_KEY).map(Bytes::wrap);
   }
 
   @Override
@@ -107,6 +115,11 @@ public class VariablesKeyValueStorage implements VariablesStorage {
     @Override
     public void setSafeBlock(final Hash blockHash) {
       setVariable(SAFE_BLOCK_HASH_KEY, blockHash);
+    }
+
+    @Override
+    public void setLocalEnrSeqno(final Bytes nodeRecord) {
+      setVariable(SEQ_NO_STORE_KEY, nodeRecord);
     }
 
     @Override
