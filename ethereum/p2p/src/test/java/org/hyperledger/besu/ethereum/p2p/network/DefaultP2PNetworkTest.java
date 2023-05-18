@@ -390,7 +390,7 @@ public final class DefaultP2PNetworkTest {
         .maintainedPeers(maintainedPeers)
         .metricsSystem(new NoOpMetricsSystem())
         .supportedCapabilities(Capability.create("eth", 63))
-        .storageProvider(new InMemoryKeyValueStorageProvider())
+        .variablesStorage(new InMemoryKeyValueStorageProvider().createVariablesStorage())
         .blockNumberForks(Collections.emptyList())
         .timestampForks(Collections.emptyList())
         .allConnectionsSupplier(Stream::empty)

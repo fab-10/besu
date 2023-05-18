@@ -61,7 +61,7 @@ public class MockPeerDiscoveryAgent extends PeerDiscoveryAgent {
         peerPermissions,
         natService,
         new NoOpMetricsSystem(),
-        new InMemoryKeyValueStorageProvider(),
+        new InMemoryKeyValueStorageProvider().createVariablesStorage(),
         forkIdManager,
         rlpxAgent);
     this.agentNetwork = agentNetwork;

@@ -18,6 +18,7 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static org.apache.tuweni.bytes.Bytes.wrapBuffer;
 
 import org.hyperledger.besu.cryptoservices.NodeKey;
+import org.hyperledger.besu.ethereum.chain.VariablesStorage;
 import org.hyperledger.besu.ethereum.forkid.ForkIdManager;
 import org.hyperledger.besu.ethereum.p2p.config.DiscoveryConfiguration;
 import org.hyperledger.besu.ethereum.p2p.discovery.internal.Packet;
@@ -27,7 +28,6 @@ import org.hyperledger.besu.ethereum.p2p.discovery.internal.TimerUtil;
 import org.hyperledger.besu.ethereum.p2p.discovery.internal.VertxTimerUtil;
 import org.hyperledger.besu.ethereum.p2p.permissions.PeerPermissions;
 import org.hyperledger.besu.ethereum.p2p.rlpx.RlpxAgent;
-import org.hyperledger.besu.ethereum.storage.StorageProvider;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
 import org.hyperledger.besu.nat.NatService;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -70,7 +70,7 @@ public class VertxPeerDiscoveryAgent extends PeerDiscoveryAgent {
       final PeerPermissions peerPermissions,
       final NatService natService,
       final MetricsSystem metricsSystem,
-      final StorageProvider storageProvider,
+      final VariablesStorage variablesStorage,
       final ForkIdManager forkIdManager,
       final RlpxAgent rlpxAgent) {
     super(
@@ -79,7 +79,7 @@ public class VertxPeerDiscoveryAgent extends PeerDiscoveryAgent {
         peerPermissions,
         natService,
         metricsSystem,
-        storageProvider,
+        variablesStorage,
         forkIdManager,
         rlpxAgent);
     checkArgument(vertx != null, "vertx instance cannot be null");

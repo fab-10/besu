@@ -20,6 +20,7 @@ import static com.google.common.base.Preconditions.checkState;
 import org.hyperledger.besu.cryptoservices.NodeKey;
 import org.hyperledger.besu.ethereum.chain.Blockchain;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
+import org.hyperledger.besu.ethereum.chain.VariablesStorage;
 import org.hyperledger.besu.ethereum.core.Util;
 import org.hyperledger.besu.ethereum.forkid.ForkIdManager;
 import org.hyperledger.besu.ethereum.p2p.config.NetworkingConfiguration;
@@ -45,7 +46,6 @@ import org.hyperledger.besu.ethereum.p2p.rlpx.connections.netty.TLSConfiguration
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.ShouldConnectCallback;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.messages.DisconnectMessage.DisconnectReason;
-import org.hyperledger.besu.ethereum.storage.StorageProvider;
 import org.hyperledger.besu.nat.NatMethod;
 import org.hyperledger.besu.nat.NatService;
 import org.hyperledger.besu.nat.core.NatManager;
@@ -497,7 +497,7 @@ public class DefaultP2PNetwork implements P2PNetwork {
 
     private NatService natService = new NatService(Optional.empty());
     private MetricsSystem metricsSystem;
-    private StorageProvider storageProvider;
+    private VariablesStorage variablesStorage;
     private Optional<TLSConfiguration> p2pTLSConfiguration = Optional.empty();
     private Blockchain blockchain;
     private List<Long> blockNumberForks;
@@ -545,7 +545,7 @@ public class DefaultP2PNetwork implements P2PNetwork {
           supportedCapabilities != null && supportedCapabilities.size() > 0,
           "Supported capabilities must be set and non-empty.");
       checkState(metricsSystem != null, "MetricsSystem must be set.");
-      checkState(storageProvider != null, "StorageProvider must be set.");
+      checkState(variablesStorage != null, "VariablesStorage must be set.");
       checkState(peerDiscoveryAgent != null || vertx != null, "Vertx must be set.");
       checkState(blockNumberForks != null, "BlockNumberForks must be set.");
       checkState(timestampForks != null, "TimestampForks must be set.");
@@ -564,7 +564,7 @@ public class DefaultP2PNetwork implements P2PNetwork {
           peerPermissions,
           natService,
           metricsSystem,
-          storageProvider,
+          variablesStorage,
           forkIdManager,
           rlpxAgent);
     }
@@ -651,9 +651,9 @@ public class DefaultP2PNetwork implements P2PNetwork {
       return this;
     }
 
-    public Builder storageProvider(final StorageProvider storageProvider) {
-      checkNotNull(storageProvider);
-      this.storageProvider = storageProvider;
+    public Builder variablesStorage(final VariablesStorage variablesStorage) {
+      checkNotNull(variablesStorage);
+      this.variablesStorage = variablesStorage;
       return this;
     }
 

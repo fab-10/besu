@@ -207,6 +207,6 @@ public class NetworkingServiceLifecycleTest {
         .config(config)
         .metricsSystem(new NoOpMetricsSystem())
         .supportedCapabilities(Arrays.asList(Capability.create("eth", 63)))
-        .storageProvider(new InMemoryKeyValueStorageProvider());
+        .variablesStorage(new InMemoryKeyValueStorageProvider().createVariablesStorage());
   }
 }

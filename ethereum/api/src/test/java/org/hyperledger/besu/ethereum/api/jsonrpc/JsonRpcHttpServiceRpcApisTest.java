@@ -277,7 +277,7 @@ public class JsonRpcHttpServiceRpcApisTest {
             .vertx(vertx)
             .config(config)
             .metricsSystem(new NoOpMetricsSystem())
-            .storageProvider(new InMemoryKeyValueStorageProvider())
+            .variablesStorage(new InMemoryKeyValueStorageProvider().createVariablesStorage())
             .blockchain(blockchain)
             .blockNumberForks(Collections.emptyList())
             .timestampForks(Collections.emptyList())

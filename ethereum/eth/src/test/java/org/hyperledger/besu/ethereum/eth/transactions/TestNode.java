@@ -193,7 +193,8 @@ public class TestNode implements Closeable {
                         .config(networkingConfiguration)
                         .metricsSystem(new NoOpMetricsSystem())
                         .supportedCapabilities(capabilities)
-                        .storageProvider(new InMemoryKeyValueStorageProvider())
+                        .variablesStorage(
+                            new InMemoryKeyValueStorageProvider().createVariablesStorage())
                         .blockchain(blockchain)
                         .blockNumberForks(Collections.emptyList())
                         .timestampForks(Collections.emptyList())

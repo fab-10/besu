@@ -676,7 +676,7 @@ public class RunnerBuilder {
               .metricsSystem(metricsSystem)
               .supportedCapabilities(caps)
               .natService(natService)
-              .storageProvider(storageProvider)
+              .variablesStorage(storageProvider.createVariablesStorage())
               .p2pTLSConfiguration(p2pTLSConfiguration)
               .blockchain(context.getBlockchain())
               .blockNumberForks(besuController.getGenesisConfigOptions().getForkBlockNumbers())

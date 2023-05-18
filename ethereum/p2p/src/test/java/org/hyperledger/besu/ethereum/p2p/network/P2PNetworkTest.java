@@ -271,7 +271,7 @@ public class P2PNetworkTest {
         .nodeKey(NodeKeyUtils.generate())
         .metricsSystem(new NoOpMetricsSystem())
         .supportedCapabilities(Arrays.asList(Capability.create("eth", 63)))
-        .storageProvider(new InMemoryKeyValueStorageProvider())
+        .variablesStorage(new InMemoryKeyValueStorageProvider().createVariablesStorage())
         .blockNumberForks(Collections.emptyList())
         .timestampForks(Collections.emptyList())
         .blockchain(blockchainMock)

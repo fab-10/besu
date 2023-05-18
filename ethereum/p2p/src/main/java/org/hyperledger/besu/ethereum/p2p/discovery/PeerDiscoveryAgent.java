@@ -33,7 +33,6 @@ import org.hyperledger.besu.ethereum.p2p.peers.Peer;
 import org.hyperledger.besu.ethereum.p2p.peers.PeerId;
 import org.hyperledger.besu.ethereum.p2p.permissions.PeerPermissions;
 import org.hyperledger.besu.ethereum.p2p.rlpx.RlpxAgent;
-import org.hyperledger.besu.ethereum.storage.StorageProvider;
 import org.hyperledger.besu.nat.NatService;
 import org.hyperledger.besu.plugin.data.EnodeURL;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -107,7 +106,7 @@ public abstract class PeerDiscoveryAgent {
       final PeerPermissions peerPermissions,
       final NatService natService,
       final MetricsSystem metricsSystem,
-      final StorageProvider storageProvider,
+      final VariablesStorage variablesStorage,
       final ForkIdManager forkIdManager,
       final RlpxAgent rlpxAgent) {
     this.metricsSystem = metricsSystem;
@@ -126,7 +125,7 @@ public abstract class PeerDiscoveryAgent {
 
     this.id = nodeKey.getPublicKey().getEncodedBytes();
 
-    this.variablesStorage = storageProvider.createVariablesStorage();
+    this.variablesStorage = variablesStorage;
     this.forkIdManager = forkIdManager;
     this.forkIdSupplier = () -> forkIdManager.getForkIdForChainHead().getForkIdAsBytesList();
     this.rlpxAgent = rlpxAgent;
