@@ -32,13 +32,8 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PoSFastSyncTargetManager extends FastSyncTargetManager {
+public class PoSFastSyncTargetManager extends AbstractFastSyncTargetManager {
   private static final Logger LOG = LoggerFactory.getLogger(PoSFastSyncTargetManager.class);
-
-  private final ProtocolSchedule protocolSchedule;
-  private final EthContext ethContext;
-  private final MetricsSystem metricsSystem;
-  private final FastSyncState fastSyncState;
 
   public PoSFastSyncTargetManager(
       final SynchronizerConfiguration config,
@@ -56,10 +51,6 @@ public class PoSFastSyncTargetManager extends FastSyncTargetManager {
         ethContext,
         metricsSystem,
         fastSyncState);
-    this.protocolSchedule = protocolSchedule;
-    this.ethContext = ethContext;
-    this.metricsSystem = metricsSystem;
-    this.fastSyncState = fastSyncState;
   }
 
   @Override

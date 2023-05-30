@@ -49,14 +49,14 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 @RunWith(Parameterized.class)
-public class FullSyncTargetManagerTest {
+public class PoWFullSyncTargetManagerTest {
 
   private EthProtocolManager ethProtocolManager;
 
   private MutableBlockchain localBlockchain;
   private final WorldStateArchive localWorldState = mock(WorldStateArchive.class);
   private RespondingEthPeer.Responder responder;
-  private FullSyncTargetManager syncTargetManager;
+  private PoWFullSyncTargetManager syncTargetManager;
 
   @Parameterized.Parameters
   public static Collection<Object[]> data() {
@@ -65,7 +65,7 @@ public class FullSyncTargetManagerTest {
 
   private final DataStorageFormat storageFormat;
 
-  public FullSyncTargetManagerTest(final DataStorageFormat storageFormat) {
+  public PoWFullSyncTargetManagerTest(final DataStorageFormat storageFormat) {
     this.storageFormat = storageFormat;
   }
 
@@ -93,7 +93,7 @@ public class FullSyncTargetManagerTest {
     localBlockchainSetup.importFirstBlocks(5);
     otherBlockchainSetup.importFirstBlocks(20);
     syncTargetManager =
-        new FullSyncTargetManager(
+        new PoWFullSyncTargetManager(
             SynchronizerConfiguration.builder().build(),
             protocolSchedule,
             protocolContext,

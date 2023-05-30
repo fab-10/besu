@@ -35,8 +35,8 @@ public class FullSyncChainDownloader {
       final MetricsSystem metricsSystem,
       final SyncTerminationCondition terminationCondition) {
 
-    final FullSyncTargetManager syncTargetManager =
-        new FullSyncTargetManager(
+    final PoWFullSyncTargetManager syncTargetManager =
+        new PoWFullSyncTargetManager(
             config,
             protocolSchedule,
             protocolContext,

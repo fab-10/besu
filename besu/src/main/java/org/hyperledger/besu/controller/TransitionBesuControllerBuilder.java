@@ -223,7 +223,8 @@ public class TransitionBesuControllerBuilder extends BesuControllerBuilder {
       final EthContext ethContext,
       final SyncState syncState,
       final EthProtocolManager ethProtocolManager,
-      final PivotBlockSelector pivotBlockSelector) {
+      final PivotBlockSelector pivotBlockSelector,
+      final boolean optimizeForPoS) {
 
     DefaultSynchronizer sync =
         (DefaultSynchronizer)
@@ -235,7 +236,8 @@ public class TransitionBesuControllerBuilder extends BesuControllerBuilder {
                 ethContext,
                 syncState,
                 ethProtocolManager,
-                pivotBlockSelector);
+                pivotBlockSelector,
+                optimizeForPoS);
     final GenesisConfigOptions maybeForTTD = configOptionsSupplier.get();
 
     if (maybeForTTD.getTerminalTotalDifficulty().isPresent()) {

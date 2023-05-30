@@ -2927,10 +2927,14 @@ public class BesuCommand implements DefaultCommandValues, Runnable {
   }
 
   private SynchronizerConfiguration buildSyncConfig() {
+    final boolean optimizeForPos =
+        getActualGenesisConfigOptions().getTerminalTotalDifficulty().isPresent();
+
     return unstableSynchronizerOptions
         .toDomainObject()
         .syncMode(syncMode)
         .fastSyncMinimumPeerCount(fastSyncMinPeerCount)
+        .optimizeForPos(optimizeForPos)
         .build();
   }
 

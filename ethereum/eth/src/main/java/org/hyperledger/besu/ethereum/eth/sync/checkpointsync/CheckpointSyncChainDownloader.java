@@ -17,11 +17,12 @@ import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.sync.ChainDownloader;
 import org.hyperledger.besu.ethereum.eth.sync.PipelineChainDownloader;
+import org.hyperledger.besu.ethereum.eth.sync.SyncTargetManager;
 import org.hyperledger.besu.ethereum.eth.sync.SynchronizerConfiguration;
 import org.hyperledger.besu.ethereum.eth.sync.fastsync.FastSyncChainDownloader;
 import org.hyperledger.besu.ethereum.eth.sync.fastsync.FastSyncState;
-import org.hyperledger.besu.ethereum.eth.sync.fastsync.FastSyncTargetManager;
 import org.hyperledger.besu.ethereum.eth.sync.fastsync.PoSFastSyncTargetManager;
+import org.hyperledger.besu.ethereum.eth.sync.fastsync.PoWFastSyncTargetManager;
 import org.hyperledger.besu.ethereum.eth.sync.state.SyncState;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateStorage;
@@ -39,15 +40,24 @@ public class CheckpointSyncChainDownloader extends FastSyncChainDownloader {
       final MetricsSystem metricsSystem,
       final FastSyncState fastSyncState) {
 
-    final FastSyncTargetManager syncTargetManager =
-        new PoSFastSyncTargetManager(
-            config,
-            worldStateStorage,
-            protocolSchedule,
-            protocolContext,
-            ethContext,
-            metricsSystem,
-            fastSyncState);
+    final SyncTargetManager syncTargetManager =
+        config.optimizeForPos()
+            ? new PoSFastSyncTargetManager(
+                config,
+                worldStateStorage,
+                protocolSchedule,
+                protocolContext,
+                ethContext,
+                metricsSystem,
+                fastSyncState)
+            : new PoWFastSyncTargetManager(
+                config,
+                worldStateStorage,
+                protocolSchedule,
+                protocolContext,
+                ethContext,
+                metricsSystem,
+                fastSyncState);
 
     return new PipelineChainDownloader(
         syncState,

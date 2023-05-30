@@ -23,7 +23,6 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
-import org.hyperledger.besu.ethereum.eth.sync.SyncTargetManager;
 import org.hyperledger.besu.ethereum.eth.sync.SynchronizerConfiguration;
 import org.hyperledger.besu.ethereum.eth.sync.tasks.RetryingGetHeaderFromPeerByNumberTask;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
@@ -39,21 +38,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class FastSyncTargetManager extends SyncTargetManager {
-  private static final Logger LOG = LoggerFactory.getLogger(FastSyncTargetManager.class);
-
-  private final WorldStateStorage worldStateStorage;
-  private final ProtocolSchedule protocolSchedule;
-  private final ProtocolContext protocolContext;
-  private final EthContext ethContext;
-  private final MetricsSystem metricsSystem;
-  private final FastSyncState fastSyncState;
+public class PoWFastSyncTargetManager extends AbstractFastSyncTargetManager {
+  private static final Logger LOG = LoggerFactory.getLogger(PoWFastSyncTargetManager.class);
   private final AtomicBoolean logDebug = new AtomicBoolean(true);
   private final AtomicBoolean logInfo = new AtomicBoolean(true);
   private final int logDebugRepeatDelay = 15;
   private final int logInfoRepeatDelay = 120;
 
-  public FastSyncTargetManager(
+  public PoWFastSyncTargetManager(
       final SynchronizerConfiguration config,
       final WorldStateStorage worldStateStorage,
       final ProtocolSchedule protocolSchedule,
@@ -61,13 +53,14 @@ public class FastSyncTargetManager extends SyncTargetManager {
       final EthContext ethContext,
       final MetricsSystem metricsSystem,
       final FastSyncState fastSyncState) {
-    super(config, protocolSchedule, protocolContext, ethContext, metricsSystem);
-    this.worldStateStorage = worldStateStorage;
-    this.protocolSchedule = protocolSchedule;
-    this.protocolContext = protocolContext;
-    this.ethContext = ethContext;
-    this.metricsSystem = metricsSystem;
-    this.fastSyncState = fastSyncState;
+    super(
+        config,
+        worldStateStorage,
+        protocolSchedule,
+        protocolContext,
+        ethContext,
+        metricsSystem,
+        fastSyncState);
   }
 
   @Override
@@ -162,21 +155,5 @@ public class FastSyncTargetManager extends SyncTargetManager {
   private boolean peerHasDifferentPivotBlock(final List<BlockHeader> result) {
     final BlockHeader pivotBlockHeader = fastSyncState.getPivotBlockHeader().get();
     return result.size() != 1 || !result.get(0).equals(pivotBlockHeader);
-  }
-
-  @Override
-  public boolean shouldContinueDownloading() {
-    final BlockHeader pivotBlockHeader = fastSyncState.getPivotBlockHeader().get();
-    boolean isValidChainHead =
-        protocolContext.getBlockchain().getChainHeadHash().equals(pivotBlockHeader.getHash());
-    if (!isValidChainHead) {
-      if (protocolContext.getBlockchain().contains(pivotBlockHeader.getHash())) {
-        protocolContext.getBlockchain().rewindToBlock(pivotBlockHeader.getHash());
-      } else {
-        return true;
-      }
-    }
-    return !worldStateStorage.isWorldStateAvailable(
-        pivotBlockHeader.getStateRoot(), pivotBlockHeader.getBlockHash());
   }
 }

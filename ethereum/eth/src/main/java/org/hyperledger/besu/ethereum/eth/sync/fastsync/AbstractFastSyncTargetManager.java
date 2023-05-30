@@ -1,5 +1,5 @@
 /*
- * Copyright ConsenSys AG.
+ * Copyright Hyperledger Besu Contributors.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -15,54 +15,44 @@
 package org.hyperledger.besu.ethereum.eth.sync.fastsync;
 
 import org.hyperledger.besu.ethereum.ProtocolContext;
+import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
-import org.hyperledger.besu.ethereum.eth.sync.ChainDownloader;
-import org.hyperledger.besu.ethereum.eth.sync.PipelineChainDownloader;
 import org.hyperledger.besu.ethereum.eth.sync.SyncTargetManager;
 import org.hyperledger.besu.ethereum.eth.sync.SynchronizerConfiguration;
-import org.hyperledger.besu.ethereum.eth.sync.state.SyncState;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateStorage;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
-public class FastSyncChainDownloader {
+public abstract class AbstractFastSyncTargetManager extends SyncTargetManager {
+  protected final WorldStateStorage worldStateStorage;
+  protected final FastSyncState fastSyncState;
 
-  protected FastSyncChainDownloader() {}
-
-  public static ChainDownloader create(
+  public AbstractFastSyncTargetManager(
       final SynchronizerConfiguration config,
       final WorldStateStorage worldStateStorage,
       final ProtocolSchedule protocolSchedule,
       final ProtocolContext protocolContext,
       final EthContext ethContext,
-      final SyncState syncState,
       final MetricsSystem metricsSystem,
       final FastSyncState fastSyncState) {
+    super(config, protocolSchedule, protocolContext, ethContext, metricsSystem);
+    this.worldStateStorage = worldStateStorage;
+    this.fastSyncState = fastSyncState;
+  }
 
-    final SyncTargetManager syncTargetManager =
-        config.optimizeForPos()
-            ? new PoSFastSyncTargetManager(
-                config,
-                worldStateStorage,
-                protocolSchedule,
-                protocolContext,
-                ethContext,
-                metricsSystem,
-                fastSyncState)
-            : new PoWFastSyncTargetManager(
-                config,
-                worldStateStorage,
-                protocolSchedule,
-                protocolContext,
-                ethContext,
-                metricsSystem,
-                fastSyncState);
-    return new PipelineChainDownloader(
-        syncState,
-        syncTargetManager,
-        new FastSyncDownloadPipelineFactory(
-            config, protocolSchedule, protocolContext, ethContext, fastSyncState, metricsSystem),
-        ethContext.getScheduler(),
-        metricsSystem);
+  @Override
+  public boolean shouldContinueDownloading() {
+    final BlockHeader pivotBlockHeader = fastSyncState.getPivotBlockHeader().get();
+    boolean isValidChainHead =
+        protocolContext.getBlockchain().getChainHeadHash().equals(pivotBlockHeader.getHash());
+    if (!isValidChainHead) {
+      if (protocolContext.getBlockchain().contains(pivotBlockHeader.getHash())) {
+        protocolContext.getBlockchain().rewindToBlock(pivotBlockHeader.getHash());
+      } else {
+        return true;
+      }
+    }
+    return !worldStateStorage.isWorldStateAvailable(
+        pivotBlockHeader.getStateRoot(), pivotBlockHeader.getBlockHash());
   }
 }

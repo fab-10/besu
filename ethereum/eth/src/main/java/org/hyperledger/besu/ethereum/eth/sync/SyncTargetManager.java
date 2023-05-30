@@ -36,11 +36,11 @@ public abstract class SyncTargetManager {
 
   private static final Logger LOG = LoggerFactory.getLogger(SyncTargetManager.class);
 
-  private final SynchronizerConfiguration config;
-  private final ProtocolSchedule protocolSchedule;
-  private final ProtocolContext protocolContext;
-  private final EthContext ethContext;
-  private final MetricsSystem metricsSystem;
+  protected final SynchronizerConfiguration config;
+  protected final ProtocolSchedule protocolSchedule;
+  protected final ProtocolContext protocolContext;
+  protected final EthContext ethContext;
+  protected final MetricsSystem metricsSystem;
 
   protected SyncTargetManager(
       final SynchronizerConfiguration config,

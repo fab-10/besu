@@ -21,7 +21,6 @@ import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
-import org.hyperledger.besu.ethereum.eth.sync.SyncTargetManager;
 import org.hyperledger.besu.ethereum.eth.sync.SynchronizerConfiguration;
 import org.hyperledger.besu.ethereum.eth.sync.state.SyncTarget;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
@@ -34,24 +33,19 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class FullSyncTargetManager extends SyncTargetManager {
+class PoSFullSyncTargetManager extends AbstractFullSyncTargetManager {
 
-  private static final Logger LOG = LoggerFactory.getLogger(FullSyncTargetManager.class);
-  private final ProtocolContext protocolContext;
-  private final EthContext ethContext;
-  private final SyncTerminationCondition terminationCondition;
+  private static final Logger LOG = LoggerFactory.getLogger(PoSFullSyncTargetManager.class);
 
-  FullSyncTargetManager(
+  PoSFullSyncTargetManager(
       final SynchronizerConfiguration config,
       final ProtocolSchedule protocolSchedule,
       final ProtocolContext protocolContext,
       final EthContext ethContext,
       final MetricsSystem metricsSystem,
       final SyncTerminationCondition terminationCondition) {
-    super(config, protocolSchedule, protocolContext, ethContext, metricsSystem);
-    this.protocolContext = protocolContext;
-    this.ethContext = ethContext;
-    this.terminationCondition = terminationCondition;
+    super(
+        config, protocolSchedule, protocolContext, ethContext, metricsSystem, terminationCondition);
   }
 
   @Override

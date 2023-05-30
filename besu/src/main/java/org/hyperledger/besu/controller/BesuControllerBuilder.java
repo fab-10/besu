@@ -700,6 +700,9 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
         createPivotSelector(
             protocolSchedule, protocolContext, ethContext, syncState, metricsSystem);
 
+    final boolean optimizeForPoS =
+        configOptionsSupplier.get().getTerminalTotalDifficulty().isPresent();
+
     final Synchronizer synchronizer =
         createSynchronizer(
             protocolSchedule,
@@ -709,7 +712,8 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
             ethContext,
             syncState,
             ethProtocolManager,
-            pivotBlockSelector);
+            pivotBlockSelector,
+            optimizeForPoS);
 
     protocolContext.setSynchronizer(Optional.of(synchronizer));
 
@@ -769,6 +773,7 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
    * @param syncState the sync state
    * @param ethProtocolManager the eth protocol manager
    * @param pivotBlockSelector the pivot block selector
+   * @param optimizeForPoS use strategies that work better on PoS networks
    * @return the synchronizer
    */
   protected Synchronizer createSynchronizer(
@@ -779,7 +784,8 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
       final EthContext ethContext,
       final SyncState syncState,
       final EthProtocolManager ethProtocolManager,
-      final PivotBlockSelector pivotBlockSelector) {
+      final PivotBlockSelector pivotBlockSelector,
+      final boolean optimizeForPoS) {
 
     final DefaultSynchronizer toUse =
         new DefaultSynchronizer(
@@ -796,7 +802,8 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
             clock,
             metricsSystem,
             getFullSyncTerminationCondition(protocolContext.getBlockchain()),
-            pivotBlockSelector);
+            pivotBlockSelector,
+            optimizeForPoS);
 
     return toUse;
   }

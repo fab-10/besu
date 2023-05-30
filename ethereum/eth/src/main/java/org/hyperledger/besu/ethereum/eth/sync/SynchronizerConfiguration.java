@@ -49,8 +49,8 @@ public class SynchronizerConfiguration {
       CachingTaskCollection.DEFAULT_CACHE_SIZE;
   public static final long DEFAULT_PROPAGATION_MANAGER_GET_BLOCK_TIMEOUT_MILLIS =
       TimeUnit.SECONDS.toMillis(60);
-
   public static final boolean DEFAULT_CHECKPOINT_POST_MERGE_ENABLED = false;
+  public static final boolean DEFAULT_OPTIMIZE_FOR_POS = false;
 
   // Fast sync config
   private final int fastSyncPivotDistance;
@@ -85,6 +85,7 @@ public class SynchronizerConfiguration {
   private final int maxTrailingPeers;
   private final long worldStateMinMillisBeforeStalling;
   private final long propagationManagerGetBlockTimeoutMillis;
+  private final boolean optimizeForPos;
 
   private SynchronizerConfiguration(
       final int fastSyncPivotDistance,
@@ -108,7 +109,8 @@ public class SynchronizerConfiguration {
       final int computationParallelism,
       final int maxTrailingPeers,
       final long propagationManagerGetBlockTimeoutMillis,
-      final boolean checkpointPostMergeEnabled) {
+      final boolean checkpointPostMergeEnabled,
+      final boolean optimizedForPos) {
     this.fastSyncPivotDistance = fastSyncPivotDistance;
     this.fastSyncFullValidationRate = fastSyncFullValidationRate;
     this.fastSyncMinimumPeerCount = fastSyncMinimumPeerCount;
@@ -131,6 +133,7 @@ public class SynchronizerConfiguration {
     this.maxTrailingPeers = maxTrailingPeers;
     this.propagationManagerGetBlockTimeoutMillis = propagationManagerGetBlockTimeoutMillis;
     this.checkpointPostMergeEnabled = checkpointPostMergeEnabled;
+    this.optimizeForPos = optimizedForPos;
   }
 
   public static Builder builder() {
@@ -254,6 +257,10 @@ public class SynchronizerConfiguration {
     return propagationManagerGetBlockTimeoutMillis;
   }
 
+  public boolean optimizeForPos() {
+    return optimizeForPos;
+  }
+
   public static class Builder {
     private SyncMode syncMode = SyncMode.FULL;
     private int fastSyncMinimumPeerCount = DEFAULT_FAST_SYNC_MINIMUM_PEERS;
@@ -283,6 +290,7 @@ public class SynchronizerConfiguration {
     private long propagationManagerGetBlockTimeoutMillis =
         DEFAULT_PROPAGATION_MANAGER_GET_BLOCK_TIMEOUT_MILLIS;
     private boolean checkpointPostMergeEnabled = DEFAULT_CHECKPOINT_POST_MERGE_ENABLED;
+    private boolean optimizeForPos = DEFAULT_OPTIMIZE_FOR_POS;
 
     public Builder fastSyncPivotDistance(final int distance) {
       fastSyncPivotDistance = distance;
@@ -406,6 +414,11 @@ public class SynchronizerConfiguration {
       return this;
     }
 
+    public Builder optimizeForPos(final boolean optimizeForPos) {
+      this.optimizeForPos = optimizeForPos;
+      return this;
+    }
+
     public SynchronizerConfiguration build() {
       return new SynchronizerConfiguration(
           fastSyncPivotDistance,
@@ -429,7 +442,8 @@ public class SynchronizerConfiguration {
           computationParallelism,
           maxTrailingPeers,
           propagationManagerGetBlockTimeoutMillis,
-          checkpointPostMergeEnabled);
+          checkpointPostMergeEnabled,
+          optimizeForPos);
     }
   }
 }
