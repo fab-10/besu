@@ -43,7 +43,6 @@ import org.hyperledger.besu.plugin.services.txselection.TransactionSelectorFacto
 
 import java.util.ArrayList;
 import java.util.EnumMap;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -79,12 +78,15 @@ import org.slf4j.LoggerFactory;
  */
 public class BlockTransactionSelector {
 
+  public record TransactionValidationResult(
+      Transaction transaction, ValidationResult<TransactionInvalidReason> validationResult) {}
+
   public static class TransactionSelectionResults {
     private final List<Transaction> transactions = Lists.newArrayList();
     private final Map<TransactionType, List<Transaction>> transactionsByType =
         new EnumMap<>(TransactionType.class);
     private final List<TransactionReceipt> receipts = Lists.newArrayList();
-    private final Map<Transaction, TransactionInvalidReason> invalidTransactions = new HashMap<>();
+    private final List<TransactionValidationResult> invalidTransactions = Lists.newArrayList();
     private final List<TransactionSelectionResult> selectionResults = Lists.newArrayList();
     private long cumulativeGasUsed = 0;
     private long cumulativeDataGasUsed = 0;
@@ -112,8 +114,9 @@ public class BlockTransactionSelector {
     }
 
     private void updateWithInvalidTransaction(
-        final Transaction transaction, final TransactionInvalidReason invalidReason) {
-      invalidTransactions.put(transaction, invalidReason);
+        final Transaction transaction,
+        final ValidationResult<TransactionInvalidReason> validationResult) {
+      invalidTransactions.add(new TransactionValidationResult(transaction, validationResult));
     }
 
     public List<Transaction> getTransactions() {
@@ -136,7 +139,7 @@ public class BlockTransactionSelector {
       return cumulativeDataGasUsed;
     }
 
-    public Map<Transaction, TransactionInvalidReason> getInvalidTransactions() {
+    public List<TransactionValidationResult> getInvalidTransactions() {
       return invalidTransactions;
     }
 
@@ -275,7 +278,7 @@ public class BlockTransactionSelector {
         .log();
     pendingTransactions.selectTransactions(
         pendingTransaction -> {
-          final var res = evaluateTransaction(pendingTransaction);
+          final var res = evaluateTransaction(pendingTransaction, false);
           transactionSelectionResults.addSelectionResult(res);
           return res;
         });
@@ -295,7 +298,7 @@ public class BlockTransactionSelector {
   public TransactionSelectionResults evaluateTransactions(final List<Transaction> transactions) {
     transactions.forEach(
         transaction ->
-            transactionSelectionResults.addSelectionResult(evaluateTransaction(transaction)));
+            transactionSelectionResults.addSelectionResult(evaluateTransaction(transaction, true)));
     return transactionSelectionResults;
   }
 
@@ -308,7 +311,8 @@ public class BlockTransactionSelector {
    * the space remaining in the block.
    *
    */
-  private TransactionSelectionResult evaluateTransaction(final Transaction transaction) {
+  private TransactionSelectionResult evaluateTransaction(
+      final Transaction transaction, final boolean reportFutureNonceTransactionsAsInvalid) {
     if (isCancelled.get()) {
       throw new CancellationException("Cancelled during transaction selection.");
     }
@@ -389,9 +393,12 @@ public class BlockTransactionSelector {
       }
       return txSelectionResult;
     } else {
-      transactionSelectionResults.updateWithInvalidTransaction(
-          transaction, effectiveResult.getValidationResult().getInvalidReason());
 
+      final boolean isIncorrectNonce = isIncorrectNonce(effectiveResult.getValidationResult());
+      if (!isIncorrectNonce || reportFutureNonceTransactionsAsInvalid) {
+        transactionSelectionResults.updateWithInvalidTransaction(
+            transaction, effectiveResult.getValidationResult());
+      }
       return transactionSelectionResultForInvalidResult(
           transaction, effectiveResult.getValidationResult());
     }
@@ -463,6 +470,10 @@ public class BlockTransactionSelector {
   private boolean isTransientValidationError(final TransactionInvalidReason invalidReason) {
     return invalidReason.equals(TransactionInvalidReason.GAS_PRICE_BELOW_CURRENT_BASE_FEE)
         || invalidReason.equals(TransactionInvalidReason.NONCE_TOO_HIGH);
+  }
+
+  private boolean isIncorrectNonce(final ValidationResult<TransactionInvalidReason> result) {
+    return result.getInvalidReason().equals(TransactionInvalidReason.NONCE_TOO_HIGH);
   }
 
   private boolean transactionTooLargeForBlock(final Transaction transaction) {
