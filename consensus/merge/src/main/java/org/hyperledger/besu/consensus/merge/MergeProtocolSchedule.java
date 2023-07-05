@@ -30,6 +30,7 @@ import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /** The Merge protocol schedule. */
@@ -62,11 +63,11 @@ public class MergeProtocolSchedule {
       final PrivacyParameters privacyParameters,
       final boolean isRevertReasonEnabled) {
 
-    Map<Long, Function<ProtocolSpecBuilder, ProtocolSpecBuilder>> postMergeModifications =
+    Map<Long, BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder>> postMergeModifications =
         new HashMap<>();
     postMergeModifications.put(
         0L,
-        (specBuilder) ->
+        (protocolSchedule, specBuilder) ->
             MergeProtocolSchedule.applyParisSpecificModifications(
                 specBuilder, config.getChainId()));
     unapplyModificationsFromShanghaiOnwards(config, postMergeModifications);
@@ -109,11 +110,11 @@ public class MergeProtocolSchedule {
 
   private static void unapplyModificationsFromShanghaiOnwards(
       final GenesisConfigOptions config,
-      final Map<Long, Function<ProtocolSpecBuilder, ProtocolSpecBuilder>> postMergeModifications) {
+      final Map<Long, BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder>> postMergeModifications) {
     // Any post-Paris fork can rely on the MainnetProtocolSpec definitions again
     // Must allow for config to skip Shanghai and go straight to a later fork.
     if (config.getForkBlockTimestamps().size() > 0) {
-      postMergeModifications.put(config.getForkBlockTimestamps().get(0), Function.identity());
+      postMergeModifications.put(config.getForkBlockTimestamps().get(0), ((protocolSchedule, protocolSpecBuilder) -> protocolSpecBuilder));
     }
   }
 }

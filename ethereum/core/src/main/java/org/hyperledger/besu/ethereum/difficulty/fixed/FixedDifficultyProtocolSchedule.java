@@ -33,7 +33,7 @@ public class FixedDifficultyProtocolSchedule {
             config,
             ProtocolSpecAdapters.create(
                 0,
-                builder ->
+                    (unused, builder) ->
                     builder.difficultyCalculator(FixedDifficultyCalculators.calculator(config))),
             privacyParameters,
             isRevertReasonEnabled,

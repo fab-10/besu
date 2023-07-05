@@ -213,16 +213,16 @@ public class TransitionProtocolSchedule implements ProtocolSchedule {
     return transitionUtils.dispatchFunctionAccordingToMergeState(ProtocolSchedule::listMilestones);
   }
 
-  /**
-   * Sets transaction filter.
-   *
-   * @param transactionFilter the transaction filter
-   */
-  @Override
-  public void setTransactionFilter(final TransactionFilter transactionFilter) {
-    transitionUtils.dispatchConsumerAccordingToMergeState(
-        protocolSchedule -> protocolSchedule.setTransactionFilter(transactionFilter));
-  }
+//  /**
+//   * Sets transaction filter.
+//   *
+//   * @param transactionFilter the transaction filter
+//   */
+//  @Override
+//  public void setTransactionFilter(final TransactionFilter transactionFilter) {
+//    transitionUtils.dispatchConsumerAccordingToMergeState(
+//        protocolSchedule -> protocolSchedule.setTransactionFilter(transactionFilter));
+//  }
 
   /**
    * Sets public world state archive for privacy block processor.

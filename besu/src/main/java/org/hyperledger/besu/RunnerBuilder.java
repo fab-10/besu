@@ -784,7 +784,7 @@ public class RunnerBuilder {
     final Optional<AccountPermissioningController> accountPermissioningController =
         buildAccountPermissioningController(
             permissioningConfiguration,
-            besuController,
+        //    besuController,
             transactionSimulator,
             context.getBlockchain());
 
@@ -1128,7 +1128,7 @@ public class RunnerBuilder {
 
   private Optional<AccountPermissioningController> buildAccountPermissioningController(
       final Optional<PermissioningConfiguration> permissioningConfiguration,
-      final BesuController besuController,
+   //   final BesuController besuController,
       final TransactionSimulator transactionSimulator,
       final Blockchain blockchain) {
 
@@ -1136,12 +1136,12 @@ public class RunnerBuilder {
       final Optional<AccountPermissioningController> accountPermissioningController =
           AccountPermissioningControllerFactory.create(
               permissioningConfiguration.get(), transactionSimulator, metricsSystem, blockchain);
-
-      accountPermissioningController.ifPresent(
-          permissioningController ->
-              besuController
-                  .getProtocolSchedule()
-                  .setTransactionFilter(permissioningController::isPermitted));
+//
+//      accountPermissioningController.ifPresent(
+//          permissioningController ->
+//              besuController
+//                  .getProtocolSchedule()
+//                  .setTransactionFilter(permissioningController::isPermitted));
 
       return accountPermissioningController;
     } else {

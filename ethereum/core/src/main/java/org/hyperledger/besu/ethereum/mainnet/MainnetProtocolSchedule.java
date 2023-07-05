@@ -50,7 +50,7 @@ public class MainnetProtocolSchedule {
     return new ProtocolScheduleBuilder(
             config,
             DEFAULT_CHAIN_ID,
-            ProtocolSpecAdapters.create(0, Function.identity()),
+            ProtocolSpecAdapters.create(0, ((protocolSchedule, protocolSpecBuilder) -> protocolSpecBuilder)),
             privacyParameters,
             isRevertReasonEnabled,
             evmConfiguration)

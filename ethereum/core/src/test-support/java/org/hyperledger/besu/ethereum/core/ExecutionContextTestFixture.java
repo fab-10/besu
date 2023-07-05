@@ -135,7 +135,7 @@ public class ExecutionContextTestFixture {
             new ProtocolScheduleBuilder(
                     new StubGenesisConfigOptions().petersburgBlock(0),
                     BigInteger.valueOf(42),
-                    ProtocolSpecAdapters.create(0, Function.identity()),
+                    ProtocolSpecAdapters.create(0, ((protSched, protocolSpecBuilder) -> protocolSpecBuilder)),
                     new PrivacyParameters(),
                     false,
                     EvmConfiguration.DEFAULT)

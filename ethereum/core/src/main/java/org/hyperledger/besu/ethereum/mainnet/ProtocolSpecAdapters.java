@@ -18,39 +18,40 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.NavigableSet;
 import java.util.TreeSet;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Stream;
 
 public class ProtocolSpecAdapters {
 
-  final Map<Long, Function<ProtocolSpecBuilder, ProtocolSpecBuilder>> modifiers;
+  final Map<Long, BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder>> modifiers;
 
   public ProtocolSpecAdapters(
-      final Map<Long, Function<ProtocolSpecBuilder, ProtocolSpecBuilder>> modifiers) {
+      final Map<Long, BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder>> modifiers) {
     this.modifiers = modifiers;
   }
 
   public static ProtocolSpecAdapters create(
       final long blockNumberOrTimestamp,
-      final Function<ProtocolSpecBuilder, ProtocolSpecBuilder> modifier) {
-    final Map<Long, Function<ProtocolSpecBuilder, ProtocolSpecBuilder>> entries = new HashMap<>();
+      final BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder> modifier) {
+    final Map<Long, BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder>> entries = new HashMap<>();
     entries.put(blockNumberOrTimestamp, modifier);
     return new ProtocolSpecAdapters(entries);
   }
 
-  public Function<ProtocolSpecBuilder, ProtocolSpecBuilder> getModifierForBlock(
+  public BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder> getModifierForBlock(
       final long blockNumberOrTimestamp) {
     final NavigableSet<Long> epochs = new TreeSet<>(modifiers.keySet());
     final Long modifier = epochs.floor(blockNumberOrTimestamp);
 
     if (modifier == null) {
-      return Function.identity();
+      return (unused, builder) -> builder;
     }
 
     return modifiers.get(modifier);
   }
 
-  public Stream<Map.Entry<Long, Function<ProtocolSpecBuilder, ProtocolSpecBuilder>>> stream() {
+  public Stream<Map.Entry<Long, BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder>>> stream() {
     return modifiers.entrySet().stream();
   }
 }

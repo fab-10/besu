@@ -94,7 +94,7 @@ public class ReferenceTestProtocolSchedules {
     return new ProtocolScheduleBuilder(
             options,
             CHAIN_ID,
-            ProtocolSpecAdapters.create(0, Function.identity()),
+            ProtocolSpecAdapters.create(0, ((protocolSchedule, protocolSpecBuilder) -> protocolSpecBuilder)),
             PrivacyParameters.DEFAULT,
             false,
             EvmConfiguration.DEFAULT)

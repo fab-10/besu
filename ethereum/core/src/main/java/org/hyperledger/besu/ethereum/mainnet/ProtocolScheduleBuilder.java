@@ -24,6 +24,7 @@ import java.math.BigInteger;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.TreeMap;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -193,7 +194,7 @@ public class ProtocolScheduleBuilder {
                   classicBlockNumber,
                   ClassicProtocolSpecs.classicRecoveryInitDefinition(
                       config.getContractSizeLimit(), config.getEvmStackSize(), evmConfiguration),
-                  Function.identity());
+                  (unused, builder) -> builder);
               protocolSchedule.putBlockNumberMilestone(
                   classicBlockNumber + 1, originalProtocolSpec);
             });
@@ -358,14 +359,14 @@ public class ProtocolScheduleBuilder {
   private ProtocolSpec getProtocolSpec(
       final ProtocolSchedule protocolSchedule,
       final ProtocolSpecBuilder definition,
-      final Function<ProtocolSpecBuilder, ProtocolSpecBuilder> modifier) {
+      final BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder> modifier) {
     definition
         .badBlocksManager(badBlockManager)
         .privacyParameters(privacyParameters)
         .privateTransactionValidatorBuilder(
             () -> new PrivateTransactionValidator(protocolSchedule.getChainId()));
 
-    return modifier.apply(definition).build(protocolSchedule);
+    return modifier.apply(protocolSchedule, definition).build(protocolSchedule);
   }
 
   private void addProtocolSpec(
@@ -373,7 +374,7 @@ public class ProtocolScheduleBuilder {
       final BuilderMapEntry.MilestoneType milestoneType,
       final long blockNumberOrTimestamp,
       final ProtocolSpecBuilder definition,
-      final Function<ProtocolSpecBuilder, ProtocolSpecBuilder> modifier) {
+      final BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder> modifier) {
 
     switch (milestoneType) {
       case BLOCK_NUMBER -> protocolSchedule.putBlockNumberMilestone(
@@ -392,13 +393,13 @@ public class ProtocolScheduleBuilder {
     private final MilestoneType milestoneType;
     private final long blockIdentifier;
     private final ProtocolSpecBuilder builder;
-    private final Function<ProtocolSpecBuilder, ProtocolSpecBuilder> modifier;
+    private final BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder> modifier;
 
     public BuilderMapEntry(
         final MilestoneType milestoneType,
         final long blockIdentifier,
         final ProtocolSpecBuilder builder,
-        final Function<ProtocolSpecBuilder, ProtocolSpecBuilder> modifier) {
+        final BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder> modifier) {
       this.milestoneType = milestoneType;
       this.blockIdentifier = blockIdentifier;
       this.builder = builder;
@@ -413,7 +414,7 @@ public class ProtocolScheduleBuilder {
       return builder;
     }
 
-    public Function<ProtocolSpecBuilder, ProtocolSpecBuilder> getModifier() {
+    public BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder> getModifier() {
       return modifier;
     }
 

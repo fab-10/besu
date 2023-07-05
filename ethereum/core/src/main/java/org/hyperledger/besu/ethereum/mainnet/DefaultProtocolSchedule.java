@@ -110,11 +110,11 @@ public class DefaultProtocolSchedule implements ProtocolSchedule {
     return this.protocolSpecs.stream().anyMatch(predicate);
   }
 
-  @Override
-  public void setTransactionFilter(final TransactionFilter transactionFilter) {
-    protocolSpecs.forEach(
-        spec -> spec.spec().getTransactionValidator().setTransactionFilter(transactionFilter));
-  }
+//  @Override
+//  public void setTransactionFilter(final TransactionFilter transactionFilter) {
+//    protocolSpecs.forEach(
+//        spec -> spec.spec().getTransactionValidator().setTransactionFilter(transactionFilter));
+//  }
 
   @Override
   public void setPublicWorldStateArchiveForPrivacyBlockProcessor(

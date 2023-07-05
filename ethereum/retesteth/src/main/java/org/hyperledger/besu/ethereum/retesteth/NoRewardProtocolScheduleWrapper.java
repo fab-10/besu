@@ -120,10 +120,10 @@ public class NoRewardProtocolScheduleWrapper implements ProtocolSchedule {
     return delegate.listMilestones();
   }
 
-  @Override
-  public void setTransactionFilter(final TransactionFilter transactionFilter) {
-    delegate.setTransactionFilter(transactionFilter);
-  }
+//  @Override
+//  public void setTransactionFilter(final TransactionFilter transactionFilter) {
+//    delegate.setTransactionFilter(transactionFilter);
+//  }
 
   @Override
   public void setPublicWorldStateArchiveForPrivacyBlockProcessor(

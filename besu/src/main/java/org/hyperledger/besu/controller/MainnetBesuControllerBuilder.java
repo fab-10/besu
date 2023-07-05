@@ -97,6 +97,7 @@ public class MainnetBesuControllerBuilder extends BesuControllerBuilder {
 
   @Override
   protected void prepForBuild() {
+    super.prepForBuild();
     configOptionsSupplier
         .get()
         .getThanosBlockNumber()

@@ -34,6 +34,7 @@ import org.hyperledger.besu.evm.internal.EvmConfiguration;
 import java.math.BigInteger;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 /** Defines the protocol behaviours for a blockchain using a BFT consensus mechanism. */
@@ -59,7 +60,7 @@ public abstract class BaseBftProtocolScheduleBuilder {
       final boolean isRevertReasonEnabled,
       final BftExtraDataCodec bftExtraDataCodec,
       final EvmConfiguration evmConfiguration) {
-    final Map<Long, Function<ProtocolSpecBuilder, ProtocolSpecBuilder>> specMap = new HashMap<>();
+    final Map<Long, BiFunction<ProtocolSchedule, ProtocolSpecBuilder, ProtocolSpecBuilder>> specMap = new HashMap<>();
 
     forksSchedule
         .getForks()
@@ -67,7 +68,7 @@ public abstract class BaseBftProtocolScheduleBuilder {
             forkSpec ->
                 specMap.put(
                     forkSpec.getBlock(),
-                    builder -> applyBftChanges(builder, forkSpec.getValue(), bftExtraDataCodec)));
+                        (protocolSchedule, builder) -> applyBftChanges(builder, forkSpec.getValue(), bftExtraDataCodec)));
 
     final ProtocolSpecAdapters specAdapters = new ProtocolSpecAdapters(specMap);
 

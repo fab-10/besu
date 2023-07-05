@@ -47,6 +47,7 @@ import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.core.Synchronizer;
+import org.hyperledger.besu.ethereum.core.TransactionFilter;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
 import org.hyperledger.besu.ethereum.eth.SnapProtocol;
@@ -80,8 +81,12 @@ import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.p2p.config.NetworkingConfiguration;
 import org.hyperledger.besu.ethereum.p2p.config.SubProtocolConfiguration;
+import org.hyperledger.besu.ethereum.permissioning.PermissioningConfiguration;
+import org.hyperledger.besu.ethereum.permissioning.account.AccountPermissioningController;
+import org.hyperledger.besu.ethereum.permissioning.account.AccountPermissioningControllerFactory;
 import org.hyperledger.besu.ethereum.storage.StorageProvider;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueSegmentIdentifier;
+import org.hyperledger.besu.ethereum.transaction.TransactionSimulator;
 import org.hyperledger.besu.ethereum.worldstate.DataStorageConfiguration;
 import org.hyperledger.besu.ethereum.worldstate.DataStorageFormat;
 import org.hyperledger.besu.ethereum.worldstate.DefaultWorldStateArchive;
@@ -140,6 +145,9 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
   protected ObservableMetricsSystem metricsSystem;
   /** The Privacy parameters. */
   protected PrivacyParameters privacyParameters;
+  /** The permissioning configuration. */
+protected Optional<PermissioningConfiguration> permissioningConfiguration = Optional.empty();
+protected Optional<TransactionFilter> transactionFilter = Optional.empty();
   /** The Pki block creation configuration. */
   protected Optional<PkiBlockCreationConfiguration> pkiBlockCreationConfiguration =
       Optional.empty();
@@ -306,6 +314,10 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
    */
   public BesuControllerBuilder privacyParameters(final PrivacyParameters privacyParameters) {
     this.privacyParameters = privacyParameters;
+    return this;
+  }
+  public BesuControllerBuilder permissioningConfiguration(final Optional<PermissioningConfiguration> permissioningConfiguration) {
+    this.permissioningConfiguration = permissioningConfiguration;
     return this;
   }
 
@@ -877,7 +889,9 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
   }
 
   /** Prep for build. */
-  protected void prepForBuild() {}
+  protected void prepForBuild() {
+
+  }
 
   /**
    * Create additional json rpc method factory json rpc methods.

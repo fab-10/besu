@@ -26,6 +26,7 @@ import org.hyperledger.besu.ethereum.mainnet.BlockHeaderValidator;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockBodyValidator;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockImporter;
 import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSpecs;
+import org.hyperledger.besu.ethereum.mainnet.PermissioningTransactionValidator;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
@@ -74,7 +75,7 @@ public class CliqueProtocolSchedule {
             DEFAULT_CHAIN_ID,
             ProtocolSpecAdapters.create(
                 0,
-                builder ->
+                (protocolSchedule, builder) ->
                     applyCliqueSpecificModifications(
                         epochManager,
                         cliqueConfig.getBlockPeriodSeconds(),
@@ -124,7 +125,8 @@ public class CliqueProtocolSchedule {
         .blockReward(Wei.ZERO)
         .skipZeroBlockRewards(true)
         .miningBeneficiaryCalculator(CliqueHelpers::getProposerOfBlock)
-        .blockHeaderFunctions(new CliqueBlockHeaderFunctions());
+        .blockHeaderFunctions(new CliqueBlockHeaderFunctions())
+            .transactionValidatorBuilder(((gasCalculator, gasLimitCalculator) -> new PermissioningTransactionValidator(specBuilder.)))
   }
 
   private static BlockHeaderValidator.Builder getBlockHeaderValidator(

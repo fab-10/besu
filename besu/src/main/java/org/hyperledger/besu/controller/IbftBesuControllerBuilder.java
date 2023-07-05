@@ -101,6 +101,7 @@ public class IbftBesuControllerBuilder extends BftBesuControllerBuilder {
 
   @Override
   protected void prepForBuild() {
+    super.prepForBuild();
     bftConfig = configOptionsSupplier.get().getBftConfigOptions();
     bftEventQueue = new BftEventQueue(bftConfig.getMessageQueueLimit());
     forksSchedule = IbftForksSchedulesFactory.create(configOptionsSupplier.get());

@@ -57,6 +57,7 @@ public class CliqueBesuControllerBuilder extends BesuControllerBuilder {
 
   @Override
   protected void prepForBuild() {
+    super.prepForBuild();
     localAddress = Util.publicKeyToAddress(nodeKey.getPublicKey());
     final CliqueConfigOptions cliqueConfig = configOptionsSupplier.get().getCliqueConfigOptions();
     final long blocksPerEpoch = cliqueConfig.getEpochLength();

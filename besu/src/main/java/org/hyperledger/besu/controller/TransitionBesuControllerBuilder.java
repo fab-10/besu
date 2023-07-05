@@ -96,6 +96,7 @@ public class TransitionBesuControllerBuilder extends BesuControllerBuilder {
 
   @Override
   protected void prepForBuild() {
+    super.prepForBuild();
     preMergeBesuControllerBuilder.prepForBuild();
     mergeBesuControllerBuilder.prepForBuild();
   }

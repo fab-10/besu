@@ -119,6 +119,7 @@ public class QbftBesuControllerBuilder extends BftBesuControllerBuilder {
 
   @Override
   protected void prepForBuild() {
+    super.prepForBuild();
     qbftConfig = configOptionsSupplier.get().getQbftConfigOptions();
     bftEventQueue = new BftEventQueue(qbftConfig.getMessageQueueLimit());
     qbftForksSchedule = QbftForksSchedulesFactory.create(configOptionsSupplier.get());

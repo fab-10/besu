@@ -14,6 +14,8 @@
  */
 package org.hyperledger.besu.ethereum.mainnet;
 
+import static org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason.CHAIN_HEAD_NOT_AVAILABLE;
+import static org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason.CHAIN_HEAD_WORLD_STATE_NOT_AVAILABLE;
 import static org.hyperledger.besu.evm.account.Account.MAX_NONCE;
 
 import org.hyperledger.besu.crypto.SECPSignature;
@@ -21,13 +23,18 @@ import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.GasLimitCalculator;
+import org.hyperledger.besu.ethereum.ProtocolContext;
+import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionFilter;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
+import org.hyperledger.besu.ethereum.trie.MerkleTrieException;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
 import org.hyperledger.besu.plugin.data.TransactionType;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.math.BigInteger;
 import java.util.Optional;
@@ -40,7 +47,6 @@ import java.util.Set;
  * {@link Transaction}.
  */
 public class MainnetTransactionValidator implements TransactionValidator {
-
   private final GasCalculator gasCalculator;
   private final GasLimitCalculator gasLimitCalculator;
   private final FeeMarket feeMarket;
@@ -49,7 +55,6 @@ public class MainnetTransactionValidator implements TransactionValidator {
 
   private final Optional<BigInteger> chainId;
 
-  private Optional<TransactionFilter> transactionFilter = Optional.empty();
   private final Set<TransactionType> acceptedTransactionTypes;
 
   private final int maxInitcodeSize;
@@ -100,22 +105,13 @@ public class MainnetTransactionValidator implements TransactionValidator {
     this.maxInitcodeSize = maxInitcodeSize;
   }
 
-  /**
-   * Asserts whether a transaction is valid.
-   *
-   * @param transaction the transaction to validate
-   * @param baseFee optional baseFee
-   * @param transactionValidationParams Validation parameters that will be used
-   * @return An empty {@link Optional} if the transaction is considered valid; otherwise an {@code
-   *     Optional} containing a {@link TransactionInvalidReason} that identifies why the transaction
-   *     is invalid.
-   */
   @Override
   public ValidationResult<TransactionInvalidReason> validate(
       final Transaction transaction,
       final Optional<Wei> baseFee,
       final TransactionValidationParams transactionValidationParams) {
-    final ValidationResult<TransactionInvalidReason> signatureResult =
+
+    final var signatureResult =
         validateTransactionSignature(transaction);
     if (!signatureResult.isValid()) {
       return signatureResult;
@@ -249,17 +245,16 @@ public class MainnetTransactionValidator implements TransactionValidator {
               transaction.getSender()));
     }
 
-    if (!isSenderAllowed(transaction, validationParams)) {
-      return ValidationResult.invalid(
-          TransactionInvalidReason.TX_SENDER_NOT_AUTHORIZED,
-          String.format("Sender %s is not on the Account Allowlist", transaction.getSender()));
-    }
+//    if (!isSenderAllowed(transaction, validationParams)) {
+//      return ValidationResult.invalid(
+//          TransactionInvalidReason.TX_SENDER_NOT_AUTHORIZED,
+//          String.format("Sender %s is not on the Account Allowlist", transaction.getSender()));
+//    }
 
     return ValidationResult.valid();
   }
 
-  @Override
-  public ValidationResult<TransactionInvalidReason> validateTransactionSignature(
+  private ValidationResult<TransactionInvalidReason> validateTransactionSignature(
       final Transaction transaction) {
     if (chainId.isPresent()
         && (transaction.getChainId().isPresent() && !transaction.getChainId().equals(chainId))) {
@@ -297,25 +292,25 @@ public class MainnetTransactionValidator implements TransactionValidator {
     }
     return ValidationResult.valid();
   }
-
-  private boolean isSenderAllowed(
-      final Transaction transaction, final TransactionValidationParams validationParams) {
-    if (validationParams.checkLocalPermissions() || validationParams.checkOnchainPermissions()) {
-      return transactionFilter
-          .map(
-              c ->
-                  c.permitted(
-                      transaction,
-                      validationParams.checkLocalPermissions(),
-                      validationParams.checkOnchainPermissions()))
-          .orElse(true);
-    } else {
-      return true;
-    }
-  }
-
-  @Override
-  public void setTransactionFilter(final TransactionFilter transactionFilter) {
-    this.transactionFilter = Optional.of(transactionFilter);
-  }
+//
+//  private boolean isSenderAllowed(
+//      final Transaction transaction, final TransactionValidationParams validationParams) {
+//    if (validationParams.checkLocalPermissions() || validationParams.checkOnchainPermissions()) {
+//      return transactionFilter
+//          .map(
+//              c ->
+//                  c.permitted(
+//                      transaction,
+//                      validationParams.checkLocalPermissions(),
+//                      validationParams.checkOnchainPermissions()))
+//          .orElse(true);
+//    } else {
+//      return true;
+//    }
+//  }
+//
+//  @Override
+//  public void setTransactionFilter(final TransactionFilter transactionFilter) {
+//    this.transactionFilter = Optional.of(transactionFilter);
+//  }
 }
