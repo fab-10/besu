@@ -125,8 +125,7 @@ public class CliqueProtocolSchedule {
         .blockReward(Wei.ZERO)
         .skipZeroBlockRewards(true)
         .miningBeneficiaryCalculator(CliqueHelpers::getProposerOfBlock)
-        .blockHeaderFunctions(new CliqueBlockHeaderFunctions())
-            .transactionValidatorBuilder(((gasCalculator, gasLimitCalculator) -> new PermissioningTransactionValidator(specBuilder.)))
+        .blockHeaderFunctions(new CliqueBlockHeaderFunctions());
   }
 
   private static BlockHeaderValidator.Builder getBlockHeaderValidator(

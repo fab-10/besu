@@ -19,8 +19,8 @@ import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.GasLimitCalculator;
+import org.hyperledger.besu.ethereum.core.PermissionTransactionFilter;
 import org.hyperledger.besu.ethereum.core.Transaction;
-import org.hyperledger.besu.ethereum.core.TransactionFilter;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.account.Account;
@@ -35,8 +35,8 @@ import static org.hyperledger.besu.evm.account.Account.MAX_NONCE;
 
 public class PermissioningTransactionValidator implements TransactionValidator {
   private final TransactionValidator delegateTransactionValidator;
-  private final TransactionFilter transactionFilter;
-  public PermissioningTransactionValidator(final TransactionValidator delegateTransactionValidator, final TransactionFilter transactionFilter) {
+  private final PermissionTransactionFilter transactionFilter;
+  public PermissioningTransactionValidator(final TransactionValidator delegateTransactionValidator, final PermissionTransactionFilter transactionFilter) {
     this.delegateTransactionValidator = delegateTransactionValidator;
     this.transactionFilter = transactionFilter;
   }

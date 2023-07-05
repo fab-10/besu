@@ -23,10 +23,10 @@ import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.GasLimitCalculator;
+import org.hyperledger.besu.ethereum.core.PermissionTransactionFilter;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
-import org.hyperledger.besu.ethereum.core.TransactionFilter;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.ethereum.trie.MerkleTrieException;
@@ -292,11 +292,11 @@ public class MainnetTransactionValidator implements TransactionValidator {
     }
     return ValidationResult.valid();
   }
-//
+
 //  private boolean isSenderAllowed(
 //      final Transaction transaction, final TransactionValidationParams validationParams) {
 //    if (validationParams.checkLocalPermissions() || validationParams.checkOnchainPermissions()) {
-//      return transactionFilter
+//      return permissionTransactionFilter
 //          .map(
 //              c ->
 //                  c.permitted(
@@ -310,7 +310,8 @@ public class MainnetTransactionValidator implements TransactionValidator {
 //  }
 //
 //  @Override
-//  public void setTransactionFilter(final TransactionFilter transactionFilter) {
-//    this.transactionFilter = Optional.of(transactionFilter);
+//  public void setPermissionTransactionFilter(
+//      final PermissionTransactionFilter permissionTransactionFilter) {
+//    this.permissionTransactionFilter = Optional.of(permissionTransactionFilter);
 //  }
 }
