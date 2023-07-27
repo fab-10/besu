@@ -40,8 +40,8 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
@@ -105,14 +105,14 @@ public class LayeredPendingTransactionsLondonTest
   @Override
   protected ExecutionContextTestFixture createExecutionContextTestFixture() {
     final ProtocolSchedule protocolSchedule =
-        new ProtocolScheduleBuilder(
+        new MainnetProtocolScheduleBuilder()
+            .createProtocolSchedule(
                 new StubGenesisConfigOptions().londonBlock(0L).baseFeePerGas(10L),
                 BigInteger.valueOf(1),
                 ProtocolSpecAdapters.create(0, Function.identity()),
                 new PrivacyParameters(),
                 false,
-                EvmConfiguration.DEFAULT)
-            .createProtocolSchedule();
+                EvmConfiguration.DEFAULT);
     final ExecutionContextTestFixture executionContextTestFixture =
         ExecutionContextTestFixture.builder().protocolSchedule(protocolSchedule).build();
 

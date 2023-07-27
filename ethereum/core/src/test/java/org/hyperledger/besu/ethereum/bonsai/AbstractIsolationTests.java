@@ -59,6 +59,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.layered.EndLayer;
 import org.hyperledger.besu.ethereum.eth.transactions.layered.GasPricePrioritizedTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.layered.LayeredPendingTransactions;
 import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSchedule;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.storage.StorageProvider;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueSegmentIdentifier;
@@ -95,7 +96,8 @@ public abstract class AbstractIsolationTests {
           SignatureAlgorithmFactory.getInstance()
               .createKeyPair(SECPPrivateKey.create(Bytes32.fromHexString(key), "ECDSA"));
   protected final ProtocolSchedule protocolSchedule =
-      MainnetProtocolSchedule.fromConfig(GenesisConfigFile.development().getConfigOptions());
+      MainnetProtocolSchedule.fromConfig(
+          GenesisConfigFile.development().getConfigOptions(), new MainnetProtocolScheduleBuilder());
   protected final GenesisState genesisState =
       GenesisState.fromConfig(GenesisConfigFile.development(), protocolSchedule);
   protected final MutableBlockchain blockchain = createInMemoryBlockchain(genesisState.getBlock());

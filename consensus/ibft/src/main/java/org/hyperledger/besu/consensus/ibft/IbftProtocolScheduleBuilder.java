@@ -22,6 +22,7 @@ import org.hyperledger.besu.consensus.common.bft.BftExtraDataCodec;
 import org.hyperledger.besu.consensus.common.bft.BftProtocolSchedule;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.mainnet.BlockHeaderValidator;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.BaseFeeMarket;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
@@ -44,6 +45,7 @@ public class IbftProtocolScheduleBuilder extends BaseBftProtocolScheduleBuilder 
    */
   public static BftProtocolSchedule create(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final ForksSchedule<BftConfigOptions> forksSchedule,
       final PrivacyParameters privacyParameters,
       final boolean isRevertReasonEnabled,
@@ -52,6 +54,7 @@ public class IbftProtocolScheduleBuilder extends BaseBftProtocolScheduleBuilder 
     return new IbftProtocolScheduleBuilder()
         .createProtocolSchedule(
             config,
+            protocolScheduleBuilder,
             forksSchedule,
             privacyParameters,
             isRevertReasonEnabled,
@@ -70,11 +73,13 @@ public class IbftProtocolScheduleBuilder extends BaseBftProtocolScheduleBuilder 
    */
   public static BftProtocolSchedule create(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final ForksSchedule<BftConfigOptions> forksSchedule,
       final BftExtraDataCodec bftExtraDataCodec,
       final EvmConfiguration evmConfiguration) {
     return create(
         config,
+        protocolScheduleBuilder,
         forksSchedule,
         PrivacyParameters.DEFAULT,
         false,

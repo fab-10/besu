@@ -21,8 +21,8 @@ import org.hyperledger.besu.ethereum.core.BlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSchedule;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
 
@@ -56,7 +56,8 @@ class MainnetGenesisFileModule extends GenesisFileModule {
         return schedule.get();
       }
     }
-    return MainnetProtocolSchedule.fromConfig(configOptions, EvmConfiguration.DEFAULT);
+    return MainnetProtocolSchedule.fromConfig(
+        configOptions, new MainnetProtocolScheduleBuilder(), EvmConfiguration.DEFAULT);
   }
 
   public static Map<String, Supplier<ProtocolSchedule>> createSchedules() {
@@ -104,13 +105,13 @@ class MainnetGenesisFileModule extends GenesisFileModule {
 
   private static Supplier<ProtocolSchedule> createSchedule(final GenesisConfigOptions options) {
     return () ->
-        new ProtocolScheduleBuilder(
+        new MainnetProtocolScheduleBuilder()
+            .createProtocolSchedule(
                 options,
                 options.getChainId().orElse(BigInteger.ONE),
                 ProtocolSpecAdapters.create(0, Function.identity()),
                 PrivacyParameters.DEFAULT,
                 false,
-                EvmConfiguration.DEFAULT)
-            .createProtocolSchedule();
+                EvmConfiguration.DEFAULT);
   }
 }

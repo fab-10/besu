@@ -135,8 +135,8 @@ public final class RunnerBuilderTest {
     when(besuController.getMiningCoordinator()).thenReturn(mock(MergeMiningCoordinator.class));
     when(besuController.getEthPeers()).thenReturn(mock(EthPeers.class));
     final GenesisConfigOptions genesisConfigOptions = mock(GenesisConfigOptions.class);
-    when(genesisConfigOptions.getForkBlockNumbers()).thenReturn(Collections.emptyList());
-    when(genesisConfigOptions.getForkBlockTimestamps()).thenReturn(Collections.emptyList());
+    when(genesisConfigOptions.getForkBlockNumbers()).thenReturn(Collections.emptySortedMap());
+    when(genesisConfigOptions.getForkBlockTimestamps()).thenReturn(Collections.emptySortedMap());
     when(besuController.getGenesisConfigOptions()).thenReturn(genesisConfigOptions);
   }
 

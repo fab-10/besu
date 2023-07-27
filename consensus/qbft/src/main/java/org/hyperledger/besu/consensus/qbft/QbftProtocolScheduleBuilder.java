@@ -26,6 +26,7 @@ import org.hyperledger.besu.consensus.common.bft.BftProtocolSchedule;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.mainnet.BlockHeaderValidator;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.BaseFeeMarket;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
@@ -48,6 +49,7 @@ public class QbftProtocolScheduleBuilder extends BaseBftProtocolScheduleBuilder 
    */
   public static BftProtocolSchedule create(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final ForksSchedule<QbftConfigOptions> qbftForksSchedule,
       final PrivacyParameters privacyParameters,
       final boolean isRevertReasonEnabled,
@@ -56,6 +58,7 @@ public class QbftProtocolScheduleBuilder extends BaseBftProtocolScheduleBuilder 
     return new QbftProtocolScheduleBuilder()
         .createProtocolSchedule(
             config,
+            protocolScheduleBuilder,
             qbftForksSchedule,
             privacyParameters,
             isRevertReasonEnabled,
@@ -74,11 +77,13 @@ public class QbftProtocolScheduleBuilder extends BaseBftProtocolScheduleBuilder 
    */
   public static BftProtocolSchedule create(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final ForksSchedule<QbftConfigOptions> qbftForksSchedule,
       final BftExtraDataCodec bftExtraDataCodec,
       final EvmConfiguration evmConfiguration) {
     return create(
         config,
+        protocolScheduleBuilder,
         qbftForksSchedule,
         PrivacyParameters.DEFAULT,
         false,
@@ -97,11 +102,13 @@ public class QbftProtocolScheduleBuilder extends BaseBftProtocolScheduleBuilder 
    */
   public static ProtocolSchedule create(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final ForksSchedule<QbftConfigOptions> qbftForksSchedule,
       final boolean isRevertReasonEnabled,
       final BftExtraDataCodec bftExtraDataCodec) {
     return create(
         config,
+        protocolScheduleBuilder,
         qbftForksSchedule,
         PrivacyParameters.DEFAULT,
         isRevertReasonEnabled,

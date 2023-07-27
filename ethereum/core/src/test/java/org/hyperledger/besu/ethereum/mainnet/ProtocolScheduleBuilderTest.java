@@ -50,14 +50,16 @@ public class ProtocolScheduleBuilderTest {
 
   @BeforeEach
   public void setup() {
-    builder =
-        new ProtocolScheduleBuilder(
-            configOptions,
-            CHAIN_ID,
-            ProtocolSpecAdapters.create(0, Function.identity()),
-            new PrivacyParameters(),
-            false,
-            EvmConfiguration.DEFAULT);
+    builder = new MainnetProtocolScheduleBuilder();
+    /*
+           configOptions,
+           CHAIN_ID,
+           ProtocolSpecAdapters.create(0, Function.identity()),
+           new PrivacyParameters(),
+           false,
+           EvmConfiguration.DEFAULT);
+
+    */
   }
 
   @Test
@@ -68,7 +70,14 @@ public class ProtocolScheduleBuilderTest {
     when(configOptions.getMergeNetSplitBlockNumber()).thenReturn(OptionalLong.of(15L));
     when(configOptions.getShanghaiTime()).thenReturn(OptionalLong.of(PRE_SHANGHAI_TIMESTAMP + 1));
     when(configOptions.getCancunTime()).thenReturn(OptionalLong.of(PRE_SHANGHAI_TIMESTAMP + 3));
-    final ProtocolSchedule protocolSchedule = builder.createProtocolSchedule();
+    final ProtocolSchedule protocolSchedule =
+        builder.createProtocolSchedule(
+            configOptions,
+            CHAIN_ID,
+            ProtocolSpecAdapters.create(0, Function.identity()),
+            new PrivacyParameters(),
+            false,
+            EvmConfiguration.DEFAULT);
 
     assertThat(protocolSchedule.getChainId()).contains(CHAIN_ID);
     assertThat(protocolSchedule.getByBlockHeader(blockHeader(0)).getName()).isEqualTo("Frontier");
@@ -108,7 +117,14 @@ public class ProtocolScheduleBuilderTest {
   public void createProtocolScheduleOverlappingUsesLatestFork() {
     when(configOptions.getHomesteadBlockNumber()).thenReturn(OptionalLong.of(0L));
     when(configOptions.getByzantiumBlockNumber()).thenReturn(OptionalLong.of(0L));
-    final ProtocolSchedule protocolSchedule = builder.createProtocolSchedule();
+    final ProtocolSchedule protocolSchedule =
+        builder.createProtocolSchedule(
+            configOptions,
+            CHAIN_ID,
+            ProtocolSpecAdapters.create(0, Function.identity()),
+            new PrivacyParameters(),
+            false,
+            EvmConfiguration.DEFAULT);
 
     assertThat(protocolSchedule.getChainId()).contains(CHAIN_ID);
     assertThat(protocolSchedule.getByBlockHeader(blockHeader(0)).getName()).isEqualTo("Byzantium");
@@ -120,7 +136,15 @@ public class ProtocolScheduleBuilderTest {
     when(configOptions.getDaoForkBlock()).thenReturn(OptionalLong.of(0L));
     when(configOptions.getArrowGlacierBlockNumber()).thenReturn(OptionalLong.of(12L));
     when(configOptions.getGrayGlacierBlockNumber()).thenReturn(OptionalLong.of(11L));
-    assertThatThrownBy(() -> builder.createProtocolSchedule())
+    assertThatThrownBy(
+            () ->
+                builder.createProtocolSchedule(
+                    configOptions,
+                    CHAIN_ID,
+                    ProtocolSpecAdapters.create(0, Function.identity()),
+                    new PrivacyParameters(),
+                    false,
+                    EvmConfiguration.DEFAULT))
         .isInstanceOf(RuntimeException.class)
         .hasMessage(
             "Genesis Config Error: 'GrayGlacier' is scheduled for milestone 11 but it must be on or after milestone 12.");
@@ -131,7 +155,15 @@ public class ProtocolScheduleBuilderTest {
     when(configOptions.getDaoForkBlock()).thenReturn(OptionalLong.of(0L));
     when(configOptions.getShanghaiTime()).thenReturn(OptionalLong.of(3L));
     when(configOptions.getCancunTime()).thenReturn(OptionalLong.of(2L));
-    assertThatThrownBy(() -> builder.createProtocolSchedule())
+    assertThatThrownBy(
+            () ->
+                builder.createProtocolSchedule(
+                    configOptions,
+                    CHAIN_ID,
+                    ProtocolSpecAdapters.create(0, Function.identity()),
+                    new PrivacyParameters(),
+                    false,
+                    EvmConfiguration.DEFAULT))
         .isInstanceOf(RuntimeException.class)
         .hasMessage(
             "Genesis Config Error: 'Cancun' is scheduled for milestone 2 but it must be on or after milestone 3.");
@@ -192,17 +224,23 @@ public class ProtocolScheduleBuilderTest {
   }
 
   private MilestoneStreamingProtocolSchedule createScheduleModifiedAt(final int blockNumber) {
-    final ProtocolScheduleBuilder builder =
-        new ProtocolScheduleBuilder(
-            configOptions,
-            CHAIN_ID,
-            ProtocolSpecAdapters.create(blockNumber, modifier),
-            new PrivacyParameters(),
-            false,
-            EvmConfiguration.DEFAULT);
+    final ProtocolScheduleBuilder builder = new MainnetProtocolScheduleBuilder();
+    //            configOptions,
+    //            CHAIN_ID,
+    //            ProtocolSpecAdapters.create(blockNumber, modifier),
+    //            new PrivacyParameters(),
+    //            false,
+    //            EvmConfiguration.DEFAULT);
 
     return new MilestoneStreamingProtocolSchedule(
-        (DefaultProtocolSchedule) builder.createProtocolSchedule());
+        (DefaultProtocolSchedule)
+            builder.createProtocolSchedule(
+                configOptions,
+                CHAIN_ID,
+                ProtocolSpecAdapters.create(blockNumber, modifier),
+                new PrivacyParameters(),
+                false,
+                EvmConfiguration.DEFAULT));
   }
 
   private BlockHeader blockHeader(final long number) {

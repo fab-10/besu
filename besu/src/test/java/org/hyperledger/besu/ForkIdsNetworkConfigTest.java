@@ -36,9 +36,11 @@ import org.hyperledger.besu.ethereum.forkid.ForkId;
 import org.hyperledger.besu.ethereum.forkid.ForkIdManager;
 import org.hyperledger.besu.ethereum.mainnet.DefaultProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSchedule;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.ServiceLoader;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -194,16 +196,34 @@ public class ForkIdsNetworkConfigTest {
     private static MilestoneStreamingTransitionProtocolSchedule createSchedule(
         final GenesisConfigFile genesisConfigFile) {
       final GenesisConfigOptions configOptions = genesisConfigFile.getConfigOptions();
+      final ProtocolScheduleBuilder protocolScheduleBuilder =
+          selectProtocolScheduleBuilder(configOptions);
       MilestoneStreamingProtocolSchedule preMergeProtocolSchedule =
           new MilestoneStreamingProtocolSchedule(
-              (DefaultProtocolSchedule) MainnetProtocolSchedule.fromConfig(configOptions));
+              (DefaultProtocolSchedule)
+                  MainnetProtocolSchedule.fromConfig(configOptions, protocolScheduleBuilder));
       MilestoneStreamingProtocolSchedule postMergeProtocolSchedule =
           new MilestoneStreamingProtocolSchedule(
-              (DefaultProtocolSchedule) MergeProtocolSchedule.create(configOptions, false));
+              (DefaultProtocolSchedule)
+                  MergeProtocolSchedule.create(configOptions, protocolScheduleBuilder, false));
       final MilestoneStreamingTransitionProtocolSchedule schedule =
           new MilestoneStreamingTransitionProtocolSchedule(
               preMergeProtocolSchedule, postMergeProtocolSchedule);
       return schedule;
+    }
+
+    private static ProtocolScheduleBuilder selectProtocolScheduleBuilder(
+        final GenesisConfigOptions configOptions) {
+      // find all default implementations
+      final ServiceLoader<ProtocolScheduleBuilder> serviceLoader =
+          ServiceLoader.load(ProtocolScheduleBuilder.class);
+      return serviceLoader.stream()
+          .map(ServiceLoader.Provider::get)
+          .filter(builder -> builder.matchGenesisConfig(configOptions))
+          .findFirst()
+          .orElseThrow(
+              () ->
+                  new RuntimeException("No protocol schedule builder found for you configuration"));
     }
 
     public static class MilestoneStreamingTransitionProtocolSchedule

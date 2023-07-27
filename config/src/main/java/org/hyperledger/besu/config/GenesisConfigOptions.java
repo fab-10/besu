@@ -19,12 +19,13 @@ import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 
 import java.math.BigInteger;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.SortedMap;
 
+import com.google.common.base.CaseFormat;
 import org.apache.tuweni.units.bigints.UInt256;
 
 /** The interface Genesis config options. */
@@ -284,19 +285,25 @@ public interface GenesisConfigOptions {
    */
   Optional<Hash> getTerminalBlockHash();
 
+  SortedMap<Long, Fork> getForkByType(Fork.Type type);
+
   /**
    * Gets fork block numbers.
    *
    * @return the fork block numbers
    */
-  List<Long> getForkBlockNumbers();
+  default SortedMap<Long, Fork> getForkBlockNumbers() {
+    return getForkByType(Fork.Type.BLOCK);
+  }
 
   /**
    * Gets fork block timestamps.
    *
    * @return the fork block timestamps
    */
-  List<Long> getForkBlockTimestamps();
+  default SortedMap<Long, Fork> getForkBlockTimestamps() {
+    return getForkByType(Fork.Type.TIME);
+  }
 
   /**
    * Block number for the Dao Fork, this value is used to tell node to connect with peer that did
@@ -495,4 +502,73 @@ public interface GenesisConfigOptions {
    * @return the deposit address
    */
   Optional<Address> getDepositContractAddress();
+
+  enum Fork {
+    HOMESTEAD(Type.BLOCK),
+    DAO_FORK(Type.BLOCK),
+    EIP_150(Type.BLOCK),
+    EIP_158(Type.BLOCK),
+    BYZANTIUM(Type.BLOCK),
+    CONSTANTINOPLE(Type.BLOCK),
+    CONSTANTINOPLE_FIX(Type.BLOCK),
+    PETERSBURG(Type.BLOCK),
+    ISTANBUL(Type.BLOCK),
+    MUIR_GLACIER(Type.BLOCK),
+    BERLIN(Type.BLOCK),
+    LONDON(Type.BLOCK),
+    ARROW_GLACIER(Type.BLOCK),
+    GRAY_GLACIER(Type.BLOCK),
+    MERGE_NET_SPLIT(Type.BLOCK),
+    SHANGHAI(Type.TIME),
+    CANCUN(Type.TIME),
+    FUTURE_EIPS(Type.TIME),
+    EXPERIMENTAL_EIPS(Type.TIME),
+
+    // Classic forks
+    CLASSIC_FORK(Type.BLOCK),
+    ECIP_1015(Type.BLOCK),
+    DIE_HARD(Type.BLOCK),
+    GOTHAM(Type.BLOCK),
+    ECIP_1041(Type.BLOCK),
+    ATLANTIS(Type.BLOCK),
+    AGHARTA(Type.BLOCK),
+    PHOENIX(Type.BLOCK),
+    THANOS(Type.BLOCK),
+    MAGNETO(Type.BLOCK),
+    MYSTIQUE(Type.BLOCK);
+
+    private final Type type;
+    private final String canonicalName;
+    private final String fullName;
+
+    Fork(final Type type) {
+      this.type = type;
+      this.canonicalName = CaseFormat.UPPER_UNDERSCORE.to(CaseFormat.LOWER_CAMEL, name());
+      this.fullName =
+          CaseFormat.UPPER_UNDERSCORE.to(
+              CaseFormat.LOWER_CAMEL, name() + "_" + type.name().toUpperCase());
+    }
+
+    public Type getType() {
+      return type;
+    }
+
+    public String jsonName() {
+      return fullName.toLowerCase();
+    }
+
+    public String mapName() {
+      return fullName;
+    }
+
+    @Override
+    public String toString() {
+      return canonicalName;
+    }
+
+    public enum Type {
+      BLOCK,
+      TIME;
+    }
+  }
 }

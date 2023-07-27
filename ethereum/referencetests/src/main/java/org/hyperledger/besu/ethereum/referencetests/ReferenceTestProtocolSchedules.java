@@ -18,8 +18,8 @@ package org.hyperledger.besu.ethereum.referencetests;
 import org.hyperledger.besu.config.GenesisConfigOptions;
 import org.hyperledger.besu.config.StubGenesisConfigOptions;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
 
@@ -96,14 +96,14 @@ public class ReferenceTestProtocolSchedules {
   }
 
   private static ProtocolSchedule createSchedule(final GenesisConfigOptions options) {
-    return new ProtocolScheduleBuilder(
+    return new MainnetProtocolScheduleBuilder()
+        .createProtocolSchedule(
             options,
             CHAIN_ID,
             ProtocolSpecAdapters.create(0, Function.identity()),
             PrivacyParameters.DEFAULT,
             false,
-            EvmConfiguration.DEFAULT)
-        .createProtocolSchedule();
+            EvmConfiguration.DEFAULT);
   }
 
   public static boolean shouldClearEmptyAccounts(final String fork) {

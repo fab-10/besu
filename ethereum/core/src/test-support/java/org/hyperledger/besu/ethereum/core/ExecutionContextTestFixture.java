@@ -23,8 +23,8 @@ import org.hyperledger.besu.ethereum.chain.DefaultBlockchain;
 import org.hyperledger.besu.ethereum.chain.GenesisState;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStoragePrefixedKeyBlockchainStorage;
 import org.hyperledger.besu.ethereum.storage.keyvalue.VariablesKeyValueStorage;
@@ -131,15 +131,16 @@ public class ExecutionContextTestFixture {
 
     public ExecutionContextTestFixture build() {
       if (protocolSchedule == null) {
+
         protocolSchedule =
-            new ProtocolScheduleBuilder(
+            new MainnetProtocolScheduleBuilder()
+                .createProtocolSchedule(
                     new StubGenesisConfigOptions().petersburgBlock(0),
                     BigInteger.valueOf(42),
                     ProtocolSpecAdapters.create(0, Function.identity()),
                     new PrivacyParameters(),
                     false,
-                    EvmConfiguration.DEFAULT)
-                .createProtocolSchedule();
+                    EvmConfiguration.DEFAULT);
       }
       if (blockchainKeyValueStorage == null) {
         blockchainKeyValueStorage = new InMemoryKeyValueStorage();

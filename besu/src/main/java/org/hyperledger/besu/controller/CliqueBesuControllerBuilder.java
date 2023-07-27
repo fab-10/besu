@@ -108,6 +108,7 @@ public class CliqueBesuControllerBuilder extends BesuControllerBuilder {
   @Override
   protected ProtocolSchedule createProtocolSchedule() {
     return CliqueProtocolSchedule.create(
+        protocolScheduleBuilder,
         configOptionsSupplier.get(),
         nodeKey,
         privacyParameters,

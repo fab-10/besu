@@ -16,19 +16,19 @@ package org.hyperledger.besu.config;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Objects.isNull;
+import static org.hyperledger.besu.config.GenesisConfigOptions.Fork.HOMESTEAD;
 
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 
 import java.math.BigInteger;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.SortedMap;
 import java.util.TreeMap;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -201,12 +201,12 @@ public class JsonGenesisConfigOptions implements GenesisConfigOptions {
 
   @Override
   public OptionalLong getHomesteadBlockNumber() {
-    return getOptionalLong("homesteadblock");
+    return getOptionalLong(HOMESTEAD.jsonName());
   }
 
   @Override
   public OptionalLong getDaoForkBlock() {
-    final OptionalLong block = getOptionalLong("daoforkblock");
+    final OptionalLong block = getOptionalLong(Fork.DAO_FORK.jsonName());
     if (block.isPresent() && block.getAsLong() <= 0) {
       return OptionalLong.empty();
     }
@@ -215,28 +215,28 @@ public class JsonGenesisConfigOptions implements GenesisConfigOptions {
 
   @Override
   public OptionalLong getTangerineWhistleBlockNumber() {
-    return getOptionalLong("eip150block");
+    return getOptionalLong(Fork.EIP_150.jsonName());
   }
 
   @Override
   public OptionalLong getSpuriousDragonBlockNumber() {
-    return getOptionalLong("eip158block");
+    return getOptionalLong(Fork.EIP_158.jsonName());
   }
 
   @Override
   public OptionalLong getByzantiumBlockNumber() {
-    return getOptionalLong("byzantiumblock");
+    return getOptionalLong(Fork.BYZANTIUM.jsonName());
   }
 
   @Override
   public OptionalLong getConstantinopleBlockNumber() {
-    return getOptionalLong("constantinopleblock");
+    return getOptionalLong(Fork.CONSTANTINOPLE.jsonName());
   }
 
   @Override
   public OptionalLong getPetersburgBlockNumber() {
-    final OptionalLong petersburgBlock = getOptionalLong("petersburgblock");
-    final OptionalLong constantinopleFixBlock = getOptionalLong("constantinoplefixblock");
+    final OptionalLong petersburgBlock = getOptionalLong(Fork.PETERSBURG.jsonName());
+    final OptionalLong constantinopleFixBlock = getOptionalLong(Fork.CONSTANTINOPLE_FIX.jsonName());
     if (constantinopleFixBlock.isPresent()) {
       if (petersburgBlock.isPresent()) {
         throw new RuntimeException(
@@ -249,57 +249,57 @@ public class JsonGenesisConfigOptions implements GenesisConfigOptions {
 
   @Override
   public OptionalLong getIstanbulBlockNumber() {
-    return getOptionalLong("istanbulblock");
+    return getOptionalLong(Fork.ISTANBUL.jsonName());
   }
 
   @Override
   public OptionalLong getMuirGlacierBlockNumber() {
-    return getOptionalLong("muirglacierblock");
+    return getOptionalLong(Fork.MUIR_GLACIER.jsonName());
   }
 
   @Override
   public OptionalLong getBerlinBlockNumber() {
-    return getOptionalLong("berlinblock");
+    return getOptionalLong(Fork.BERLIN.jsonName());
   }
 
   @Override
   public OptionalLong getLondonBlockNumber() {
-    return getOptionalLong("londonblock");
+    return getOptionalLong(Fork.LONDON.jsonName());
   }
 
   @Override
   public OptionalLong getArrowGlacierBlockNumber() {
-    return getOptionalLong("arrowglacierblock");
+    return getOptionalLong(Fork.ARROW_GLACIER.jsonName());
   }
 
   @Override
   public OptionalLong getGrayGlacierBlockNumber() {
-    return getOptionalLong("grayglacierblock");
+    return getOptionalLong(Fork.GRAY_GLACIER.jsonName());
   }
 
   @Override
   public OptionalLong getMergeNetSplitBlockNumber() {
-    return getOptionalLong("mergenetsplitblock");
+    return getOptionalLong(Fork.MERGE_NET_SPLIT.jsonName());
   }
 
   @Override
   public OptionalLong getShanghaiTime() {
-    return getOptionalLong("shanghaitime");
+    return getOptionalLong(Fork.SHANGHAI.jsonName());
   }
 
   @Override
   public OptionalLong getCancunTime() {
-    return getOptionalLong("cancuntime");
+    return getOptionalLong(Fork.CANCUN.jsonName());
   }
 
   @Override
   public OptionalLong getFutureEipsTime() {
-    return getOptionalLong("futureeipstime");
+    return getOptionalLong(Fork.FUTURE_EIPS.jsonName());
   }
 
   @Override
   public OptionalLong getExperimentalEipsTime() {
-    return getOptionalLong("experimentaleipstime");
+    return getOptionalLong(Fork.EXPERIMENTAL_EIPS.jsonName());
   }
 
   @Override
@@ -327,57 +327,57 @@ public class JsonGenesisConfigOptions implements GenesisConfigOptions {
 
   @Override
   public OptionalLong getClassicForkBlock() {
-    return getOptionalLong("classicforkblock");
+    return getOptionalLong(Fork.CLASSIC_FORK.jsonName());
   }
 
   @Override
   public OptionalLong getEcip1015BlockNumber() {
-    return getOptionalLong("ecip1015block");
+    return getOptionalLong(Fork.ECIP_1015.jsonName());
   }
 
   @Override
   public OptionalLong getDieHardBlockNumber() {
-    return getOptionalLong("diehardblock");
+    return getOptionalLong(Fork.DIE_HARD.jsonName());
   }
 
   @Override
   public OptionalLong getGothamBlockNumber() {
-    return getOptionalLong("gothamblock");
+    return getOptionalLong(Fork.GOTHAM.jsonName());
   }
 
   @Override
   public OptionalLong getDefuseDifficultyBombBlockNumber() {
-    return getOptionalLong("ecip1041block");
+    return getOptionalLong(Fork.ECIP_1041.jsonName());
   }
 
   @Override
   public OptionalLong getAtlantisBlockNumber() {
-    return getOptionalLong("atlantisblock");
+    return getOptionalLong(Fork.ATLANTIS.jsonName());
   }
 
   @Override
   public OptionalLong getAghartaBlockNumber() {
-    return getOptionalLong("aghartablock");
+    return getOptionalLong(Fork.AGHARTA.jsonName());
   }
 
   @Override
   public OptionalLong getPhoenixBlockNumber() {
-    return getOptionalLong("phoenixblock");
+    return getOptionalLong(Fork.PHOENIX.jsonName());
   }
 
   @Override
   public OptionalLong getThanosBlockNumber() {
-    return getOptionalLong("thanosblock");
+    return getOptionalLong(Fork.THANOS.jsonName());
   }
 
   @Override
   public OptionalLong getMagnetoBlockNumber() {
-    return getOptionalLong("magnetoblock");
+    return getOptionalLong(Fork.MAGNETO.jsonName());
   }
 
   @Override
   public OptionalLong getMystiqueBlockNumber() {
-    return getOptionalLong("mystiqueblock");
+    return getOptionalLong(Fork.MYSTIQUE.jsonName());
   }
 
   @Override
@@ -426,40 +426,48 @@ public class JsonGenesisConfigOptions implements GenesisConfigOptions {
     final ImmutableMap.Builder<String, Object> builder = ImmutableMap.builder();
     getChainId().ifPresent(chainId -> builder.put("chainId", chainId));
 
-    // mainnet fork blocks
-    getHomesteadBlockNumber().ifPresent(l -> builder.put("homesteadBlock", l));
-    getDaoForkBlock().ifPresent(l -> builder.put("daoForkBlock", l));
-    getTangerineWhistleBlockNumber().ifPresent(l -> builder.put("eip150Block", l));
-    getSpuriousDragonBlockNumber().ifPresent(l -> builder.put("eip158Block", l));
-    getByzantiumBlockNumber().ifPresent(l -> builder.put("byzantiumBlock", l));
-    getConstantinopleBlockNumber().ifPresent(l -> builder.put("constantinopleBlock", l));
-    getPetersburgBlockNumber().ifPresent(l -> builder.put("petersburgBlock", l));
-    getIstanbulBlockNumber().ifPresent(l -> builder.put("istanbulBlock", l));
-    getMuirGlacierBlockNumber().ifPresent(l -> builder.put("muirGlacierBlock", l));
-    getBerlinBlockNumber().ifPresent(l -> builder.put("berlinBlock", l));
-    getLondonBlockNumber().ifPresent(l -> builder.put("londonBlock", l));
-    getArrowGlacierBlockNumber().ifPresent(l -> builder.put("arrowGlacierBlock", l));
-    getGrayGlacierBlockNumber().ifPresent(l -> builder.put("grayGlacierBlock", l));
-    getMergeNetSplitBlockNumber().ifPresent(l -> builder.put("mergeNetSplitBlock", l));
-    getShanghaiTime().ifPresent(l -> builder.put("shanghaiTime", l));
-    getCancunTime().ifPresent(l -> builder.put("cancunTime", l));
+    for (final Fork fork : Fork.values()) {
+      getOptionalLong(fork.jsonName()).ifPresent(l -> builder.put(fork.mapName(), l));
+    }
+    //
+    //    // mainnet fork blocks
+    //    getHomesteadBlockNumber().ifPresent(l -> builder.put(HOMESTEAD.mapName(), l));
+    //    getDaoForkBlock().ifPresent(l -> builder.put(Fork.DAO_FORK.mapName(), l));
+    //    getTangerineWhistleBlockNumber().ifPresent(l -> builder.put(Fork.EIP_150.mapName(), l));
+    //    getSpuriousDragonBlockNumber().ifPresent(l -> builder.put(Fork.EIP_158.mapName(), l));
+    //    getByzantiumBlockNumber().ifPresent(l -> builder.put(Fork.BYZANTIUM.mapName(), l));
+    //    getConstantinopleBlockNumber().ifPresent(l -> builder.put(Fork.CONSTANTINOPLE.mapName(),
+    // l));
+    //    getPetersburgBlockNumber().ifPresent(l -> builder.put(Fork.PETERSBURG.mapName(), l));
+    //    getIstanbulBlockNumber().ifPresent(l -> builder.put(Fork.ISTANBUL.mapName(), l));
+    //    getMuirGlacierBlockNumber().ifPresent(l -> builder.put(Fork.MUIR_GLACIER.mapName(), l));
+    //    getBerlinBlockNumber().ifPresent(l -> builder.put(Fork.BERLIN.mapName(), l));
+    //    getLondonBlockNumber().ifPresent(l -> builder.put(Fork.LONDON.mapName(), l));
+    //    getArrowGlacierBlockNumber().ifPresent(l -> builder.put(Fork.ARROW_GLACIER.mapName(), l));
+    //    getGrayGlacierBlockNumber().ifPresent(l -> builder.put(Fork.GRAY_GLACIER.mapName(), l));
+    //    getMergeNetSplitBlockNumber().ifPresent(l -> builder.put(Fork.MERGE_NET_SPLIT.mapName(),
+    // l));
+    //    getShanghaiTime().ifPresent(l -> builder.put(Fork.SHANGHAI.mapName(), l));
+    //    getCancunTime().ifPresent(l -> builder.put(Fork.CANCUN.mapName(), l));
     getTerminalBlockNumber().ifPresent(l -> builder.put("terminalBlockNumber", l));
     getTerminalBlockHash().ifPresent(h -> builder.put("terminalBlockHash", h.toHexString()));
-    getFutureEipsTime().ifPresent(l -> builder.put("futureEipsTime", l));
-    getExperimentalEipsTime().ifPresent(l -> builder.put("experimentalEipsTime", l));
+    //    getFutureEipsTime().ifPresent(l -> builder.put(Fork.FUTURE_EIPS.mapName(), l));
+    //    getExperimentalEipsTime().ifPresent(l -> builder.put(Fork.EXPERIMENTAL_EIPS.mapName(),
+    // l));
 
     // classic fork blocks
-    getClassicForkBlock().ifPresent(l -> builder.put("classicForkBlock", l));
-    getEcip1015BlockNumber().ifPresent(l -> builder.put("ecip1015Block", l));
-    getDieHardBlockNumber().ifPresent(l -> builder.put("dieHardBlock", l));
-    getGothamBlockNumber().ifPresent(l -> builder.put("gothamBlock", l));
-    getDefuseDifficultyBombBlockNumber().ifPresent(l -> builder.put("ecip1041Block", l));
-    getAtlantisBlockNumber().ifPresent(l -> builder.put("atlantisBlock", l));
-    getAghartaBlockNumber().ifPresent(l -> builder.put("aghartaBlock", l));
-    getPhoenixBlockNumber().ifPresent(l -> builder.put("phoenixBlock", l));
-    getThanosBlockNumber().ifPresent(l -> builder.put("thanosBlock", l));
-    getMagnetoBlockNumber().ifPresent(l -> builder.put("magnetoBlock", l));
-    getMystiqueBlockNumber().ifPresent(l -> builder.put("mystiqueBlock", l));
+    //    getClassicForkBlock().ifPresent(l -> builder.put(Fork.CLASSIC_FORK.mapName(), l));
+    //    getEcip1015BlockNumber().ifPresent(l -> builder.put(Fork.ECIP_1015.mapName(), l));
+    //    getDieHardBlockNumber().ifPresent(l -> builder.put(Fork.DIE_HARD.mapName(), l));
+    //    getGothamBlockNumber().ifPresent(l -> builder.put(Fork.GOTHAM.mapName(), l));
+    //    getDefuseDifficultyBombBlockNumber().ifPresent(l -> builder.put(Fork.ECIP_1041.mapName(),
+    // l));
+    //    getAtlantisBlockNumber().ifPresent(l -> builder.put(Fork.ATLANTIS.mapName(), l));
+    //    getAghartaBlockNumber().ifPresent(l -> builder.put(Fork.AGHARTA.mapName(), l));
+    //    getPhoenixBlockNumber().ifPresent(l -> builder.put(Fork.PHOENIX.mapName(), l));
+    //    getThanosBlockNumber().ifPresent(l -> builder.put(Fork.THANOS.mapName(), l));
+    //    getMagnetoBlockNumber().ifPresent(l -> builder.put(Fork.MAGNETO.mapName(), l));
+    //    getMystiqueBlockNumber().ifPresent(l -> builder.put(Fork.MYSTIQUE.mapName(), l));
 
     getContractSizeLimit().ifPresent(l -> builder.put("contractSizeLimit", l));
     getEvmStackSize().ifPresent(l -> builder.put("evmstacksize", l));
@@ -541,55 +549,78 @@ public class JsonGenesisConfigOptions implements GenesisConfigOptions {
   }
 
   @Override
-  public List<Long> getForkBlockNumbers() {
-    Stream<OptionalLong> forkBlockNumbers =
-        Stream.of(
-            getHomesteadBlockNumber(),
-            getDaoForkBlock(),
-            getTangerineWhistleBlockNumber(),
-            getSpuriousDragonBlockNumber(),
-            getByzantiumBlockNumber(),
-            getConstantinopleBlockNumber(),
-            getPetersburgBlockNumber(),
-            getIstanbulBlockNumber(),
-            getMuirGlacierBlockNumber(),
-            getBerlinBlockNumber(),
-            getLondonBlockNumber(),
-            getArrowGlacierBlockNumber(),
-            getGrayGlacierBlockNumber(),
-            getMergeNetSplitBlockNumber(),
-            getEcip1015BlockNumber(),
-            getDieHardBlockNumber(),
-            getGothamBlockNumber(),
-            getDefuseDifficultyBombBlockNumber(),
-            getAtlantisBlockNumber(),
-            getAghartaBlockNumber(),
-            getPhoenixBlockNumber(),
-            getThanosBlockNumber(),
-            getMagnetoBlockNumber(),
-            getMystiqueBlockNumber());
-    // when adding forks add an entry to ${REPO_ROOT}/config/src/test/resources/all_forks.json
+  public SortedMap<Long, Fork> getForkByType(final Fork.Type type) {
+    final TreeMap<Long, Fork> blockForks = new TreeMap<>();
 
-    return forkBlockNumbers
-        .filter(OptionalLong::isPresent)
-        .map(OptionalLong::getAsLong)
-        .distinct()
-        .sorted()
-        .collect(Collectors.toList());
+    Stream.of(Fork.values())
+        .filter(f -> f.getType().equals(type))
+        .forEach(fork -> getOptionalLong(fork.jsonName()).ifPresent(l -> blockForks.put(l, fork)));
+
+    return blockForks;
   }
 
-  @Override
-  public List<Long> getForkBlockTimestamps() {
-    Stream<OptionalLong> forkBlockTimestamps =
-        Stream.of(
-            getShanghaiTime(), getCancunTime(), getFutureEipsTime(), getExperimentalEipsTime());
-    // when adding forks add an entry to ${REPO_ROOT}/config/src/test/resources/all_forks.json
+  //  public SortedMap<Long, Fork> getForkBlockNumbers() {
+  //    return getForksByType(Fork.Type.BLOCK);
+  //
+  //    Stream<Map.Entry<OptionalLong, Fork>> forkBlockNumbers =
+  //        Stream.of(
+  //            new SimpleEntry<>(getHomesteadBlockNumber(), HOMESTEAD),
+  //                new SimpleEntry<>(getDaoForkBlock(),DAO_FORK),
+  //                        new SimpleEntry<>(getTangerineWhistleBlockNumber(), EIP_150),
+  //                                new SimpleEntry<>(getSpuriousDragonBlockNumber(), EIP_158),
+  //                                        new SimpleEntry<>(getByzantiumBlockNumber(), BYZANTIUM),
+  //                                                new
+  // SimpleEntry<>(getConstantinopleBlockNumber(), CONSTANTINOPLE),
+  //                new SimpleEntry<>(getPetersburgBlockNumber(), PETERSBURG),
+  //                        new SimpleEntry<>(getIstanbulBlockNumber(), ISTANBUL),
+  //                                new SimpleEntry<>(getMuirGlacierBlockNumber(), MUIR_GLACIER),
+  //                                        new SimpleEntry<>(getBerlinBlockNumber(), BERLIN),
+  //                                                new SimpleEntry<>(getLondonBlockNumber(),
+  // LONDON),
+  //                                                        new
+  // SimpleEntry<>(getArrowGlacierBlockNumber(), ARROW_GLACIER),
+  //                                                                new
+  // SimpleEntry<>(getGrayGlacierBlockNumber(), GRAY_GLACIER),
+  //                new SimpleEntry<>(getMergeNetSplitBlockNumber(), MERGE_NET_SPLIT),
+  //                        new SimpleEntry<>(getEcip1015BlockNumber(), ECIP_1015),
+  //                                new SimpleEntry<>(getDieHardBlockNumber(), DIE_HARD),
+  //                                        new SimpleEntry<>(getGothamBlockNumber(), GOTHAM),
+  //                                                new
+  // SimpleEntry<>(getDefuseDifficultyBombBlockNumber(), ECIP_1041),
+  //                                                        new
+  // SimpleEntry<>(getAtlantisBlockNumber(), ATLANTIS),
+  //                new SimpleEntry<>(getAghartaBlockNumber(), AGHARTA),
+  //                        new SimpleEntry<>(getPhoenixBlockNumber(), PHOENIX),
+  //                                new SimpleEntry<>(getThanosBlockNumber(), THANOS),
+  //                                        new SimpleEntry<>(getMagnetoBlockNumber(), MAGNETO),
+  //                                                new SimpleEntry<>(getMystiqueBlockNumber(),
+  // MYSTIQUE));
+  // when adding forks add an entry to ${REPO_ROOT}/config/src/test/resources/all_forks.json
 
-    return forkBlockTimestamps
-        .filter(OptionalLong::isPresent)
-        .map(OptionalLong::getAsLong)
-        .distinct()
-        .sorted()
-        .collect(Collectors.toList());
-  }
+  //    return forkBlockNumbers
+  //        .filter(e -> e.getKey().isPresent())
+  //        .map(e -> new SimpleEntry<>(e.getKey().getAsLong(), e.getValue()))
+  //        .distinct()
+  //        .sorted(Comparator.comparingLong(SimpleEntry::getKey))
+  //        .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue, (a,b) -> a,
+  // TreeMap::new));
+  //  }
+
+  //  @Override
+  //  public List<Long> getForkBlockTimestamps() {
+  //      return getForksByType(Fork.Type.BLOCK);
+  //
+  //    Stream<OptionalLong> forkBlockTimestamps =
+  //        Stream.of(
+  //            getShanghaiTime(), getCancunTime(), getFutureEipsTime(), getExperimentalEipsTime());
+  //    // when adding forks add an entry to ${REPO_ROOT}/config/src/test/resources/all_forks.json
+  //
+  //    return forkBlockTimestamps
+  //        .filter(OptionalLong::isPresent)
+  //        .map(OptionalLong::getAsLong)
+  //        .distinct()
+  //        .sorted()
+  //        .collect(Collectors.toList());
+  //  }
+
 }

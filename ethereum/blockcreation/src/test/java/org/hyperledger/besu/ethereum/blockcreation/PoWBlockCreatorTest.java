@@ -43,10 +43,10 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfigurati
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.EpochCalculator;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.PoWHasher;
 import org.hyperledger.besu.ethereum.mainnet.PoWSolver;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.ethereum.mainnet.ValidationTestUtils;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
@@ -84,14 +84,14 @@ class PoWBlockCreatorTest extends AbstractBlockCreatorTest {
     final ExecutionContextTestFixture executionContextTestFixture =
         ExecutionContextTestFixture.builder()
             .protocolSchedule(
-                new ProtocolScheduleBuilder(
+                new MainnetProtocolScheduleBuilder()
+                    .createProtocolSchedule(
                         genesisConfigOptions,
                         BigInteger.valueOf(42),
                         ProtocolSpecAdapters.create(0, Function.identity()),
                         PrivacyParameters.DEFAULT,
                         false,
-                        EvmConfiguration.DEFAULT)
-                    .createProtocolSchedule())
+                        EvmConfiguration.DEFAULT))
             .build();
 
     final PoWSolver solver =
@@ -140,14 +140,14 @@ class PoWBlockCreatorTest extends AbstractBlockCreatorTest {
     final ExecutionContextTestFixture executionContextTestFixture =
         ExecutionContextTestFixture.builder()
             .protocolSchedule(
-                new ProtocolScheduleBuilder(
+                new MainnetProtocolScheduleBuilder()
+                    .createProtocolSchedule(
                         genesisConfigOptions,
                         BigInteger.valueOf(42),
                         ProtocolSpecAdapters.create(0, Function.identity()),
                         PrivacyParameters.DEFAULT,
                         false,
-                        EvmConfiguration.DEFAULT)
-                    .createProtocolSchedule())
+                        EvmConfiguration.DEFAULT))
             .build();
 
     final PoWSolver solver =
@@ -186,14 +186,14 @@ class PoWBlockCreatorTest extends AbstractBlockCreatorTest {
         GenesisConfigFile.fromConfig("{\"config\": {\"ethash\": {\"fixeddifficulty\":1}}}")
             .getConfigOptions();
     ProtocolSchedule protocolSchedule =
-        new ProtocolScheduleBuilder(
+        new MainnetProtocolScheduleBuilder()
+            .createProtocolSchedule(
                 genesisConfigOptions,
                 BigInteger.valueOf(42),
                 ProtocolSpecAdapters.create(0, Function.identity()),
                 PrivacyParameters.DEFAULT,
                 false,
-                EvmConfiguration.DEFAULT)
-            .createProtocolSchedule();
+                EvmConfiguration.DEFAULT);
     final ExecutionContextTestFixture executionContextTestFixture =
         ExecutionContextTestFixture.builder().protocolSchedule(protocolSchedule).build();
 
@@ -255,14 +255,14 @@ class PoWBlockCreatorTest extends AbstractBlockCreatorTest {
         GenesisConfigFile.fromConfig("{\"config\": {\"ethash\": {\"fixeddifficulty\":1}}}")
             .getConfigOptions();
     ProtocolSchedule protocolSchedule =
-        new ProtocolScheduleBuilder(
+        new MainnetProtocolScheduleBuilder()
+            .createProtocolSchedule(
                 genesisConfigOptions,
                 BigInteger.valueOf(42),
                 ProtocolSpecAdapters.create(0, Function.identity()),
                 PrivacyParameters.DEFAULT,
                 false,
-                EvmConfiguration.DEFAULT)
-            .createProtocolSchedule();
+                EvmConfiguration.DEFAULT);
     final ExecutionContextTestFixture executionContextTestFixture =
         ExecutionContextTestFixture.builder().protocolSchedule(protocolSchedule).build();
 

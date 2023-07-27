@@ -26,30 +26,38 @@ public class FixedDifficultyProtocolSchedule {
 
   public static ProtocolSchedule create(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final PrivacyParameters privacyParameters,
       final boolean isRevertReasonEnabled,
       final EvmConfiguration evmConfiguration) {
-    return new ProtocolScheduleBuilder(
-            config,
-            ProtocolSpecAdapters.create(
-                0,
-                builder ->
-                    builder.difficultyCalculator(FixedDifficultyCalculators.calculator(config))),
-            privacyParameters,
-            isRevertReasonEnabled,
-            evmConfiguration)
-        .createProtocolSchedule();
+    return protocolScheduleBuilder.createProtocolSchedule(
+        config,
+        ProtocolSpecAdapters.create(
+            0,
+            builder -> builder.difficultyCalculator(FixedDifficultyCalculators.calculator(config))),
+        privacyParameters,
+        isRevertReasonEnabled,
+        evmConfiguration);
   }
 
   public static ProtocolSchedule create(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final boolean isRevertReasonEnabled,
       final EvmConfiguration evmConfiguration) {
-    return create(config, PrivacyParameters.DEFAULT, isRevertReasonEnabled, evmConfiguration);
+    return create(
+        config,
+        protocolScheduleBuilder,
+        PrivacyParameters.DEFAULT,
+        isRevertReasonEnabled,
+        evmConfiguration);
   }
 
   public static ProtocolSchedule create(
-      final GenesisConfigOptions config, final EvmConfiguration evmConfiguration) {
-    return create(config, PrivacyParameters.DEFAULT, false, evmConfiguration);
+      final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
+      final EvmConfiguration evmConfiguration) {
+    return create(
+        config, protocolScheduleBuilder, PrivacyParameters.DEFAULT, false, evmConfiguration);
   }
 }

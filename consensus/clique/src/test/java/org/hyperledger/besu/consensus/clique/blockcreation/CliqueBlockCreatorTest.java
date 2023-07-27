@@ -56,6 +56,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
@@ -96,6 +97,7 @@ public class CliqueBlockCreatorTest {
     protocolSchedule =
         CliqueProtocolSchedule.create(
             GenesisConfigFile.DEFAULT.getConfigOptions(),
+            new MainnetProtocolScheduleBuilder(),
             proposerNodeKey,
             false,
             EvmConfiguration.DEFAULT);

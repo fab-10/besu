@@ -45,20 +45,23 @@ public class DefaultProtocolScheduleTest {
   private final Function<ProtocolSpecBuilder, ProtocolSpecBuilder> modifier = Function.identity();
 
   private final long FIRST_TIMESTAMP_FORK = 9991L;
+  private final boolean isRevertReasonEnabled = false;
 
   @BeforeEach
   public void setup() {
     config = new StubGenesisConfigOptions();
     config.chainId(DEFAULT_CHAIN_ID);
-    boolean isRevertReasonEnabled = false;
-    builder =
-        new ProtocolScheduleBuilder(
-            config,
-            DEFAULT_CHAIN_ID,
-            ProtocolSpecAdapters.create(FIRST_TIMESTAMP_FORK, modifier),
-            privacyParameters,
-            isRevertReasonEnabled,
-            evmConfiguration);
+    builder = new MainnetProtocolScheduleBuilder();
+    /*
+           config,
+           DEFAULT_CHAIN_ID,
+           ProtocolSpecAdapters.create(FIRST_TIMESTAMP_FORK, modifier),
+           privacyParameters,
+           isRevertReasonEnabled,
+           evmConfiguration);
+
+
+    */
   }
 
   @Test
@@ -111,7 +114,14 @@ public class DefaultProtocolScheduleTest {
     config.grayGlacierBlock(0);
     config.shanghaiTime(FIRST_TIMESTAMP_FORK);
     config.cancunTime(FIRST_TIMESTAMP_FORK + 2);
-    final ProtocolSchedule schedule = builder.createProtocolSchedule();
+    final ProtocolSchedule schedule =
+        builder.createProtocolSchedule(
+            config,
+            DEFAULT_CHAIN_ID,
+            ProtocolSpecAdapters.create(FIRST_TIMESTAMP_FORK, modifier),
+            privacyParameters,
+            isRevertReasonEnabled,
+            evmConfiguration);
 
     assertThat(schedule.getByBlockHeader(header(2, FIRST_TIMESTAMP_FORK + 2)).getName())
         .isEqualTo("Cancun");
@@ -124,7 +134,14 @@ public class DefaultProtocolScheduleTest {
     config.grayGlacierBlock(0);
     config.shanghaiTime(FIRST_TIMESTAMP_FORK);
     config.cancunTime(FIRST_TIMESTAMP_FORK + 2);
-    final ProtocolSchedule schedule = builder.createProtocolSchedule();
+    final ProtocolSchedule schedule =
+        builder.createProtocolSchedule(
+            config,
+            DEFAULT_CHAIN_ID,
+            ProtocolSpecAdapters.create(FIRST_TIMESTAMP_FORK, modifier),
+            privacyParameters,
+            isRevertReasonEnabled,
+            evmConfiguration);
 
     assertThat(schedule.getByBlockHeader(header(2, FIRST_TIMESTAMP_FORK)).getName())
         .isEqualTo("Shanghai");
@@ -137,7 +154,14 @@ public class DefaultProtocolScheduleTest {
     config.londonBlock(0);
     config.grayGlacierBlock(100);
     config.shanghaiTime(9992L);
-    final ProtocolSchedule schedule = builder.createProtocolSchedule();
+    final ProtocolSchedule schedule =
+        builder.createProtocolSchedule(
+            config,
+            DEFAULT_CHAIN_ID,
+            ProtocolSpecAdapters.create(FIRST_TIMESTAMP_FORK, modifier),
+            privacyParameters,
+            isRevertReasonEnabled,
+            evmConfiguration);
 
     assertThat(schedule.getByBlockHeader(header(100, 8881L)).getName()).isEqualTo("GrayGlacier");
     assertThat(schedule.getByBlockHeader(header(200, 9991L)).getName()).isEqualTo("GrayGlacier");
@@ -149,7 +173,14 @@ public class DefaultProtocolScheduleTest {
     config.londonBlock(50);
     config.grayGlacierBlock(100);
     config.shanghaiTime(9992L);
-    final ProtocolSchedule schedule = builder.createProtocolSchedule();
+    final ProtocolSchedule schedule =
+        builder.createProtocolSchedule(
+            config,
+            DEFAULT_CHAIN_ID,
+            ProtocolSpecAdapters.create(FIRST_TIMESTAMP_FORK, modifier),
+            privacyParameters,
+            isRevertReasonEnabled,
+            evmConfiguration);
 
     assertThat(schedule.getByBlockHeader(header(99, 8881L)).getName()).isEqualTo("London");
   }
@@ -158,7 +189,14 @@ public class DefaultProtocolScheduleTest {
   public void getByBlockHeader_getLatestBlockNumberForkWhenNoTimestampForks() {
     config.magneto(0);
     config.mystique(100);
-    final ProtocolSchedule schedule = builder.createProtocolSchedule();
+    final ProtocolSchedule schedule =
+        builder.createProtocolSchedule(
+            config,
+            DEFAULT_CHAIN_ID,
+            ProtocolSpecAdapters.create(FIRST_TIMESTAMP_FORK, modifier),
+            privacyParameters,
+            isRevertReasonEnabled,
+            evmConfiguration);
 
     assertThat(schedule.getByBlockHeader(header(100, Long.MAX_VALUE)).getName())
         .isEqualTo("Mystique");
@@ -208,7 +246,14 @@ public class DefaultProtocolScheduleTest {
     config.shanghaiTime(FIRST_TIMESTAMP_FORK);
     config.cancunTime(9992L);
     config.experimentalEipsTime(9994L);
-    final ProtocolSchedule protocolSchedule = builder.createProtocolSchedule();
+    final ProtocolSchedule protocolSchedule =
+        builder.createProtocolSchedule(
+            config,
+            DEFAULT_CHAIN_ID,
+            ProtocolSpecAdapters.create(FIRST_TIMESTAMP_FORK, modifier),
+            privacyParameters,
+            isRevertReasonEnabled,
+            evmConfiguration);
 
     assertThat(protocolSchedule.isOnMilestoneBoundary(header(0L, 0L))).isEqualTo(true);
 

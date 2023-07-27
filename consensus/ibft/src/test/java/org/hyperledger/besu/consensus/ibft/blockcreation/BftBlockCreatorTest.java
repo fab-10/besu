@@ -52,6 +52,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.BlockHeaderValidator;
 import org.hyperledger.besu.ethereum.mainnet.HeaderValidationMode;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
@@ -111,6 +112,7 @@ public class BftBlockCreatorTest {
     final ProtocolSchedule protocolSchedule =
         bftProtocolSchedule.createProtocolSchedule(
             configOptions,
+            new MainnetProtocolScheduleBuilder(),
             forksSchedule,
             PrivacyParameters.DEFAULT,
             false,

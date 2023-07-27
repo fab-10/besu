@@ -19,6 +19,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.hyperledger.besu.config.GenesisConfigFile;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
 
@@ -31,7 +32,9 @@ public class FixedProtocolScheduleTest {
 
     final ProtocolSchedule schedule =
         FixedDifficultyProtocolSchedule.create(
-            GenesisConfigFile.development().getConfigOptions(), EvmConfiguration.DEFAULT);
+            GenesisConfigFile.development().getConfigOptions(),
+            new MainnetProtocolScheduleBuilder(),
+            EvmConfiguration.DEFAULT);
 
     final BlockHeaderTestFixture headerBuilder = new BlockHeaderTestFixture();
 

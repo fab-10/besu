@@ -320,7 +320,7 @@ public class GenesisConfigFile {
    * @return list of fork block numbers
    */
   public List<Long> getForkBlockNumbers() {
-    return getConfigOptions().getForkBlockNumbers();
+    return getConfigOptions().getForkBlockNumbers().keySet().stream().toList();
   }
 
   /**
@@ -329,6 +329,6 @@ public class GenesisConfigFile {
    * @return list of fork time stamps
    */
   public List<Long> getForkTimestamps() {
-    return getConfigOptions().getForkBlockTimestamps();
+    return getConfigOptions().getForkBlockTimestamps().keySet().stream().toList();
   }
 }

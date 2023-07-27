@@ -249,6 +249,7 @@ public class IbftBesuControllerBuilder extends BftBesuControllerBuilder {
   protected ProtocolSchedule createProtocolSchedule() {
     return IbftProtocolScheduleBuilder.create(
         configOptionsSupplier.get(),
+        protocolScheduleBuilder,
         forksSchedule,
         privacyParameters,
         isRevertReasonEnabled,

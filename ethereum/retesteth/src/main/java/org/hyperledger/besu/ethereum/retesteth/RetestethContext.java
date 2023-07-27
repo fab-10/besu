@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.retesteth;
 
 import static org.hyperledger.besu.config.JsonUtil.normalizeKeys;
 
+import org.hyperledger.besu.config.GenesisConfigOptions;
 import org.hyperledger.besu.config.JsonGenesisConfigOptions;
 import org.hyperledger.besu.config.JsonUtil;
 import org.hyperledger.besu.datatypes.Address;
@@ -52,6 +53,7 @@ import org.hyperledger.besu.ethereum.mainnet.PoWHasher;
 import org.hyperledger.besu.ethereum.mainnet.PoWSolution;
 import org.hyperledger.besu.ethereum.mainnet.PoWSolver;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.ScheduleBasedBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStoragePrefixedKeyBlockchainStorage;
@@ -68,6 +70,7 @@ import org.hyperledger.besu.util.Subscribers;
 
 import java.util.Collections;
 import java.util.Optional;
+import java.util.ServiceLoader;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
@@ -150,7 +153,10 @@ public class RetestethContext {
         JsonGenesisConfigOptions.fromJsonObject(
             JsonUtil.getObjectNode(genesisConfig, "config").get());
     protocolSchedule =
-        MainnetProtocolSchedule.fromConfig(jsonGenesisConfigOptions, EvmConfiguration.DEFAULT);
+        MainnetProtocolSchedule.fromConfig(
+            jsonGenesisConfigOptions,
+            selectProtocolScheduleBuilder(jsonGenesisConfigOptions),
+            EvmConfiguration.DEFAULT);
     if ("NoReward".equalsIgnoreCase(sealEngine)) {
       protocolSchedule = new NoRewardProtocolScheduleWrapper(protocolSchedule);
     }
@@ -246,6 +252,19 @@ public class RetestethContext {
     }
 
     return true;
+  }
+
+  private ProtocolScheduleBuilder selectProtocolScheduleBuilder(
+      final GenesisConfigOptions genesisConfig) {
+    // find all default implementations
+    final ServiceLoader<ProtocolScheduleBuilder> serviceLoader =
+        ServiceLoader.load(ProtocolScheduleBuilder.class);
+    return serviceLoader.stream()
+        .map(ServiceLoader.Provider::get)
+        .filter(builder -> builder.matchGenesisConfig(genesisConfig))
+        .findFirst()
+        .orElseThrow(
+            () -> new RuntimeException("No protocol schedule builder found for you configuration"));
   }
 
   private static MutableBlockchain createInMemoryBlockchain(final Block genesisBlock) {

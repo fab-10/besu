@@ -42,6 +42,7 @@ import org.hyperledger.besu.ethereum.core.MilestoneStreamingProtocolSchedule;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.core.Util;
 import org.hyperledger.besu.ethereum.mainnet.HeaderValidationMode;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
 
 import java.math.BigInteger;
@@ -96,6 +97,7 @@ public class IbftProtocolScheduleTest {
       final GenesisConfigOptions genesisConfig, final List<ForkSpec<BftConfigOptions>> forks) {
     return IbftProtocolScheduleBuilder.create(
         genesisConfig,
+        new MainnetProtocolScheduleBuilder(),
         new ForksSchedule<>(forks),
         PrivacyParameters.DEFAULT,
         false,

@@ -21,6 +21,7 @@ import static org.hyperledger.besu.ethereum.core.InMemoryKeyValueStorageProvider
 import static org.mockito.Mockito.mock;
 
 import org.hyperledger.besu.config.GenesisConfigFile;
+import org.hyperledger.besu.config.GenesisConfigOptions;
 import org.hyperledger.besu.ethereum.ConsensusContext;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.chain.Blockchain;
@@ -32,6 +33,7 @@ import org.hyperledger.besu.ethereum.mainnet.BlockImportResult;
 import org.hyperledger.besu.ethereum.mainnet.HeaderValidationMode;
 import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.ScheduleBasedBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.util.RawBlockIterator;
@@ -49,6 +51,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.ServiceLoader;
 
 import com.google.common.base.Charsets;
 import com.google.common.io.Resources;
@@ -136,9 +139,10 @@ public class BlockchainSetupUtil {
   }
 
   private static ProtocolSchedule mainnetProtocolScheduleProvider(
-      final GenesisConfigFile genesisConfigFile) {
+      final GenesisConfigFile genesisConfigFile,
+      final ProtocolScheduleBuilder protocolScheduleBuilder) {
     return MainnetProtocolSchedule.fromConfig(
-        genesisConfigFile.getConfigOptions(), EvmConfiguration.DEFAULT);
+        genesisConfigFile.getConfigOptions(), protocolScheduleBuilder, EvmConfiguration.DEFAULT);
   }
 
   private static ProtocolContext mainnetProtocolContextProvider(
@@ -165,7 +169,10 @@ public class BlockchainSetupUtil {
       final String genesisJson = Resources.toString(chainResources.getGenesisURL(), Charsets.UTF_8);
 
       final GenesisConfigFile genesisConfigFile = GenesisConfigFile.fromConfig(genesisJson);
-      final ProtocolSchedule protocolSchedule = protocolScheduleProvider.get(genesisConfigFile);
+      final ProtocolSchedule protocolSchedule =
+          protocolScheduleProvider.get(
+              genesisConfigFile,
+              selectProtocolScheduleBuilder(genesisConfigFile.getConfigOptions()));
 
       final GenesisState genesisState = GenesisState.fromJson(genesisJson, protocolSchedule);
       final MutableBlockchain blockchain = createInMemoryBlockchain(genesisState.getBlock());
@@ -200,6 +207,19 @@ public class BlockchainSetupUtil {
     } catch (final IOException | URISyntaxException ex) {
       throw new IllegalStateException(ex);
     }
+  }
+
+  private static ProtocolScheduleBuilder selectProtocolScheduleBuilder(
+      final GenesisConfigOptions genesisConfig) {
+    // find all default implementations
+    final ServiceLoader<ProtocolScheduleBuilder> serviceLoader =
+        ServiceLoader.load(ProtocolScheduleBuilder.class);
+    return serviceLoader.stream()
+        .map(ServiceLoader.Provider::get)
+        .filter(builder -> builder.matchGenesisConfig(genesisConfig))
+        .findFirst()
+        .orElseThrow(
+            () -> new RuntimeException("No protocol schedule builder found for you configuration"));
   }
 
   public long getMaxBlockNumber() {
@@ -251,7 +271,8 @@ public class BlockchainSetupUtil {
   }
 
   private interface ProtocolScheduleProvider {
-    ProtocolSchedule get(GenesisConfigFile genesisConfig);
+    ProtocolSchedule get(
+        GenesisConfigFile genesisConfig, ProtocolScheduleBuilder protocolScheduleBuilder);
   }
 
   private interface ProtocolContextProvider {

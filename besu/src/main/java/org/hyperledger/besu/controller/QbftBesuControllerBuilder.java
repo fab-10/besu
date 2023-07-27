@@ -289,6 +289,7 @@ public class QbftBesuControllerBuilder extends BftBesuControllerBuilder {
   protected ProtocolSchedule createProtocolSchedule() {
     return QbftProtocolScheduleBuilder.create(
         configOptionsSupplier.get(),
+        protocolScheduleBuilder,
         qbftForksSchedule,
         privacyParameters,
         isRevertReasonEnabled,

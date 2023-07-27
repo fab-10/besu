@@ -18,6 +18,7 @@ import org.hyperledger.besu.config.GenesisConfigFile;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.difficulty.fixed.FixedDifficultyProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.RawMessage;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
@@ -62,6 +63,7 @@ public final class BlockHeadersMessageTest {
         message.getHeaders(
             FixedDifficultyProtocolSchedule.create(
                 GenesisConfigFile.development().getConfigOptions(),
+                new MainnetProtocolScheduleBuilder(),
                 false,
                 EvmConfiguration.DEFAULT));
 

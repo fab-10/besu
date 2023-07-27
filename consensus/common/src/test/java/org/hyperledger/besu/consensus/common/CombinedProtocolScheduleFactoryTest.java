@@ -22,6 +22,7 @@ import org.hyperledger.besu.consensus.common.bft.BftProtocolSchedule;
 import org.hyperledger.besu.ethereum.core.MilestoneStreamingProtocolSchedule;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.mainnet.DefaultProtocolSchedule;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
@@ -149,16 +150,22 @@ public class CombinedProtocolScheduleFactoryTest {
 
   private BftProtocolSchedule createProtocolSchedule(
       final GenesisConfigOptions genesisConfigOptions) {
-    final ProtocolScheduleBuilder protocolScheduleBuilder =
-        new ProtocolScheduleBuilder(
-            genesisConfigOptions,
-            BigInteger.ONE,
-            ProtocolSpecAdapters.create(0, Function.identity()),
-            new PrivacyParameters(),
-            false,
-            EvmConfiguration.DEFAULT);
+    final ProtocolScheduleBuilder protocolScheduleBuilder = new MainnetProtocolScheduleBuilder();
+    //            genesisConfigOptions,
+    //            BigInteger.ONE,
+    //            ProtocolSpecAdapters.create(0, Function.identity()),
+    //            new PrivacyParameters(),
+    //            false,
+    //            EvmConfiguration.DEFAULT);
 
     return new BftProtocolSchedule(
-        (DefaultProtocolSchedule) protocolScheduleBuilder.createProtocolSchedule());
+        (DefaultProtocolSchedule)
+            protocolScheduleBuilder.createProtocolSchedule(
+                genesisConfigOptions,
+                BigInteger.ONE,
+                ProtocolSpecAdapters.create(0, Function.identity()),
+                new PrivacyParameters(),
+                false,
+                EvmConfiguration.DEFAULT));
   }
 }

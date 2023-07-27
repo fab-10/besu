@@ -54,6 +54,7 @@ public abstract class BaseBftProtocolScheduleBuilder {
    */
   public BftProtocolSchedule createProtocolSchedule(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final ForksSchedule<? extends BftConfigOptions> forksSchedule,
       final PrivacyParameters privacyParameters,
       final boolean isRevertReasonEnabled,
@@ -72,14 +73,14 @@ public abstract class BaseBftProtocolScheduleBuilder {
     final ProtocolSpecAdapters specAdapters = new ProtocolSpecAdapters(specMap);
 
     final ProtocolSchedule protocolSchedule =
-        new ProtocolScheduleBuilder(
-                config,
-                DEFAULT_CHAIN_ID,
-                specAdapters,
-                privacyParameters,
-                isRevertReasonEnabled,
-                evmConfiguration)
-            .createProtocolSchedule();
+        protocolScheduleBuilder.createProtocolSchedule(
+            config,
+            DEFAULT_CHAIN_ID,
+            specAdapters,
+            privacyParameters,
+            isRevertReasonEnabled,
+            evmConfiguration);
+
     return new BftProtocolSchedule((DefaultProtocolSchedule) protocolSchedule);
   }
 

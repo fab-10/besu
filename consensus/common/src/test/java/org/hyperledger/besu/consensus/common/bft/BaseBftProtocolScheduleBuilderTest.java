@@ -33,6 +33,7 @@ import org.hyperledger.besu.ethereum.core.MilestoneStreamingProtocolSchedule;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.mainnet.BlockHeaderValidator;
 import org.hyperledger.besu.ethereum.mainnet.DefaultProtocolSchedule;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
@@ -237,6 +238,7 @@ public class BaseBftProtocolScheduleBuilderTest {
         };
     return bftProtocolSchedule.createProtocolSchedule(
         genesisConfig,
+        new MainnetProtocolScheduleBuilder(),
         new ForksSchedule<>(forks),
         PrivacyParameters.DEFAULT,
         false,

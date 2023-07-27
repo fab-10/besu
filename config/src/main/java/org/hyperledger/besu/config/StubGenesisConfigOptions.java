@@ -20,11 +20,11 @@ import org.hyperledger.besu.datatypes.Wei;
 
 import java.math.BigInteger;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
+import java.util.SortedMap;
 
 import com.google.common.collect.ImmutableMap;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -411,13 +411,8 @@ public class StubGenesisConfigOptions implements GenesisConfigOptions, Cloneable
   }
 
   @Override
-  public List<Long> getForkBlockNumbers() {
-    return Collections.emptyList();
-  }
-
-  @Override
-  public List<Long> getForkBlockTimestamps() {
-    return Collections.emptyList();
+  public SortedMap<Long, Fork> getForkByType(final Fork.Type type) {
+    return Collections.emptySortedMap();
   }
 
   @Override

@@ -77,6 +77,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolFactory;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.p2p.config.NetworkingConfiguration;
 import org.hyperledger.besu.ethereum.p2p.config.SubProtocolConfiguration;
@@ -107,6 +108,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.ServiceLoader;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -184,6 +186,8 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
   private Optional<TransactionSelectorFactory> transactionSelectorFactory = Optional.empty();
   /** the Dagger configured context that can provide dependencies */
   protected Optional<BesuComponent> besuComponent = Optional.empty();
+
+  protected ProtocolScheduleBuilder protocolScheduleBuilder;
 
   /**
    * Provide a BesuComponent which can be used to get other dependencies
@@ -560,6 +564,7 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
     checkNotNull(networkingConfiguration, "Missing network configuration");
     prepForBuild();
 
+    protocolScheduleBuilder = selectProtocolScheduleBuilder();
     final ProtocolSchedule protocolSchedule = createProtocolSchedule();
     final GenesisState genesisState = GenesisState.fromConfig(genesisConfig, protocolSchedule);
 
@@ -779,6 +784,18 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
         additionalPluginServices,
         ethPeers,
         storageProvider);
+  }
+
+  private ProtocolScheduleBuilder selectProtocolScheduleBuilder() {
+    // find all default implementations
+    final ServiceLoader<ProtocolScheduleBuilder> serviceLoader =
+        ServiceLoader.load(ProtocolScheduleBuilder.class);
+    return serviceLoader.stream()
+        .map(ServiceLoader.Provider::get)
+        .filter(builder -> builder.matchGenesisConfig(genesisConfig.getConfigOptions()))
+        .findFirst()
+        .orElseThrow(
+            () -> new RuntimeException("No protocol schedule builder found for you configuration"));
   }
 
   /**

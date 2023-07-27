@@ -45,8 +45,11 @@ public class MergeProtocolSchedule {
    * @return the protocol schedule
    */
   public static ProtocolSchedule create(
-      final GenesisConfigOptions config, final boolean isRevertReasonEnabled) {
-    return create(config, PrivacyParameters.DEFAULT, isRevertReasonEnabled);
+      final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
+      final boolean isRevertReasonEnabled) {
+    return create(
+        config, protocolScheduleBuilder, PrivacyParameters.DEFAULT, isRevertReasonEnabled);
   }
 
   /**
@@ -59,6 +62,7 @@ public class MergeProtocolSchedule {
    */
   public static ProtocolSchedule create(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final PrivacyParameters privacyParameters,
       final boolean isRevertReasonEnabled) {
 
@@ -71,14 +75,13 @@ public class MergeProtocolSchedule {
                 specBuilder, config.getChainId()));
     unapplyModificationsFromShanghaiOnwards(config, postMergeModifications);
 
-    return new ProtocolScheduleBuilder(
-            config,
-            DEFAULT_CHAIN_ID,
-            new ProtocolSpecAdapters(postMergeModifications),
-            privacyParameters,
-            isRevertReasonEnabled,
-            EvmConfiguration.DEFAULT)
-        .createProtocolSchedule();
+    return protocolScheduleBuilder.createProtocolSchedule(
+        config,
+        DEFAULT_CHAIN_ID,
+        new ProtocolSpecAdapters(postMergeModifications),
+        privacyParameters,
+        isRevertReasonEnabled,
+        EvmConfiguration.DEFAULT);
   }
 
   /**
@@ -113,7 +116,7 @@ public class MergeProtocolSchedule {
     // Any post-Paris fork can rely on the MainnetProtocolSpec definitions again
     // Must allow for config to skip Shanghai and go straight to a later fork.
     if (config.getForkBlockTimestamps().size() > 0) {
-      postMergeModifications.put(config.getForkBlockTimestamps().get(0), Function.identity());
+      postMergeModifications.put(config.getForkBlockTimestamps().firstKey(), Function.identity());
     }
   }
 }

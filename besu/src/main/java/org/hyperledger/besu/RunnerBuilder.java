@@ -693,8 +693,16 @@ public class RunnerBuilder {
               .storageProvider(storageProvider)
               .p2pTLSConfiguration(p2pTLSConfiguration)
               .blockchain(context.getBlockchain())
-              .blockNumberForks(besuController.getGenesisConfigOptions().getForkBlockNumbers())
-              .timestampForks(besuController.getGenesisConfigOptions().getForkBlockTimestamps())
+              .blockNumberForks(
+                  besuController.getGenesisConfigOptions().getForkBlockNumbers().keySet().stream()
+                      .toList())
+              .timestampForks(
+                  besuController
+                      .getGenesisConfigOptions()
+                      .getForkBlockTimestamps()
+                      .keySet()
+                      .stream()
+                      .toList())
               .allConnectionsSupplier(ethPeers::getAllConnections)
               .allActiveConnectionsSupplier(ethPeers::getAllActiveConnections)
               .peersLowerBound(ethPeers.getPeerLowerBound())

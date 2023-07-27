@@ -40,21 +40,25 @@ public class MainnetProtocolSchedule {
    */
   public static ProtocolSchedule fromConfig(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final PrivacyParameters privacyParameters,
       final boolean isRevertReasonEnabled,
       final EvmConfiguration evmConfiguration) {
     if (FixedDifficultyCalculators.isFixedDifficultyInConfig(config)) {
       return FixedDifficultyProtocolSchedule.create(
-          config, privacyParameters, isRevertReasonEnabled, evmConfiguration);
+          config,
+          protocolScheduleBuilder,
+          privacyParameters,
+          isRevertReasonEnabled,
+          evmConfiguration);
     }
-    return new ProtocolScheduleBuilder(
-            config,
-            DEFAULT_CHAIN_ID,
-            ProtocolSpecAdapters.create(0, Function.identity()),
-            privacyParameters,
-            isRevertReasonEnabled,
-            evmConfiguration)
-        .createProtocolSchedule();
+    return protocolScheduleBuilder.createProtocolSchedule(
+        config,
+        DEFAULT_CHAIN_ID,
+        ProtocolSpecAdapters.create(0, Function.identity()),
+        privacyParameters,
+        isRevertReasonEnabled,
+        evmConfiguration);
   }
 
   /**
@@ -68,9 +72,15 @@ public class MainnetProtocolSchedule {
    */
   public static ProtocolSchedule fromConfig(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final boolean isRevertReasonEnabled,
       final EvmConfiguration evmConfiguration) {
-    return fromConfig(config, PrivacyParameters.DEFAULT, isRevertReasonEnabled, evmConfiguration);
+    return fromConfig(
+        config,
+        protocolScheduleBuilder,
+        PrivacyParameters.DEFAULT,
+        isRevertReasonEnabled,
+        evmConfiguration);
   }
 
   /**
@@ -82,8 +92,11 @@ public class MainnetProtocolSchedule {
    * @return A configured mainnet protocol schedule
    */
   public static ProtocolSchedule fromConfig(
-      final GenesisConfigOptions config, final EvmConfiguration evmConfiguration) {
-    return fromConfig(config, PrivacyParameters.DEFAULT, false, evmConfiguration);
+      final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
+      final EvmConfiguration evmConfiguration) {
+    return fromConfig(
+        config, protocolScheduleBuilder, PrivacyParameters.DEFAULT, false, evmConfiguration);
   }
 
   /**
@@ -93,7 +106,13 @@ public class MainnetProtocolSchedule {
    *     starting points
    * @return A configured mainnet protocol schedule
    */
-  public static ProtocolSchedule fromConfig(final GenesisConfigOptions config) {
-    return fromConfig(config, PrivacyParameters.DEFAULT, false, EvmConfiguration.DEFAULT);
+  public static ProtocolSchedule fromConfig(
+      final GenesisConfigOptions config, final ProtocolScheduleBuilder protocolScheduleBuilder) {
+    return fromConfig(
+        config,
+        protocolScheduleBuilder,
+        PrivacyParameters.DEFAULT,
+        false,
+        EvmConfiguration.DEFAULT);
   }
 }

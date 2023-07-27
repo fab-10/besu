@@ -31,8 +31,8 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
@@ -55,14 +55,14 @@ public class LondonFeeMarketBlockTransactionSelectorTest
 
   @Override
   protected ProtocolSchedule createProtocolSchedule() {
-    return new ProtocolScheduleBuilder(
+    return new MainnetProtocolScheduleBuilder()
+        .createProtocolSchedule(
             genesisConfigFile.getConfigOptions(),
             CHAIN_ID,
             ProtocolSpecAdapters.create(0, Function.identity()),
             new PrivacyParameters(),
             false,
-            EvmConfiguration.DEFAULT)
-        .createProtocolSchedule();
+            EvmConfiguration.DEFAULT);
   }
 
   @Override

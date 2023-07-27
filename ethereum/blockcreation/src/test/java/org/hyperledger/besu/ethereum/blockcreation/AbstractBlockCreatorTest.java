@@ -65,8 +65,8 @@ import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTran
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.BodyValidation;
 import org.hyperledger.besu.ethereum.mainnet.DepositsValidator;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.ethereum.mainnet.WithdrawalsProcessor;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.CancunFeeMarket;
@@ -334,14 +334,14 @@ abstract class AbstractBlockCreatorTest {
     final ExecutionContextTestFixture executionContextTestFixture =
         ExecutionContextTestFixture.builder()
             .protocolSchedule(
-                new ProtocolScheduleBuilder(
+                new MainnetProtocolScheduleBuilder()
+                    .createProtocolSchedule(
                         genesisConfigOptions,
                         BigInteger.valueOf(42),
                         protocolSpecAdapters,
                         PrivacyParameters.DEFAULT,
                         false,
-                        EvmConfiguration.DEFAULT)
-                    .createProtocolSchedule())
+                        EvmConfiguration.DEFAULT))
             .build();
 
     final MutableBlockchain blockchain = executionContextTestFixture.getBlockchain();

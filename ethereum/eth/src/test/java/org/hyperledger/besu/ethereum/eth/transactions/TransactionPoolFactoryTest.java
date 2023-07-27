@@ -44,8 +44,8 @@ import org.hyperledger.besu.ethereum.eth.sync.state.SyncState;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.forkid.ForkIdManager;
+import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
@@ -289,14 +289,14 @@ public class TransactionPoolFactoryTest {
 
   private void setupScheduleWith(final StubGenesisConfigOptions config) {
     schedule =
-        new ProtocolScheduleBuilder(
+        new MainnetProtocolScheduleBuilder()
+            .createProtocolSchedule(
                 config,
                 DEFAULT_CHAIN_ID,
                 ProtocolSpecAdapters.create(0, Function.identity()),
                 PrivacyParameters.DEFAULT,
                 false,
-                EvmConfiguration.DEFAULT)
-            .createProtocolSchedule();
+                EvmConfiguration.DEFAULT);
 
     protocolContext = mock(ProtocolContext.class);
     when(protocolContext.getBlockchain()).thenReturn(blockchain);

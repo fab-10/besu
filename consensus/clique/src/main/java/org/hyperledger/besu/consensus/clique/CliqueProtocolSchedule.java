@@ -45,6 +45,7 @@ public class CliqueProtocolSchedule {
   /**
    * Create protocol schedule.
    *
+   * @param protocolScheduleBuilder the protocol schedule builder
    * @param config the config
    * @param nodeKey the node key
    * @param privacyParameters the privacy parameters
@@ -53,6 +54,7 @@ public class CliqueProtocolSchedule {
    * @return the protocol schedule
    */
   public static ProtocolSchedule create(
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final GenesisConfigOptions config,
       final NodeKey nodeKey,
       final PrivacyParameters privacyParameters,
@@ -69,21 +71,33 @@ public class CliqueProtocolSchedule {
 
     final EpochManager epochManager = new EpochManager(cliqueConfig.getEpochLength());
 
-    return new ProtocolScheduleBuilder(
-            config,
-            DEFAULT_CHAIN_ID,
-            ProtocolSpecAdapters.create(
-                0,
-                builder ->
-                    applyCliqueSpecificModifications(
-                        epochManager,
-                        cliqueConfig.getBlockPeriodSeconds(),
-                        localNodeAddress,
-                        builder)),
-            privacyParameters,
-            isRevertReasonEnabled,
-            evmConfiguration)
-        .createProtocolSchedule();
+    return protocolScheduleBuilder.createProtocolSchedule(
+        config,
+        DEFAULT_CHAIN_ID,
+        ProtocolSpecAdapters.create(
+            0,
+            builder ->
+                applyCliqueSpecificModifications(
+                    epochManager, cliqueConfig.getBlockPeriodSeconds(), localNodeAddress, builder)),
+        privacyParameters,
+        isRevertReasonEnabled,
+        evmConfiguration);
+
+    //    return new MainnetProtocolScheduleBuilder(
+    //            config,
+    //            DEFAULT_CHAIN_ID,
+    //            ProtocolSpecAdapters.create(
+    //                0,
+    //                builder ->
+    //                    applyCliqueSpecificModifications(
+    //                        epochManager,
+    //                        cliqueConfig.getBlockPeriodSeconds(),
+    //                        localNodeAddress,
+    //                        builder)),
+    //            privacyParameters,
+    //            isRevertReasonEnabled,
+    //            evmConfiguration)
+    //        .createProtocolSchedule();
   }
 
   /**
@@ -97,11 +111,17 @@ public class CliqueProtocolSchedule {
    */
   public static ProtocolSchedule create(
       final GenesisConfigOptions config,
+      final ProtocolScheduleBuilder protocolScheduleBuilder,
       final NodeKey nodeKey,
       final boolean isRevertReasonEnabled,
       final EvmConfiguration evmConfiguration) {
     return create(
-        config, nodeKey, PrivacyParameters.DEFAULT, isRevertReasonEnabled, evmConfiguration);
+        protocolScheduleBuilder,
+        config,
+        nodeKey,
+        PrivacyParameters.DEFAULT,
+        isRevertReasonEnabled,
+        evmConfiguration);
   }
 
   private static ProtocolSpecBuilder applyCliqueSpecificModifications(
