@@ -97,7 +97,8 @@ public interface TransactionsLayer {
     INVALIDATED,
     PROMOTED,
     REPLACED,
-    RECONCILED;
+    RECONCILED,
+    BELOW_BASE_FEE;
 
     private final String label;
 
