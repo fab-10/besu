@@ -313,7 +313,7 @@ public class TransactionPool implements BlockAddedObserver {
   @Override
   public void onBlockAdded(final BlockAddedEvent event) {
     if (isPoolEnabled.get()) {
-      LOG.trace("Block added event {}", event);
+      final long started = System.currentTimeMillis();
       if (event.getEventType().equals(BlockAddedEvent.EventType.HEAD_ADVANCED)
           || event.getEventType().equals(BlockAddedEvent.EventType.CHAIN_REORG)) {
 
@@ -324,6 +324,11 @@ public class TransactionPool implements BlockAddedObserver {
             protocolSchedule.getByBlockHeader(event.getBlock().getHeader()).getFeeMarket());
         reAddTransactions(event.getRemovedTransactions());
       }
+      LOG.atDebug()
+          .setMessage("Block added event {} process in {}ms")
+          .addArgument(event)
+          .addArgument(() -> System.currentTimeMillis() - started)
+          .log();
     }
   }
 

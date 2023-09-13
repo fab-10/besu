@@ -405,7 +405,7 @@ public abstract class AbstractTransactionsLayer implements TransactionsLayer {
   protected abstract void internalBlockAdded(
       final BlockHeader blockHeader, final FeeMarket feeMarket);
 
-  final void promoteTransactions() {
+  protected final void promoteTransactions() {
     int freeSlots = maxTransactionsNumber() - pendingTransactions.size();
 
     while (cacheFreeSpace() > 0 && freeSlots > 0) {

@@ -140,29 +140,24 @@ public class ReadyTransactions extends AbstractSequentialTransactionsLayer {
 
   @Override
   public PendingTransaction promote(final Predicate<PendingTransaction> promotionFilter) {
+    // take the best ready transaction
+    final PendingTransaction candidateTx = orderByMaxFee.last();
 
-    final var maybePromotedTx =
-        orderByMaxFee.descendingSet().stream()
-            .filter(candidateTx -> promotionFilter.test(candidateTx))
-            .findFirst();
+    if (promotionFilter.test(candidateTx)) {
+      final var senderTxs = txsBySender.get(candidateTx.getSender());
+      // we always promote the first tx of a sender, so remove the first entry
+      senderTxs.pollFirstEntry();
+      processRemove(senderTxs, candidateTx.getTransaction(), PROMOTED);
 
-    return maybePromotedTx
-        .map(
-            promotedTx -> {
-              final var senderTxs = txsBySender.get(promotedTx.getSender());
-              // we always promote the first tx of a sender, so remove the first entry
-              senderTxs.pollFirstEntry();
-              processRemove(senderTxs, promotedTx.getTransaction(), PROMOTED);
+      // now that we have space, promote from the next layer
+      promoteTransactions();
 
-              // now that we have space, promote from the next layer
-              promoteTransactions();
-
-              if (senderTxs.isEmpty()) {
-                txsBySender.remove(promotedTx.getSender());
-              }
-              return promotedTx;
-            })
-        .orElse(null);
+      if (senderTxs.isEmpty()) {
+        txsBySender.remove(candidateTx.getSender());
+      }
+      return candidateTx;
+    }
+    return null;
   }
 
   @Override
