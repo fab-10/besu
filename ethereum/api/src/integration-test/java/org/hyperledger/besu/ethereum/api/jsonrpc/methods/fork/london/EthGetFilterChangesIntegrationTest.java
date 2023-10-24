@@ -130,7 +130,7 @@ public class EthGetFilterChangesIntegrationTest {
             protocolContext,
             batchAddedListener,
             ethContext,
-            new MiningParameters.Builder().minTransactionGasPrice(Wei.ZERO).build(),
+            MiningParameters.newDefault(),
             new TransactionPoolMetrics(metricsSystem),
             TransactionPoolConfiguration.DEFAULT,
             null);

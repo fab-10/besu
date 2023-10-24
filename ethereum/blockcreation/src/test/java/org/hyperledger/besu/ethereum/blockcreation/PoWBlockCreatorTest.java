@@ -31,6 +31,8 @@ import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeaderBuilder;
 import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.ExecutionContextTestFixture;
+import org.hyperledger.besu.ethereum.core.ImmutableMiningParameters;
+import org.hyperledger.besu.ethereum.core.ImmutableMiningParameters.MutableInitValues;
 import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.MutableWorldState;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
@@ -60,7 +62,6 @@ import org.hyperledger.besu.util.Subscribers;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.Collections;
-import java.util.Optional;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -97,29 +98,26 @@ class PoWBlockCreatorTest extends AbstractBlockCreatorTest {
                     .createProtocolSchedule())
             .build();
 
+    final MiningParameters miningParameters = createMiningParameters();
+
     final PoWSolver solver =
         new PoWSolver(
-            Lists.newArrayList(BLOCK_1_NONCE),
+            miningParameters,
             PoWHasher.ETHASH_LIGHT,
             false,
             Subscribers.none(),
-            new EpochCalculator.DefaultEpochCalculator(),
-            1000,
-            8);
+            new EpochCalculator.DefaultEpochCalculator());
 
     final TransactionPool transactionPool = createTransactionPool(executionContextTestFixture);
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(
-            BLOCK_1_COINBASE,
-            Optional::empty,
+            miningParameters,
             parent -> BLOCK_1_EXTRA_DATA,
             transactionPool,
             executionContextTestFixture.getProtocolContext(),
             executionContextTestFixture.getProtocolSchedule(),
             solver,
-            Wei.ZERO,
-            0.8,
             executionContextTestFixture.getBlockchain().getChainHeadHeader());
 
     // A Hashrate should not exist in the block creator prior to creating a block
@@ -153,29 +151,26 @@ class PoWBlockCreatorTest extends AbstractBlockCreatorTest {
                     .createProtocolSchedule())
             .build();
 
+    final MiningParameters miningParameters = createMiningParameters();
+
     final PoWSolver solver =
         new PoWSolver(
-            Lists.newArrayList(BLOCK_1_NONCE),
+            miningParameters,
             PoWHasher.ETHASH_LIGHT,
             false,
             Subscribers.none(),
-            new EpochCalculator.DefaultEpochCalculator(),
-            1000,
-            8);
+            new EpochCalculator.DefaultEpochCalculator());
 
     final TransactionPool transactionPool = createTransactionPool(executionContextTestFixture);
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(
-            BLOCK_1_COINBASE,
-            Optional::empty,
+            miningParameters,
             parent -> BLOCK_1_EXTRA_DATA,
             transactionPool,
             executionContextTestFixture.getProtocolContext(),
             executionContextTestFixture.getProtocolSchedule(),
             solver,
-            Wei.ZERO,
-            0.8,
             executionContextTestFixture.getBlockchain().getChainHeadHeader());
 
     assertThat(blockCreator.createBlock(BLOCK_1_TIMESTAMP)).isNotNull();
@@ -200,29 +195,26 @@ class PoWBlockCreatorTest extends AbstractBlockCreatorTest {
     final ExecutionContextTestFixture executionContextTestFixture =
         ExecutionContextTestFixture.builder().protocolSchedule(protocolSchedule).build();
 
+    final MiningParameters miningParameters = createMiningParameters();
+
     final PoWSolver solver =
         new PoWSolver(
-            Lists.newArrayList(BLOCK_1_NONCE),
+            miningParameters,
             PoWHasher.ETHASH_LIGHT,
             false,
             Subscribers.none(),
-            new EpochCalculator.DefaultEpochCalculator(),
-            1000,
-            8);
+            new EpochCalculator.DefaultEpochCalculator());
 
     final TransactionPool transactionPool = createTransactionPool(executionContextTestFixture);
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(
-            BLOCK_1_COINBASE,
-            () -> Optional.of(10_000_000L),
+            miningParameters,
             parent -> BLOCK_1_EXTRA_DATA,
             transactionPool,
             executionContextTestFixture.getProtocolContext(),
             executionContextTestFixture.getProtocolSchedule(),
             solver,
-            Wei.ZERO,
-            0.8,
             executionContextTestFixture.getBlockchain().getChainHeadHeader());
 
     final MutableWorldState mutableWorldState =
@@ -269,29 +261,26 @@ class PoWBlockCreatorTest extends AbstractBlockCreatorTest {
     final ExecutionContextTestFixture executionContextTestFixture =
         ExecutionContextTestFixture.builder().protocolSchedule(protocolSchedule).build();
 
+    final MiningParameters miningParameters = createMiningParameters();
+
     final PoWSolver solver =
         new PoWSolver(
-            Lists.newArrayList(BLOCK_1_NONCE),
+            miningParameters,
             PoWHasher.ETHASH_LIGHT,
             false,
             Subscribers.none(),
-            new EpochCalculator.DefaultEpochCalculator(),
-            1000,
-            8);
+            new EpochCalculator.DefaultEpochCalculator());
 
     final TransactionPool transactionPool = createTransactionPool(executionContextTestFixture);
 
     final PoWBlockCreator blockCreator =
         new PoWBlockCreator(
-            BLOCK_1_COINBASE,
-            () -> Optional.of(10_000_000L),
+            miningParameters,
             parent -> BLOCK_1_EXTRA_DATA,
             transactionPool,
             executionContextTestFixture.getProtocolContext(),
             executionContextTestFixture.getProtocolSchedule(),
             solver,
-            Wei.ZERO,
-            0.8,
             executionContextTestFixture.getBlockchain().getChainHeadHeader());
 
     final MutableWorldState mutableWorldState =
@@ -361,5 +350,17 @@ class PoWBlockCreatorTest extends AbstractBlockCreatorTest {
     transactionPool.setEnabled();
 
     return transactionPool;
+  }
+
+  private MiningParameters createMiningParameters() {
+    return ImmutableMiningParameters.builder()
+        .mutableInitValues(
+            MutableInitValues.builder()
+                .nonceGenerator(Lists.newArrayList(BLOCK_1_NONCE))
+                .extraData(BLOCK_1_EXTRA_DATA)
+                .minTransactionGasPrice(Wei.ONE)
+                .coinbase(BLOCK_1_COINBASE)
+                .build())
+        .build();
   }
 }

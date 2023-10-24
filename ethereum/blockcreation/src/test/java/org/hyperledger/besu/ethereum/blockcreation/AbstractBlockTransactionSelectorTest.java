@@ -46,6 +46,8 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.BlockHeaderBuilder;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 import org.hyperledger.besu.ethereum.core.Difficulty;
+import org.hyperledger.besu.ethereum.core.ImmutableMiningParameters;
+import org.hyperledger.besu.ethereum.core.ImmutableMiningParameters.MutableInitValues;
 import org.hyperledger.besu.ethereum.core.InMemoryKeyValueStorageProvider;
 import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.MutableWorldState;
@@ -114,12 +116,12 @@ public abstract class AbstractBlockTransactionSelectorTest {
   protected TransactionPool transactionPool;
   protected MutableWorldState worldState;
   protected ProtocolSchedule protocolSchedule;
+  protected MiningParameters miningParameters;
 
   @Mock(answer = Answers.RETURNS_DEEP_STUBS)
   protected ProtocolContext protocolContext;
 
   @Mock protected MainnetTransactionProcessor transactionProcessor;
-  @Mock protected MiningParameters miningParameters;
 
   @Mock(answer = Answers.RETURNS_DEEP_STUBS)
   protected EthContext ethContext;
@@ -151,7 +153,10 @@ public abstract class AbstractBlockTransactionSelectorTest {
     when(protocolContext.getWorldStateArchive().getMutable(any(), anyBoolean()))
         .thenReturn(Optional.of(worldState));
     when(ethContext.getEthPeers().subscribeConnect(any())).thenReturn(1L);
-    when(miningParameters.getMinTransactionGasPrice()).thenReturn(Wei.ONE);
+    miningParameters =
+        ImmutableMiningParameters.builder()
+            .mutableInitValues(MutableInitValues.builder().minTransactionGasPrice(Wei.ONE).build())
+            .build();
 
     transactionPool = createTransactionPool();
   }
@@ -587,10 +592,8 @@ public abstract class AbstractBlockTransactionSelectorTest {
         createBlockSelectorWithTxSelPlugin(
             transactionProcessor,
             blockHeader,
-            Wei.ZERO,
             miningBeneficiary,
             Wei.ZERO,
-            MIN_OCCUPANCY_80_PERCENT,
             transactionSelectorFactory);
 
     transactionPool.addRemoteTransactions(
@@ -651,10 +654,8 @@ public abstract class AbstractBlockTransactionSelectorTest {
         createBlockSelectorWithTxSelPlugin(
             transactionProcessor,
             blockHeader,
-            Wei.ZERO,
             miningBeneficiary,
             Wei.ZERO,
-            MIN_OCCUPANCY_80_PERCENT,
             transactionSelectorFactory);
 
     transactionPool.addRemoteTransactions(List.of(selected, notSelected, selected3));
@@ -685,10 +686,8 @@ public abstract class AbstractBlockTransactionSelectorTest {
     createBlockSelectorWithTxSelPlugin(
             transactionProcessor,
             createBlock(300_000),
-            Wei.ZERO,
             AddressHelpers.ofValue(1),
             Wei.ZERO,
-            MIN_OCCUPANCY_80_PERCENT,
             transactionSelectorFactory)
         .buildTransactionListForBlock();
 
@@ -750,14 +749,15 @@ public abstract class AbstractBlockTransactionSelectorTest {
       final double minBlockOccupancyRatio) {
     final BlockTransactionSelector selector =
         new BlockTransactionSelector(
+            miningParameters
+                .setMinTransactionGasPrice(minGasPrice)
+                .setMinBlockOccupancyRatio(minBlockOccupancyRatio),
             transactionProcessor,
             blockchain,
             worldState,
             transactionPool,
             blockHeader,
             this::createReceipt,
-            minGasPrice,
-            minBlockOccupancyRatio,
             this::isCancelled,
             miningBeneficiary,
             blobGasPrice,
@@ -772,21 +772,18 @@ public abstract class AbstractBlockTransactionSelectorTest {
   protected BlockTransactionSelector createBlockSelectorWithTxSelPlugin(
       final MainnetTransactionProcessor transactionProcessor,
       final ProcessableBlockHeader blockHeader,
-      final Wei minGasPrice,
       final Address miningBeneficiary,
       final Wei blobGasPrice,
-      final double minBlockOccupancyRatio,
       final PluginTransactionSelectorFactory transactionSelectorFactory) {
     final BlockTransactionSelector selector =
         new BlockTransactionSelector(
+            miningParameters,
             transactionProcessor,
             blockchain,
             worldState,
             transactionPool,
             blockHeader,
             this::createReceipt,
-            minGasPrice,
-            minBlockOccupancyRatio,
             this::isCancelled,
             miningBeneficiary,
             blobGasPrice,

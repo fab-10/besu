@@ -24,7 +24,6 @@ import org.hyperledger.besu.crypto.SECPPrivateKey;
 import org.hyperledger.besu.crypto.SECPPublicKey;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.chain.Blockchain;
 import org.hyperledger.besu.ethereum.core.BlockchainSetupUtil;
@@ -139,7 +138,7 @@ public abstract class AbstractMessageTaskTest<T, R> {
             TestClock.system(ZoneId.systemDefault()),
             metricsSystem,
             syncState,
-            new MiningParameters.Builder().minTransactionGasPrice(Wei.ONE).build(),
+            MiningParameters.newDefault(),
             TransactionPoolConfiguration.DEFAULT,
             null);
     transactionPool.setEnabled();
