@@ -29,7 +29,6 @@ import org.hyperledger.besu.crypto.KeyPair;
 import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.datatypes.PendingTransaction;
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.GasLimitCalculator;
@@ -56,6 +55,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.difficulty.fixed.FixedDifficultyProtocolSchedule;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
@@ -570,7 +570,7 @@ public abstract class AbstractBlockTransactionSelectorTest {
             new PluginTransactionSelector() {
               @Override
               public TransactionSelectionResult evaluateTransactionPreProcessing(
-                  final PendingTransaction pendingTransaction) {
+                  final org.hyperledger.besu.datatypes.PendingTransaction pendingTransaction) {
                 if (pendingTransaction.getTransaction().equals(notSelectedTransient))
                   return TransactionSelectionResult.invalidTransient("transient");
                 if (pendingTransaction.getTransaction().equals(notSelectedInvalid))
@@ -580,7 +580,7 @@ public abstract class AbstractBlockTransactionSelectorTest {
 
               @Override
               public TransactionSelectionResult evaluateTransactionPostProcessing(
-                  final PendingTransaction pendingTransaction,
+                  final org.hyperledger.besu.datatypes.PendingTransaction pendingTransaction,
                   final org.hyperledger.besu.plugin.data.TransactionProcessingResult
                       processingResult) {
                 return TransactionSelectionResult.SELECTED;
@@ -632,13 +632,13 @@ public abstract class AbstractBlockTransactionSelectorTest {
             new PluginTransactionSelector() {
               @Override
               public TransactionSelectionResult evaluateTransactionPreProcessing(
-                  final PendingTransaction pendingTransaction) {
+                  final org.hyperledger.besu.datatypes.PendingTransaction pendingTransaction) {
                 return TransactionSelectionResult.SELECTED;
               }
 
               @Override
               public TransactionSelectionResult evaluateTransactionPostProcessing(
-                  final PendingTransaction pendingTransaction,
+                  final org.hyperledger.besu.datatypes.PendingTransaction pendingTransaction,
                   final org.hyperledger.besu.plugin.data.TransactionProcessingResult
                       processingResult) {
                 // the transaction with max gas +1 should fail
@@ -875,10 +875,7 @@ public abstract class AbstractBlockTransactionSelectorTest {
     return new BlockHeaderTestFixture().number(number).buildHeader();
   }
 
-  protected BiFunction<
-          org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction,
-          org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction,
-          Boolean>
+  protected BiFunction<PendingTransaction, PendingTransaction, Boolean>
       createTransactionReplacementTester(final TransactionPoolConfiguration poolConf) {
     final TransactionPoolReplacementHandler transactionReplacementHandler =
         new TransactionPoolReplacementHandler(poolConf.getPriceBump());
