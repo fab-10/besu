@@ -95,10 +95,12 @@ import org.hyperledger.besu.ethereum.core.ProtocolScheduleFixture;
 import org.hyperledger.besu.ethereum.core.Util;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.transaction.TransactionSimulator;
 import org.hyperledger.besu.ethereum.worldstate.DefaultWorldStateArchive;
@@ -124,6 +126,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Iterables;
@@ -428,10 +431,8 @@ public class TestContextBuilder {
 
     final TransactionPoolConfiguration poolConf =
         ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build();
-
     final GasPricePendingTransactionsSorter pendingTransactions =
-        new GasPricePendingTransactionsSorter(
-            poolConf, clock, metricsSystem, blockChain::getChainHeadHeader);
+        getGasPricePendingTransactionsSorter(blockChain, clock, poolConf);
 
     final EthContext ethContext = mock(EthContext.class, RETURNS_DEEP_STUBS);
     when(ethContext.getEthPeers().subscribeConnect(any())).thenReturn(1L);
@@ -526,6 +527,22 @@ public class TestContextBuilder {
         eventMultiplexer,
         messageFactory,
         validatorProvider);
+  }
+
+  private static GasPricePendingTransactionsSorter getGasPricePendingTransactionsSorter(
+      final MutableBlockchain blockChain,
+      final Clock clock,
+      final TransactionPoolConfiguration poolConf) {
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(poolConf.getPriceBump());
+
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) ->
+            transactionReplacementHandler.shouldReplace(t1, t2, blockChain.getChainHeadHeader());
+    final GasPricePendingTransactionsSorter pendingTransactions =
+        new GasPricePendingTransactionsSorter(
+            poolConf, clock, metricsSystem, transactionReplacementTester);
+    return pendingTransactions;
   }
 
   private static QbftConfigOptions createGenesisConfig(final boolean useValidatorContract) {

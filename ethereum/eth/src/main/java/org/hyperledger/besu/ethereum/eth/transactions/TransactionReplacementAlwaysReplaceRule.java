@@ -18,15 +18,14 @@ import org.hyperledger.besu.datatypes.Wei;
 
 import java.util.Optional;
 
-@FunctionalInterface
-public interface TransactionPoolReplacementRule {
+public class TransactionReplacementAlwaysReplaceRule implements TransactionPoolReplacementRule {
 
-  boolean shouldReplace(
-      PendingTransaction existingPendingTransaction,
-      PendingTransaction newPendingTransaction,
-      Optional<Wei> baseFee);
+  @Override
+  public boolean shouldReplace(
+      final PendingTransaction existingPendingTransaction,
+      final PendingTransaction newPendingTransaction,
+      final Optional<Wei> baseFee) {
 
-  default boolean isNotGasPriced(final PendingTransaction pendingTransaction) {
-    return pendingTransaction.getTransaction().getType().supports1559FeeMarket();
+    return true;
   }
 }

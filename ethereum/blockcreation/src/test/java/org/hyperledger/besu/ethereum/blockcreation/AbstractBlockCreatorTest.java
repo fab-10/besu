@@ -58,10 +58,12 @@ import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.core.Withdrawal;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.AbstractPendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.BodyValidation;
@@ -81,6 +83,7 @@ import java.time.Clock;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -366,8 +369,7 @@ abstract class AbstractBlockCreatorTest {
     final TransactionPoolConfiguration poolConf =
         ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(100).build();
     final AbstractPendingTransactionsSorter sorter =
-        new GasPricePendingTransactionsSorter(
-            poolConf, Clock.systemUTC(), new NoOpMetricsSystem(), blockchain::getChainHeadHeader);
+        getAbstractPendingTransactionsSorter(poolConf, blockchain);
 
     final EthContext ethContext = mock(EthContext.class, RETURNS_DEEP_STUBS);
     when(ethContext.getEthPeers().subscribeConnect(any())).thenReturn(1L);
@@ -397,6 +399,20 @@ abstract class AbstractBlockCreatorTest {
         0d,
         blockchain.getChainHeadHeader(),
         depositContractAddress);
+  }
+
+  private static AbstractPendingTransactionsSorter getAbstractPendingTransactionsSorter(
+      final TransactionPoolConfiguration poolConf, final MutableBlockchain blockchain) {
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(poolConf.getPriceBump());
+
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) ->
+            transactionReplacementHandler.shouldReplace(t1, t2, blockchain.getChainHeadHeader());
+    final AbstractPendingTransactionsSorter sorter =
+        new GasPricePendingTransactionsSorter(
+            poolConf, Clock.systemUTC(), new NoOpMetricsSystem(), transactionReplacementTester);
+    return sorter;
   }
 
   static class TestBlockCreator extends AbstractBlockCreator {

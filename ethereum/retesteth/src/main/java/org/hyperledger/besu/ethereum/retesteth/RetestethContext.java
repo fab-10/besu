@@ -233,6 +233,7 @@ public class RetestethContext {
 
     transactionPool =
         TransactionPoolFactory.createTransactionPool(
+            jsonGenesisConfigOptions,
             protocolSchedule,
             protocolContext,
             ethContext,

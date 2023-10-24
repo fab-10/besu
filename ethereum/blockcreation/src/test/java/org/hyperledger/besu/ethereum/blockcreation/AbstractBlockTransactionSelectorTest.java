@@ -55,6 +55,8 @@ import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.difficulty.fixed.FixedDifficultyProtocolSchedule;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.mainnet.MainnetTransactionProcessor;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
@@ -81,6 +83,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiFunction;
 
 import com.google.common.collect.Lists;
 import org.apache.tuweni.bytes.Bytes;
@@ -873,5 +876,24 @@ public abstract class AbstractBlockTransactionSelectorTest {
 
   private BlockHeader blockHeader(final long number) {
     return new BlockHeaderTestFixture().number(number).buildHeader();
+  }
+
+  protected BiFunction<
+          org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction,
+          org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction,
+          Boolean>
+      createTransactionReplacementTester(final TransactionPoolConfiguration poolConf) {
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(poolConf.getPriceBump());
+
+    final BiFunction<
+            org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction,
+            org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction,
+            Boolean>
+        transactionReplacementTester =
+            (t1, t2) ->
+                transactionReplacementHandler.shouldReplace(
+                    t1, t2, blockchain.getChainHeadHeader());
+    return transactionReplacementTester;
   }
 }

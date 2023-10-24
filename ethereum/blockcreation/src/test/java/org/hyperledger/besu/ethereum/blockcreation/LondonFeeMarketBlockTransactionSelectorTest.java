@@ -77,12 +77,14 @@ public class LondonFeeMarketBlockTransactionSelectorTest
             .txPoolMaxSize(5)
             .txPoolLimitByAccountPercentage(Fraction.fromFloat(1f))
             .build();
+
     final PendingTransactions pendingTransactions =
         new BaseFeePendingTransactionsSorter(
             poolConf,
             TestClock.system(ZoneId.systemDefault()),
             metricsSystem,
-            blockchain::getChainHeadHeader);
+            blockchain::getChainHeadHeader,
+            createTransactionReplacementTester(poolConf));
 
     final TransactionPool transactionPool =
         new TransactionPool(

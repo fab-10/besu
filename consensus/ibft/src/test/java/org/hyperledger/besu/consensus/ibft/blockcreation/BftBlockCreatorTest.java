@@ -45,10 +45,12 @@ import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.BlockHeaderValidator;
 import org.hyperledger.besu.ethereum.mainnet.HeaderValidationMode;
@@ -63,6 +65,7 @@ import java.time.ZoneId;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiFunction;
 
 import com.google.common.collect.Lists;
 import org.apache.tuweni.bytes.Bytes;
@@ -127,11 +130,7 @@ public class BftBlockCreatorTest {
         ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build();
 
     final GasPricePendingTransactionsSorter pendingTransactions =
-        new GasPricePendingTransactionsSorter(
-            poolConf,
-            TestClock.system(ZoneId.systemDefault()),
-            metricsSystem,
-            blockchain::getChainHeadHeader);
+        getGasPricePendingTransactionsSorter(poolConf, blockHeader);
 
     final EthContext ethContext = mock(EthContext.class, RETURNS_DEEP_STUBS);
     when(ethContext.getEthPeers().subscribeConnect(any())).thenReturn(1L);
@@ -192,5 +191,22 @@ public class BftBlockCreatorTest {
         .isEqualTo(
             new BftBlockHashing(bftExtraDataEncoder)
                 .calculateDataHashForCommittedSeal(header, extraData));
+  }
+
+  private GasPricePendingTransactionsSorter getGasPricePendingTransactionsSorter(
+      final TransactionPoolConfiguration poolConf, final BlockHeader blockHeader) {
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(poolConf.getPriceBump());
+
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) -> transactionReplacementHandler.shouldReplace(t1, t2, blockHeader);
+
+    final GasPricePendingTransactionsSorter pendingTransactions =
+        new GasPricePendingTransactionsSorter(
+            poolConf,
+            TestClock.system(ZoneId.systemDefault()),
+            metricsSystem,
+            transactionReplacementTester);
+    return pendingTransactions;
   }
 }

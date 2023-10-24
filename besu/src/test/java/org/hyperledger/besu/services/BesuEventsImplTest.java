@@ -20,6 +20,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import org.hyperledger.besu.config.GenesisConfigOptions;
 import org.hyperledger.besu.crypto.KeyPair;
 import org.hyperledger.besu.crypto.SignatureAlgorithm;
 import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
@@ -93,6 +94,7 @@ public class BesuEventsImplTest {
   private static final org.hyperledger.besu.ethereum.core.Transaction TX1 = createTransaction(0);
   private static final org.hyperledger.besu.ethereum.core.Transaction TX2 = createTransaction(1);
 
+  @Mock private GenesisConfigOptions mockGenesisConfigOptions;
   @Mock private ProtocolSchedule mockProtocolSchedule;
   @Mock private ProtocolContext mockProtocolContext;
   private SyncState syncState;
@@ -125,6 +127,7 @@ public class BesuEventsImplTest {
             new NoOpMetricsSystem(),
             0);
 
+    when(mockGenesisConfigOptions.isZeroBaseFee()).thenReturn(false);
     when(mockEthContext.getEthMessages()).thenReturn(mockEthMessages);
     when(mockEthContext.getEthPeers()).thenReturn(mockEthPeers);
     when(mockEthContext.getScheduler()).thenReturn(mockEthScheduler);
@@ -149,6 +152,7 @@ public class BesuEventsImplTest {
 
     transactionPool =
         TransactionPoolFactory.createTransactionPool(
+            mockGenesisConfigOptions,
             mockProtocolSchedule,
             mockProtocolContext,
             mockEthContext,

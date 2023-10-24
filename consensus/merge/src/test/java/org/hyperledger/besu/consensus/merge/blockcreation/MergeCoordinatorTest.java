@@ -67,6 +67,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
@@ -164,12 +165,17 @@ public class MergeCoordinatorTest implements MergeGenesisConfigHelper {
           .txPoolMaxSize(10)
           .txPoolLimitByAccountPercentage(Fraction.fromPercentage(100))
           .build();
+
+  private final TransactionPoolReplacementHandler transactionReplacementHandler =
+      new TransactionPoolReplacementHandler(poolConf.getPriceBump());
+
   private final BaseFeePendingTransactionsSorter transactions =
       new BaseFeePendingTransactionsSorter(
           poolConf,
           TestClock.system(ZoneId.systemDefault()),
           metricsSystem,
-          MergeCoordinatorTest::mockBlockHeader);
+          MergeCoordinatorTest::mockBlockHeader,
+          (t1, t2) -> transactionReplacementHandler.shouldReplace(t1, t2, mockBlockHeader()));
 
   private TransactionPool transactionPool;
 

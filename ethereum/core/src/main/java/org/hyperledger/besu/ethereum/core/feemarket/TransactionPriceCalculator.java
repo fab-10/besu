@@ -31,10 +31,10 @@ public interface TransactionPriceCalculator {
 
   static TransactionPriceCalculator eip1559() {
     return (transaction, maybeBaseFee) -> {
-      final Wei baseFee = maybeBaseFee.orElseThrow();
       if (!transaction.getType().supports1559FeeMarket()) {
         return transaction.getGasPrice().orElse(Wei.ZERO);
       }
+      final Wei baseFee = maybeBaseFee.orElseThrow();
       final Wei maxPriorityFeePerGas = transaction.getMaxPriorityFeePerGas().orElseThrow();
       final Wei maxFeePerGas = transaction.getMaxFeePerGas().orElseThrow();
       Wei price = maxPriorityFeePerGas.add(baseFee);

@@ -56,6 +56,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -65,6 +66,7 @@ import java.math.BigInteger;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiFunction;
 
 import org.apache.tuweni.bytes.Bytes;
 import org.assertj.core.util.Lists;
@@ -100,12 +102,18 @@ public class EthGetFilterChangesIntegrationTest {
   public void setUp() {
     final ExecutionContextTestFixture executionContext = ExecutionContextTestFixture.create();
     blockchain = executionContext.getBlockchain();
+    final TransactionPoolConfiguration poolConf =
+        ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(MAX_TRANSACTIONS).build();
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(poolConf.getPriceBump());
+
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) ->
+            transactionReplacementHandler.shouldReplace(t1, t2, blockchain.getChainHeadHeader());
     transactions =
         new GasPricePendingTransactionsSorter(
-            ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(MAX_TRANSACTIONS).build(),
-            TestClock.fixed(),
-            metricsSystem,
-            blockchain::getChainHeadHeader);
+            poolConf, TestClock.fixed(), metricsSystem, transactionReplacementTester);
+
     final ProtocolContext protocolContext = executionContext.getProtocolContext();
 
     EthContext ethContext = mock(EthContext.class);

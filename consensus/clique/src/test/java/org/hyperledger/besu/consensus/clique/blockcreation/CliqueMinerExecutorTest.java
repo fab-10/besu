@@ -41,9 +41,11 @@ import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.Util;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
@@ -55,6 +57,7 @@ import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
 import java.util.Random;
+import java.util.function.BiFunction;
 
 import com.google.common.collect.Lists;
 import org.apache.tuweni.bytes.Bytes;
@@ -208,6 +211,12 @@ public class CliqueMinerExecutorTest {
 
     when(cliqueEthContext.getEthPeers().subscribeConnect(any())).thenReturn(1L);
 
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(conf.getPriceBump());
+
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) -> transactionReplacementHandler.shouldReplace(t1, t2, mockBlockHeader());
+
     final TransactionPool transactionPool =
         new TransactionPool(
             () ->
@@ -215,7 +224,7 @@ public class CliqueMinerExecutorTest {
                     conf,
                     TestClock.system(ZoneId.systemDefault()),
                     metricsSystem,
-                    CliqueMinerExecutorTest::mockBlockHeader),
+                    transactionReplacementTester),
             cliqueProtocolSchedule,
             cliqueProtocolContext,
             mock(TransactionBroadcaster.class),

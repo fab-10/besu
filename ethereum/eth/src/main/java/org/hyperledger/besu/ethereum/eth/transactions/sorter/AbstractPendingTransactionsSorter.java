@@ -30,7 +30,6 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionDroppedL
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.evm.account.AccountState;
@@ -55,7 +54,7 @@ import java.util.Set;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Supplier;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 import java.util.stream.StreamSupport;
 
@@ -94,20 +93,19 @@ public abstract class AbstractPendingTransactionsSorter implements PendingTransa
   protected final Counter localTransactionAddedCounter;
   protected final Counter remoteTransactionAddedCounter;
 
-  protected final TransactionPoolReplacementHandler transactionReplacementHandler;
-  protected final Supplier<BlockHeader> chainHeadHeaderSupplier;
+  protected final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+      transactionReplacementTester;
 
   public AbstractPendingTransactionsSorter(
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
-      final Supplier<BlockHeader> chainHeadHeaderSupplier) {
+      final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+          transactionReplacementTester) {
     this.poolConfig = poolConfig;
     this.pendingTransactions = new ConcurrentHashMap<>(poolConfig.getTxPoolMaxSize());
     this.clock = clock;
-    this.chainHeadHeaderSupplier = chainHeadHeaderSupplier;
-    this.transactionReplacementHandler =
-        new TransactionPoolReplacementHandler(poolConfig.getPriceBump());
+    this.transactionReplacementTester = transactionReplacementTester;
     final LabelledMetric<Counter> transactionAddedCounter =
         metricsSystem.createLabelledCounter(
             BesuMetricCategory.TRANSACTION_POOL,
@@ -291,8 +289,7 @@ public abstract class AbstractPendingTransactionsSorter implements PendingTransa
 
     final Optional<Transaction> maybeReplacedTransaction;
     if (existingPendingTx != null) {
-      if (!transactionReplacementHandler.shouldReplace(
-          existingPendingTx, pendingTransaction, chainHeadHeaderSupplier.get())) {
+      if (!transactionReplacementTester.apply(existingPendingTx, pendingTransaction)) {
         LOG.atTrace()
             .setMessage("Reject underpriced transaction replacement {}")
             .addArgument(pendingTransaction::toTraceLog)

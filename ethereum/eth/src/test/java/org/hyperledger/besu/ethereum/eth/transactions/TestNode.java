@@ -113,7 +113,7 @@ public class TestNode implements Closeable {
     final GenesisConfigFile genesisConfigFile = GenesisConfigFile.development();
     final ProtocolSchedule protocolSchedule =
         FixedDifficultyProtocolSchedule.create(
-            GenesisConfigFile.development().getConfigOptions(), false, EvmConfiguration.DEFAULT);
+            genesisConfigFile.getConfigOptions(), false, EvmConfiguration.DEFAULT);
 
     final GenesisState genesisState = GenesisState.fromConfig(genesisConfigFile, protocolSchedule);
     final BlockHeaderFunctions blockHeaderFunctions =
@@ -157,6 +157,7 @@ public class TestNode implements Closeable {
 
     transactionPool =
         TransactionPoolFactory.createTransactionPool(
+            genesisConfigFile.getConfigOptions(),
             protocolSchedule,
             protocolContext,
             ethContext,

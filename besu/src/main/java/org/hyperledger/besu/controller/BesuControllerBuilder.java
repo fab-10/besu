@@ -717,6 +717,7 @@ public abstract class BesuControllerBuilder implements MiningParameterOverrides 
 
     final TransactionPool transactionPool =
         TransactionPoolFactory.createTransactionPool(
+            configOptions,
             protocolSchedule,
             protocolContext,
             ethContext,

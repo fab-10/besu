@@ -25,7 +25,7 @@ import java.time.Clock;
 import java.util.Iterator;
 import java.util.NavigableSet;
 import java.util.TreeSet;
-import java.util.function.Supplier;
+import java.util.function.BiFunction;
 
 /**
  * Holds the current set of pending transactions with the ability to iterate them based on priority
@@ -47,8 +47,9 @@ public class GasPricePendingTransactionsSorter extends AbstractPendingTransactio
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
-      final Supplier<BlockHeader> chainHeadHeaderSupplier) {
-    super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier);
+      final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+          transactionReplacementTester) {
+    super(poolConfig, clock, metricsSystem, transactionReplacementTester);
   }
 
   @Override

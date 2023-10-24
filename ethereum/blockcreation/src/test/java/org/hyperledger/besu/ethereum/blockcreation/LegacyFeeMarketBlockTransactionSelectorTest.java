@@ -73,7 +73,7 @@ public class LegacyFeeMarketBlockTransactionSelectorTest
             poolConf,
             TestClock.system(ZoneId.systemDefault()),
             metricsSystem,
-            blockchain::getChainHeadHeader);
+            createTransactionReplacementTester(poolConf));
 
     final EthContext ethContext = mock(EthContext.class, RETURNS_DEEP_STUBS);
     when(ethContext.getEthPeers().subscribeConnect(any())).thenReturn(1L);

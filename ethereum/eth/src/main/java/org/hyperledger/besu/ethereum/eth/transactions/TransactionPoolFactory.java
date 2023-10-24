@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.eth.transactions;
 
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration.Implementation.LAYERED;
 
+import org.hyperledger.besu.config.GenesisConfigOptions;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
@@ -37,6 +38,7 @@ import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.plugin.services.BesuEvents;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.txvalidator.PluginTransactionValidatorFactory;
+import org.hyperledger.besu.util.number.Percentage;
 
 import java.time.Clock;
 import java.util.function.BiFunction;
@@ -48,6 +50,7 @@ public class TransactionPoolFactory {
   private static final Logger LOG = LoggerFactory.getLogger(TransactionPoolFactory.class);
 
   public static TransactionPool createTransactionPool(
+      final GenesisConfigOptions genesisConfigOptions,
       final ProtocolSchedule protocolSchedule,
       final ProtocolContext protocolContext,
       final EthContext ethContext,
@@ -68,6 +71,7 @@ public class TransactionPoolFactory {
         new NewPooledTransactionHashesMessageSender(transactionTracker);
 
     return createTransactionPool(
+        genesisConfigOptions,
         protocolSchedule,
         protocolContext,
         ethContext,
@@ -83,6 +87,7 @@ public class TransactionPoolFactory {
   }
 
   static TransactionPool createTransactionPool(
+      final GenesisConfigOptions genesisConfigOptions,
       final ProtocolSchedule protocolSchedule,
       final ProtocolContext protocolContext,
       final EthContext ethContext,
@@ -100,6 +105,7 @@ public class TransactionPoolFactory {
         new TransactionPool(
             () ->
                 createPendingTransactions(
+                    genesisConfigOptions,
                     protocolSchedule,
                     protocolContext,
                     clock,
@@ -191,15 +197,20 @@ public class TransactionPoolFactory {
   }
 
   private static PendingTransactions createPendingTransactions(
+      final GenesisConfigOptions genesisConfigOptions,
       final ProtocolSchedule protocolSchedule,
       final ProtocolContext protocolContext,
       final Clock clock,
       final TransactionPoolMetrics metrics,
       final TransactionPoolConfiguration transactionPoolConfiguration) {
 
-    boolean isFeeMarketImplementBaseFee =
+    boolean isBaseFeeMarketScheduled =
         protocolSchedule.anyMatch(
             scheduledSpec -> scheduledSpec.spec().getFeeMarket().implementsBaseFee());
+
+    final var transactionReplacementTester =
+        getTransactionReplacementTester(
+            genesisConfigOptions, protocolContext, transactionPoolConfiguration);
 
     if (transactionPoolConfiguration.getTxPoolImplementation().equals(LAYERED)) {
       return createLayeredPendingTransactions(
@@ -207,14 +218,16 @@ public class TransactionPoolFactory {
           protocolContext,
           metrics,
           transactionPoolConfiguration,
-          isFeeMarketImplementBaseFee);
+          isBaseFeeMarketScheduled,
+          transactionReplacementTester);
     } else {
       return createPendingTransactionSorter(
           protocolContext,
           clock,
           metrics.getMetricsSystem(),
           transactionPoolConfiguration,
-          isFeeMarketImplementBaseFee);
+          isBaseFeeMarketScheduled,
+          transactionReplacementTester);
     }
   }
 
@@ -223,19 +236,19 @@ public class TransactionPoolFactory {
       final Clock clock,
       final MetricsSystem metricsSystem,
       final TransactionPoolConfiguration transactionPoolConfiguration,
-      final boolean isFeeMarketImplementBaseFee) {
-    if (isFeeMarketImplementBaseFee) {
+      final boolean isBaseFeeMarketScheduled,
+      final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+          transactionReplacementTester) {
+    if (isBaseFeeMarketScheduled) {
       return new BaseFeePendingTransactionsSorter(
           transactionPoolConfiguration,
           clock,
           metricsSystem,
-          protocolContext.getBlockchain()::getChainHeadHeader);
+          protocolContext.getBlockchain()::getChainHeadHeader,
+          transactionReplacementTester);
     } else {
       return new GasPricePendingTransactionsSorter(
-          transactionPoolConfiguration,
-          clock,
-          metricsSystem,
-          protocolContext.getBlockchain()::getChainHeadHeader);
+          transactionPoolConfiguration, clock, metricsSystem, transactionReplacementTester);
     }
   }
 
@@ -244,15 +257,9 @@ public class TransactionPoolFactory {
       final ProtocolContext protocolContext,
       final TransactionPoolMetrics metrics,
       final TransactionPoolConfiguration transactionPoolConfiguration,
-      final boolean isFeeMarketImplementBaseFee) {
-
-    final TransactionPoolReplacementHandler transactionReplacementHandler =
-        new TransactionPoolReplacementHandler(transactionPoolConfiguration.getPriceBump());
-
-    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
-        (t1, t2) ->
-            transactionReplacementHandler.shouldReplace(
-                t1, t2, protocolContext.getBlockchain().getChainHeadHeader());
+      final boolean isBaseFeeMarketScheduled,
+      final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+          transactionReplacementTester) {
 
     final EndLayer endLayer = new EndLayer(metrics);
 
@@ -268,7 +275,7 @@ public class TransactionPoolFactory {
             transactionReplacementTester);
 
     final AbstractPrioritizedTransactions pendingTransactionsSorter;
-    if (isFeeMarketImplementBaseFee) {
+    if (isBaseFeeMarketScheduled) {
       final FeeMarket feeMarket =
           protocolSchedule
               .getByBlockHeader(protocolContext.getBlockchain().getChainHeadHeader())
@@ -292,5 +299,24 @@ public class TransactionPoolFactory {
     }
 
     return new LayeredPendingTransactions(transactionPoolConfiguration, pendingTransactionsSorter);
+  }
+
+  private static BiFunction<PendingTransaction, PendingTransaction, Boolean>
+      getTransactionReplacementTester(
+          final GenesisConfigOptions genesisConfigOptions,
+          final ProtocolContext protocolContext,
+          final TransactionPoolConfiguration transactionPoolConfiguration) {
+
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        genesisConfigOptions.isZeroBaseFee()
+                || transactionPoolConfiguration.getPriceBump().equals(Percentage.ZERO)
+            ? new TransactionPoolReplacementHandler()
+            : new TransactionPoolReplacementHandler(transactionPoolConfiguration.getPriceBump());
+
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) ->
+            transactionReplacementHandler.shouldReplace(
+                t1, t2, protocolContext.getBlockchain().getChainHeadHeader());
+    return transactionReplacementTester;
   }
 }

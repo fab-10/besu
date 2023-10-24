@@ -31,6 +31,7 @@ import java.util.NavigableSet;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.TreeSet;
+import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
 import org.slf4j.Logger;
@@ -45,15 +46,16 @@ import org.slf4j.LoggerFactory;
 public class BaseFeePendingTransactionsSorter extends AbstractPendingTransactionsSorter {
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseFeePendingTransactionsSorter.class);
-
   private Optional<Wei> baseFee;
 
   public BaseFeePendingTransactionsSorter(
       final TransactionPoolConfiguration poolConfig,
       final Clock clock,
       final MetricsSystem metricsSystem,
-      final Supplier<BlockHeader> chainHeadHeaderSupplier) {
-    super(poolConfig, clock, metricsSystem, chainHeadHeaderSupplier);
+      final Supplier<BlockHeader> chainHeadHeaderSupplier,
+      final BiFunction<PendingTransaction, PendingTransaction, Boolean>
+          transactionReplacementTester) {
+    super(poolConfig, clock, metricsSystem, transactionReplacementTester);
     this.baseFee = chainHeadHeaderSupplier.get().getBaseFee();
   }
 

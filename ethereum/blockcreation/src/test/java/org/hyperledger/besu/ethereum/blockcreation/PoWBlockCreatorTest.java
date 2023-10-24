@@ -37,10 +37,12 @@ import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.core.ProcessableBlockHeader;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.EpochCalculator;
 import org.hyperledger.besu.ethereum.mainnet.PoWHasher;
@@ -59,6 +61,7 @@ import java.io.IOException;
 import java.math.BigInteger;
 import java.util.Collections;
 import java.util.Optional;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import com.google.common.collect.Lists;
@@ -321,13 +324,25 @@ class PoWBlockCreatorTest extends AbstractBlockCreatorTest {
       final ExecutionContextTestFixture executionContextTestFixture) {
     final TransactionPoolConfiguration poolConf =
         ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build();
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(poolConf.getPriceBump());
 
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) ->
+            transactionReplacementHandler.shouldReplace(
+                t1,
+                t2,
+                executionContextTestFixture
+                    .getProtocolContext()
+                    .getBlockchain()
+                    .getChainHeadHeader());
     final BaseFeePendingTransactionsSorter pendingTransactions =
         new BaseFeePendingTransactionsSorter(
             poolConf,
             TestClock.fixed(),
             metricsSystem,
-            executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader);
+            executionContextTestFixture.getProtocolContext().getBlockchain()::getChainHeadHeader,
+            transactionReplacementTester);
 
     final EthContext ethContext = mock(EthContext.class, RETURNS_DEEP_STUBS);
     when(ethContext.getEthPeers().subscribeConnect(any())).thenReturn(1L);

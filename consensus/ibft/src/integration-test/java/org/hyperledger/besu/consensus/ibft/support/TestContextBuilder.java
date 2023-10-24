@@ -81,10 +81,12 @@ import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.Util;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
@@ -103,6 +105,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 import com.google.common.collect.Iterables;
@@ -340,10 +343,8 @@ public class TestContextBuilder {
             Optional.empty());
     final TransactionPoolConfiguration poolConf =
         ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(1).build();
-
     final GasPricePendingTransactionsSorter pendingTransactions =
-        new GasPricePendingTransactionsSorter(
-            poolConf, clock, metricsSystem, blockChain::getChainHeadHeader);
+        getGasPricePendingTransactionsSorter(blockChain, clock, poolConf);
 
     final EthContext ethContext = mock(EthContext.class, RETURNS_DEEP_STUBS);
     when(ethContext.getEthPeers().subscribeConnect(any())).thenReturn(1L);
@@ -431,5 +432,22 @@ public class TestContextBuilder {
 
     return new ControllerAndState(
         bftExecutors, ibftController, finalState, eventMultiplexer, messageFactory);
+  }
+
+  private static GasPricePendingTransactionsSorter getGasPricePendingTransactionsSorter(
+      final MutableBlockchain blockChain,
+      final Clock clock,
+      final TransactionPoolConfiguration poolConf) {
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(poolConf.getPriceBump());
+
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) ->
+            transactionReplacementHandler.shouldReplace(t1, t2, blockChain.getChainHeadHeader());
+
+    final GasPricePendingTransactionsSorter pendingTransactions =
+        new GasPricePendingTransactionsSorter(
+            poolConf, clock, metricsSystem, transactionReplacementTester);
+    return pendingTransactions;
   }
 }

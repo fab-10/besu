@@ -25,6 +25,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import org.hyperledger.besu.config.GenesisConfigOptions;
 import org.hyperledger.besu.consensus.merge.ForkchoiceEvent;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
@@ -1092,6 +1093,9 @@ public final class EthProtocolManagerTest {
     final EthScheduler ethScheduler =
         new EthScheduler(worker, scheduled, transactions, services, computations);
 
+    final GenesisConfigOptions genesisConfigOptions = mock(GenesisConfigOptions.class);
+    when(genesisConfigOptions.isZeroBaseFee()).thenReturn(false);
+
     // Create the fake TransactionMessage to feed to the EthManager.
     final BlockDataGenerator gen = new BlockDataGenerator(1);
     final List<Transaction> txes = Collections.singletonList(gen.transaction());
@@ -1110,6 +1114,7 @@ public final class EthProtocolManagerTest {
       // Create a transaction pool.  This has a side effect of registering a listener for the
       // transactions message.
       TransactionPoolFactory.createTransactionPool(
+              genesisConfigOptions,
               protocolSchedule,
               protocolContext,
               ethManager.ethContext(),

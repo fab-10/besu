@@ -51,10 +51,12 @@ import org.hyperledger.besu.ethereum.core.MiningParameters;
 import org.hyperledger.besu.ethereum.core.Util;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
@@ -66,6 +68,7 @@ import org.hyperledger.besu.testutil.TestClock;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
+import java.util.function.BiFunction;
 
 import com.google.common.collect.Lists;
 import org.apache.tuweni.bytes.Bytes;
@@ -221,6 +224,15 @@ public class CliqueBlockCreatorTest {
         ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(5).build();
     final EthContext ethContext = mock(EthContext.class, RETURNS_DEEP_STUBS);
     when(ethContext.getEthPeers().subscribeConnect(any())).thenReturn(1L);
+
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(conf.getPriceBump());
+
+    final BiFunction<PendingTransaction, PendingTransaction, Boolean> transactionReplacementTester =
+        (t1, t2) ->
+            transactionReplacementHandler.shouldReplace(
+                t1, t2, protocolContext.getBlockchain().getChainHeadHeader());
+
     final TransactionPool transactionPool =
         new TransactionPool(
             () ->
@@ -228,7 +240,7 @@ public class CliqueBlockCreatorTest {
                     conf,
                     TestClock.system(ZoneId.systemDefault()),
                     metricsSystem,
-                    blockchain::getChainHeadHeader),
+                    transactionReplacementTester),
             protocolSchedule,
             protocolContext,
             mock(TransactionBroadcaster.class),

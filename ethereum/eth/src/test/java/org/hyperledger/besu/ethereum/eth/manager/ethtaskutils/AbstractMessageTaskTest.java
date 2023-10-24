@@ -15,8 +15,10 @@
 package org.hyperledger.besu.ethereum.eth.manager.ethtaskutils;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 
+import org.hyperledger.besu.config.GenesisConfigOptions;
 import org.hyperledger.besu.crypto.KeyPair;
 import org.hyperledger.besu.crypto.SECPPrivateKey;
 import org.hyperledger.besu.crypto.SECPPublicKey;
@@ -130,6 +132,7 @@ public abstract class AbstractMessageTaskTest<T, R> {
     final SyncState syncState = new SyncState(blockchain, ethContext.getEthPeers());
     transactionPool =
         TransactionPoolFactory.createTransactionPool(
+            mock(GenesisConfigOptions.class),
             protocolSchedule,
             protocolContext,
             ethContext,

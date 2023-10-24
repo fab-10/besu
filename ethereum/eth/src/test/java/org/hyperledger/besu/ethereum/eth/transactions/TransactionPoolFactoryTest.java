@@ -25,6 +25,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import org.hyperledger.besu.config.GenesisConfigOptions;
 import org.hyperledger.besu.config.StubGenesisConfigOptions;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
@@ -75,6 +76,7 @@ import org.mockito.quality.Strictness;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class TransactionPoolFactoryTest {
+  @Mock GenesisConfigOptions genesisConfigOptions;
   @Mock ProtocolSchedule schedule;
   @Mock ProtocolContext context;
   @Mock ProtocolSpec protocolSpec;
@@ -235,6 +237,7 @@ public class TransactionPoolFactoryTest {
 
     pool =
         TransactionPoolFactory.createTransactionPool(
+            genesisConfigOptions,
             schedule,
             context,
             ethContext,
@@ -344,6 +347,7 @@ public class TransactionPoolFactoryTest {
       final TransactionPoolConfiguration.Implementation implementation) {
     final TransactionPool txPool =
         TransactionPoolFactory.createTransactionPool(
+            genesisConfigOptions,
             schedule,
             protocolContext,
             ethContext,

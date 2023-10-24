@@ -48,7 +48,8 @@ public class LegacyTransactionPoolBaseFeeTest extends AbstractLegacyTransactionP
             .build(),
         TestClock.system(ZoneId.systemDefault()),
         metricsSystem,
-        protocolContext.getBlockchain()::getChainHeadHeader);
+        protocolContext.getBlockchain()::getChainHeadHeader,
+        transactionReplacementTester);
   }
 
   @Override

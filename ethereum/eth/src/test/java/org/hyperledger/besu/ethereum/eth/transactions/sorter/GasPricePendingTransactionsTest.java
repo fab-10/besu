@@ -26,10 +26,10 @@ public class GasPricePendingTransactionsTest extends AbstractPendingTransactions
   @Override
   AbstractPendingTransactionsSorter getPendingTransactions(
       final TransactionPoolConfiguration poolConfig, final Optional<Clock> clock) {
-    return new BaseFeePendingTransactionsSorter(
+    return new GasPricePendingTransactionsSorter(
         poolConfig,
         clock.orElse(TestClock.system(ZoneId.systemDefault())),
         metricsSystem,
-        AbstractPendingTransactionsTestBase::mockBlockHeader);
+        (p1, p2) -> transactionReplacementTester(poolConfig, p1, p2));
   }
 }

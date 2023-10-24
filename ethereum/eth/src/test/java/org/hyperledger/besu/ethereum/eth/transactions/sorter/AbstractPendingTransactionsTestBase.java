@@ -41,6 +41,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionAddedLis
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionDroppedListener;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacementHandler;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.metrics.StubMetricsSystem;
@@ -106,6 +107,16 @@ public abstract class AbstractPendingTransactionsTestBase {
 
   abstract AbstractPendingTransactionsSorter getPendingTransactions(
       final TransactionPoolConfiguration poolConfig, Optional<Clock> clock);
+
+  protected Boolean transactionReplacementTester(
+      final TransactionPoolConfiguration poolConfiguration,
+      final PendingTransaction p1,
+      final PendingTransaction p2) {
+    final TransactionPoolReplacementHandler transactionReplacementHandler =
+        new TransactionPoolReplacementHandler(poolConfiguration.getPriceBump());
+
+    return transactionReplacementHandler.shouldReplace(p1, p2, mockBlockHeader());
+  }
 
   @Test
   public void shouldReturnExclusivelyLocalTransactionsWhenAppropriate() {

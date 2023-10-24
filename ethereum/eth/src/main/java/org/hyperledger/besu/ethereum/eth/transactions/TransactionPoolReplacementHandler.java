@@ -26,6 +26,10 @@ import com.google.common.annotations.VisibleForTesting;
 public class TransactionPoolReplacementHandler {
   private final List<TransactionPoolReplacementRule> rules;
 
+  public TransactionPoolReplacementHandler() {
+    this(List.of(new TransactionReplacementAlwaysReplaceRule()));
+  }
+
   public TransactionPoolReplacementHandler(final Percentage priceBump) {
     this(
         asList(
