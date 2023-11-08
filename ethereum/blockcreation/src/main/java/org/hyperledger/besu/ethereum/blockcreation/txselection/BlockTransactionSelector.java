@@ -42,6 +42,8 @@ import org.hyperledger.besu.ethereum.mainnet.MainnetTransactionProcessor;
 import org.hyperledger.besu.ethereum.mainnet.TransactionValidationParams;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
+import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
+import org.hyperledger.besu.ethereum.rlp.RLPOutput;
 import org.hyperledger.besu.ethereum.vm.BlockHashLookup;
 import org.hyperledger.besu.ethereum.vm.CachingBlockHashLookup;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
@@ -50,9 +52,14 @@ import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 
+import java.io.FileWriter;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -60,6 +67,7 @@ import java.util.function.Supplier;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.web3j.rlp.RlpEncoder;
 
 /**
  * Responsible for extracting transactions from PendingTransactions and determining if the
@@ -99,6 +107,8 @@ public class BlockTransactionSelector {
   private final AtomicBoolean isBlockTimeout = new AtomicBoolean(false);
   private final long txsSelectionMaxTime;
   private final long txEvaluationMaxTime;
+  private final FileWriter txFile;
+  private final ExecutorService txFileExecutor = Executors.newSingleThreadExecutor();
 
   public BlockTransactionSelector(
       final MiningParameters miningParameters,
@@ -137,6 +147,11 @@ public class BlockTransactionSelector {
     this.pluginOperationTracer = pluginTransactionSelector.getOperationTracer();
     txsSelectionMaxTime = miningParameters.getUnstable().getBlockTxsSelectionMaxTime();
     txEvaluationMaxTime = miningParameters.getUnstable().getBlockTxsSelectionPerTxMaxTime();
+    try {
+      txFile = new FileWriter("/data/besu/block-selection-log/" + processableBlockHeader.getNumber(), StandardCharsets.UTF_8);
+    } catch (IOException e) {
+      throw new RuntimeException(e);
+    }
   }
 
   private List<AbstractTransactionSelector> createTransactionSelectors(
@@ -188,7 +203,7 @@ public class BlockTransactionSelector {
       LOG.warn("Error during block transactions selection", e);
     } catch (TimeoutException e) {
       // synchronize since we want to be sure that there is no concurrent state update
-      synchronized (isBlockTimeout) {
+      synchronized (worldState) {
         isBlockTimeout.set(true);
       }
       LOG.warn(
@@ -196,6 +211,14 @@ public class BlockTransactionSelector {
               + txsSelectionMaxTime
               + "ms",
           e);
+    } finally {
+      txFileExecutor.submit(() -> {
+        try {
+          txFile.close();
+        } catch (IOException e) {
+          throw new RuntimeException(e);
+        }
+      });
     }
   }
 
@@ -220,6 +243,27 @@ public class BlockTransactionSelector {
 
   private TransactionSelectionResult timeLimitedEvaluateTransaction(
       final PendingTransaction pendingTransaction) {
+    txFileExecutor.submit(() -> {
+      var rlpOut = new BytesValueRLPOutput();
+      pendingTransaction.getTransaction().writeTo(rlpOut);
+      try {
+        txFile.write(rlpOut.encoded().toHexString());
+        txFile.write('\n');
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    });
+
+
+    if (isBlockTimeout.get()) {
+      LOG.atTrace()
+          .setMessage(
+              "Skipping evaluation of tx {}, since there was already a block selection timeout")
+          .addArgument(pendingTransaction::toTraceLog)
+          .log();
+      return BLOCK_SELECTION_TIMEOUT;
+    }
+
     final var txEvaluationState = new TxEvaluationState(worldState);
     final var evaluationFuture =
         ethScheduler.scheduleBlockCreationTask(
@@ -239,10 +283,11 @@ public class BlockTransactionSelector {
       return INTERNAL_ERROR;
     } catch (TimeoutException e) {
       // synchronize since we want to be sure that there is no concurrent state update
-      synchronized (txEvaluationState) {
+      synchronized (worldState) {
         // in the meantime the tx could have been evaluated, in that case the selection result is
         // present
         if (txEvaluationState.hasSelectionResult()) {
+          LOG.atTrace().setMessage("Result for tx {} arrived while evaluation went in timeout, including it").addArgument(pendingTransaction::getHash).log();
           return txEvaluationState.getSelectionResult();
         }
         LOG.warn(
@@ -392,10 +437,9 @@ public class BlockTransactionSelector {
     // only add this tx to the selected set if it is not too late,
     // this need to be done synchronously to avoid that a concurrent timeout
     // could start packing a block while we are updating the state here
-    synchronized (isBlockTimeout) {
-      synchronized (txEvaluationState) {
-        blockTooLate = isBlockTimeout.get();
-        txTooLate = txEvaluationState.isTimeout();
+    synchronized (worldState) {
+      blockTooLate = isBlockTimeout.get();
+      txTooLate = txEvaluationState.isTimeout();
 
         if (blockTooLate || txTooLate) {
           LOG.atTrace()
@@ -413,7 +457,6 @@ public class BlockTransactionSelector {
           transactionSelectionResults.updateSelected(
               transaction, receipt, gasUsedByTransaction, blobGasUsed);
         }
-      }
     }
 
     if (txTooLate) {
@@ -474,18 +517,22 @@ public class BlockTransactionSelector {
   }
 
   private static class TxEvaluationState {
+    final MutableWorldState worldState;
     final AtomicBoolean isTimeout = new AtomicBoolean(false);
     volatile TransactionSelectionResult selectionResult;
-    final WorldUpdater blockWorldStateUpdater;
-    final WorldUpdater txWorldStateUpdater;
+    WorldUpdater blockWorldStateUpdater;
+    WorldUpdater txWorldStateUpdater;
 
     TxEvaluationState(final MutableWorldState worldState) {
-      blockWorldStateUpdater = worldState.updater();
-      txWorldStateUpdater = blockWorldStateUpdater.updater();
+      this.worldState = worldState;
     }
 
     WorldUpdater getTxWorldStateUpdater() {
-      return txWorldStateUpdater;
+      synchronized (worldState) {
+        blockWorldStateUpdater = worldState.updater();
+        txWorldStateUpdater = blockWorldStateUpdater.updater();
+        return txWorldStateUpdater;
+      }
     }
 
     void triggerTimeout() {
