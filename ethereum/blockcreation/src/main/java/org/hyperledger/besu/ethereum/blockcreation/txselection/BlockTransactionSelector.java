@@ -441,18 +441,18 @@ public class BlockTransactionSelector {
       blockTooLate = isBlockTimeout.get();
       txTooLate = txEvaluationState.isTimeout();
 
-        if (blockTooLate || txTooLate) {
-          LOG.atTrace()
-              .setMessage("Timeout block={}, tx={}, when processing {}")
-              .addArgument(blockTooLate)
-              .addArgument(txTooLate)
-              .addArgument(transaction::toTraceLog)
-              .log();
-        } else {
-          txEvaluationState.commit();
-          final TransactionReceipt receipt =
-              transactionReceiptFactory.create(
-                  transaction.getType(), processingResult, worldState, cumulativeGasUsed);
+      if (blockTooLate || txTooLate) {
+        LOG.atTrace()
+            .setMessage("Timeout block={}, tx={}, when processing {}")
+            .addArgument(blockTooLate)
+            .addArgument(txTooLate)
+            .addArgument(transaction::toTraceLog)
+            .log();
+      } else {
+        txEvaluationState.commit();
+        final TransactionReceipt receipt =
+            transactionReceiptFactory.create(
+                transaction.getType(), processingResult, worldState, cumulativeGasUsed);
 
           transactionSelectionResults.updateSelected(
               transaction, receipt, gasUsedByTransaction, blobGasUsed);
