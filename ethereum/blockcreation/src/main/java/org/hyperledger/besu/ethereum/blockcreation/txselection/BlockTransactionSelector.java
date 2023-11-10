@@ -42,8 +42,8 @@ import org.hyperledger.besu.ethereum.mainnet.MainnetTransactionProcessor;
 import org.hyperledger.besu.ethereum.mainnet.TransactionValidationParams;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
+import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
-import org.hyperledger.besu.ethereum.rlp.RLPOutput;
 import org.hyperledger.besu.ethereum.vm.BlockHashLookup;
 import org.hyperledger.besu.ethereum.vm.CachingBlockHashLookup;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
@@ -52,6 +52,9 @@ import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 
+import java.io.BufferedReader;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -65,9 +68,9 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
+import org.apache.tuweni.bytes.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.web3j.rlp.RlpEncoder;
 
 /**
  * Responsible for extracting transactions from PendingTransactions and determining if the
@@ -107,8 +110,11 @@ public class BlockTransactionSelector {
   private final AtomicBoolean isBlockTimeout = new AtomicBoolean(false);
   private final long txsSelectionMaxTime;
   private final long txEvaluationMaxTime;
-  private final FileWriter txFile;
+  private FileWriter txFile = null;
+  private final boolean fileWrite = false;
   private final ExecutorService txFileExecutor = Executors.newSingleThreadExecutor();
+  private List<? extends PendingTransaction> replayTxs = List.of();
+  private final long ts = System.currentTimeMillis();
 
   public BlockTransactionSelector(
       final MiningParameters miningParameters,
@@ -147,10 +153,36 @@ public class BlockTransactionSelector {
     this.pluginOperationTracer = pluginTransactionSelector.getOperationTracer();
     txsSelectionMaxTime = miningParameters.getUnstable().getBlockTxsSelectionMaxTime();
     txEvaluationMaxTime = miningParameters.getUnstable().getBlockTxsSelectionPerTxMaxTime();
-    try {
-      txFile = new FileWriter("/data/besu/block-selection-log/" + processableBlockHeader.getNumber(), StandardCharsets.UTF_8);
-    } catch (IOException e) {
-      throw new RuntimeException(e);
+    if (fileWrite) {
+      try {
+        txFile =
+            new FileWriter(
+                "/data/besu/block-selection-log/" + processableBlockHeader.getNumber() + "." + ts,
+                StandardCharsets.UTF_8);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
+    } else {
+      try (var br =
+          new BufferedReader(
+              new FileReader(
+                  "/data/besu/block-selection-log/18542525.1699631116289",
+                  StandardCharsets.UTF_8))) {
+        replayTxs =
+            br.lines()
+                    .map(line -> line.split("="))
+                    .map(a -> a[1])
+                .map(
+                    hex ->
+                        Transaction.readFrom(
+                            new BytesValueRLPInput(Bytes.fromHexString(hex), false)))
+                .map(PendingTransaction.Remote::new)
+                .toList();
+      } catch (FileNotFoundException e) {
+        throw new RuntimeException(e);
+      } catch (IOException e) {
+        throw new RuntimeException(e);
+      }
     }
   }
 
@@ -175,7 +207,8 @@ public class BlockTransactionSelector {
    */
   public TransactionSelectionResults buildTransactionListForBlock() {
     LOG.atDebug()
-        .setMessage("Transaction pool stats {}")
+        .setMessage("Ts [{}] Transaction pool stats {}")
+            .addArgument(ts)
         .addArgument(blockSelectionContext.transactionPool().logStats())
         .log();
     timeLimitedSelection();
@@ -189,10 +222,15 @@ public class BlockTransactionSelector {
   private void timeLimitedSelection() {
     final var selectionFuture =
         ethScheduler.scheduleBlockCreationTask(
-            () ->
+            () -> {
+              if (fileWrite) {
                 blockSelectionContext
                     .transactionPool()
-                    .selectTransactions(this::timeLimitedEvaluateTransaction));
+                    .selectTransactions(this::timeLimitedEvaluateTransaction);
+              } else {
+                replayTxs.forEach(this::timeLimitedEvaluateTransaction);
+              }
+            });
 
     try {
       selectionFuture.get(txsSelectionMaxTime, TimeUnit.MILLISECONDS);
@@ -212,13 +250,16 @@ public class BlockTransactionSelector {
               + "ms",
           e);
     } finally {
-      txFileExecutor.submit(() -> {
-        try {
-          txFile.close();
-        } catch (IOException e) {
-          throw new RuntimeException(e);
-        }
-      });
+      if (fileWrite) {
+        txFileExecutor.submit(
+            () -> {
+              try {
+                txFile.close();
+              } catch (IOException e) {
+                throw new RuntimeException(e);
+              }
+            });
+      }
     }
   }
 
@@ -243,17 +284,21 @@ public class BlockTransactionSelector {
 
   private TransactionSelectionResult timeLimitedEvaluateTransaction(
       final PendingTransaction pendingTransaction) {
-    txFileExecutor.submit(() -> {
-      var rlpOut = new BytesValueRLPOutput();
-      pendingTransaction.getTransaction().writeTo(rlpOut);
-      try {
-        txFile.write(rlpOut.encoded().toHexString());
-        txFile.write('\n');
-      } catch (IOException e) {
-        throw new RuntimeException(e);
-      }
-    });
-
+    if (fileWrite) {
+      txFileExecutor.submit(
+          () -> {
+            var rlpOut = new BytesValueRLPOutput();
+            pendingTransaction.getTransaction().writeTo(rlpOut);
+            try {
+              txFile.write(pendingTransaction.getHash().toHexString());
+              txFile.write('=');
+              txFile.write(rlpOut.encoded().toHexString());
+              txFile.write('\n');
+            } catch (IOException e) {
+              throw new RuntimeException(e);
+            }
+          });
+    }
 
     if (isBlockTimeout.get()) {
       LOG.atTrace()
@@ -264,6 +309,7 @@ public class BlockTransactionSelector {
       return BLOCK_SELECTION_TIMEOUT;
     }
 
+    LOG.trace("Before: state root {}, tx {}", worldState.frontierRootHash(), pendingTransaction.getHash());
     final var txEvaluationState = new TxEvaluationState(worldState);
     final var evaluationFuture =
         ethScheduler.scheduleBlockCreationTask(
@@ -287,7 +333,10 @@ public class BlockTransactionSelector {
         // in the meantime the tx could have been evaluated, in that case the selection result is
         // present
         if (txEvaluationState.hasSelectionResult()) {
-          LOG.atTrace().setMessage("Result for tx {} arrived while evaluation went in timeout, including it").addArgument(pendingTransaction::getHash).log();
+          LOG.atTrace()
+              .setMessage("Result for tx {} arrived while evaluation went in timeout, including it")
+              .addArgument(pendingTransaction::getHash)
+              .log();
           return txEvaluationState.getSelectionResult();
         }
         LOG.warn(
@@ -299,6 +348,8 @@ public class BlockTransactionSelector {
         txEvaluationState.triggerTimeout();
         return TX_EVALUATION_TIMEOUT;
       }
+    } finally {
+      LOG.trace("After: State root {}, tx {}", worldState.frontierRootHash(), pendingTransaction.getHash());
     }
   }
 
@@ -454,9 +505,9 @@ public class BlockTransactionSelector {
             transactionReceiptFactory.create(
                 transaction.getType(), processingResult, worldState, cumulativeGasUsed);
 
-          transactionSelectionResults.updateSelected(
-              transaction, receipt, gasUsedByTransaction, blobGasUsed);
-        }
+        transactionSelectionResults.updateSelected(
+            transaction, receipt, gasUsedByTransaction, blobGasUsed);
+      }
     }
 
     if (txTooLate) {

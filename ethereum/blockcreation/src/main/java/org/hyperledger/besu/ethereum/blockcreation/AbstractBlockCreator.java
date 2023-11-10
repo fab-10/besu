@@ -112,7 +112,8 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
     this.transactionPool = transactionPool;
     this.protocolContext = protocolContext;
     this.protocolSchedule = protocolSchedule;
-    this.parentHeader = parentHeader;
+//    this.parentHeader = parentHeader;
+    this.parentHeader = protocolContext.getBlockchain().getBlockHeader(18542524).get();
     this.depositContractAddress = depositContractAddress;
     this.ethScheduler = ethScheduler;
     blockHeaderFunctions = ScheduleBasedBlockHeaderFunctions.create(protocolSchedule);
