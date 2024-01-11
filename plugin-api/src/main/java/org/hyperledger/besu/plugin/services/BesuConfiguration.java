@@ -15,6 +15,7 @@
 package org.hyperledger.besu.plugin.services;
 
 import org.hyperledger.besu.plugin.Unstable;
+import org.hyperledger.besu.plugin.services.storage.StorageFormat;
 
 import java.nio.file.Path;
 
@@ -41,7 +42,7 @@ public interface BesuConfiguration extends BesuService {
    * @return Database version.
    */
   @Unstable
-  default int getDatabaseVersion() {
-    return 1;
+  default StorageFormat getDatabaseVersion() {
+    return StorageFormat.FOREST;
   }
 }

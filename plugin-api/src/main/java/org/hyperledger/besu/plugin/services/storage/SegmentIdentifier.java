@@ -44,7 +44,7 @@ public interface SegmentIdentifier {
    * @param version Version of the DB
    * @return true if the segment is in that DB version
    */
-  default boolean includeInDatabaseVersion(final int version) {
+  default boolean includedInDatabaseFormat(final StorageFormat version) {
     return true;
   }
 

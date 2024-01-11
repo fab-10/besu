@@ -31,7 +31,7 @@ class DatabaseMetadataTest {
   void getVersion() {
     final DatabaseMetadata databaseMetadata = new DatabaseMetadata(42);
     assertThat(databaseMetadata).isNotNull();
-    assertThat(databaseMetadata.getVersion()).isEqualTo(42);
+    assertThat(databaseMetadata.getFormat()).isEqualTo(42);
   }
 
   @Test
@@ -42,7 +42,7 @@ class DatabaseMetadataTest {
 
     final DatabaseMetadata databaseMetadata = DatabaseMetadata.lookUpFrom(tempDataDir);
     assertThat(databaseMetadata).isNotNull();
-    assertThat(databaseMetadata.getVersion()).isEqualTo(42);
+    assertThat(databaseMetadata.getFormat()).isEqualTo(42);
     assertThat(databaseMetadata.maybePrivacyVersion()).isNotEmpty();
     assertThat(databaseMetadata.maybePrivacyVersion().get()).isEqualTo(55);
   }
@@ -52,7 +52,7 @@ class DatabaseMetadataTest {
     final Path tempDataDir = createAndWrite("data", "DATABASE_METADATA.json", "{\"version\":42}");
     final DatabaseMetadata databaseMetadata = DatabaseMetadata.lookUpFrom(tempDataDir);
     assertThat(databaseMetadata).isNotNull();
-    assertThat(databaseMetadata.getVersion()).isEqualTo(42);
+    assertThat(databaseMetadata.getFormat()).isEqualTo(42);
   }
 
   private Path createAndWrite(final String dir, final String file, final String content)

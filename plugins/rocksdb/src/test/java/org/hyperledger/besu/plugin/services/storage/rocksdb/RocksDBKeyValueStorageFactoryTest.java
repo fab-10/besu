@@ -67,7 +67,7 @@ public class RocksDBKeyValueStorageFactoryTest {
     // Side effect is creation of the Metadata version file
     storageFactory.create(segment, commonConfiguration, metricsSystem);
 
-    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getVersion()).isEqualTo(DEFAULT_VERSION);
+    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getFormat()).isEqualTo(DEFAULT_VERSION);
   }
 
   @Test
@@ -85,7 +85,7 @@ public class RocksDBKeyValueStorageFactoryTest {
 
     storageFactory.create(segment, commonConfiguration, metricsSystem);
 
-    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getVersion()).isEqualTo(DEFAULT_VERSION);
+    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getFormat()).isEqualTo(DEFAULT_VERSION);
   }
 
   @Test
@@ -103,7 +103,7 @@ public class RocksDBKeyValueStorageFactoryTest {
 
     storageFactory.create(segment, commonConfiguration, metricsSystem);
 
-    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getVersion()).isEqualTo(DEFAULT_VERSION);
+    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getFormat()).isEqualTo(DEFAULT_VERSION);
     assertThat(storageFactory.isSegmentIsolationSupported()).isTrue();
   }
 
@@ -217,7 +217,7 @@ public class RocksDBKeyValueStorageFactoryTest {
     // Ensure that having created everything via a symlink data dir the DB meta-data has been
     // created correctly
     storageFactory.create(segment, commonConfiguration, metricsSystem);
-    assertThat(DatabaseMetadata.lookUpFrom(tempRealDataDir).getVersion())
+    assertThat(DatabaseMetadata.lookUpFrom(tempRealDataDir).getFormat())
         .isEqualTo(DEFAULT_VERSION);
   }
 }

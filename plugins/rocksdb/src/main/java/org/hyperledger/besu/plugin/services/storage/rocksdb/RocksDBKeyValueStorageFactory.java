@@ -14,7 +14,6 @@
  */
 package org.hyperledger.besu.plugin.services.storage.rocksdb;
 
-import org.hyperledger.besu.ethereum.worldstate.DataStorageFormat;
 import org.hyperledger.besu.plugin.services.BesuConfiguration;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.exception.StorageException;
@@ -22,6 +21,7 @@ import org.hyperledger.besu.plugin.services.storage.KeyValueStorage;
 import org.hyperledger.besu.plugin.services.storage.KeyValueStorageFactory;
 import org.hyperledger.besu.plugin.services.storage.SegmentIdentifier;
 import org.hyperledger.besu.plugin.services.storage.SegmentedKeyValueStorage;
+import org.hyperledger.besu.plugin.services.storage.StorageFormat;
 import org.hyperledger.besu.plugin.services.storage.rocksdb.configuration.DatabaseMetadata;
 import org.hyperledger.besu.plugin.services.storage.rocksdb.configuration.RocksDBConfiguration;
 import org.hyperledger.besu.plugin.services.storage.rocksdb.configuration.RocksDBConfigurationBuilder;
@@ -35,7 +35,6 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Set;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -49,13 +48,12 @@ import org.slf4j.LoggerFactory;
 public class RocksDBKeyValueStorageFactory implements KeyValueStorageFactory {
 
   private static final Logger LOG = LoggerFactory.getLogger(RocksDBKeyValueStorageFactory.class);
-  private static final int DEFAULT_VERSION = 1;
-  private static final Set<Integer> SUPPORTED_VERSIONS = Set.of(1, 2);
+  private static final StorageFormat DEFAULT_VERSION = StorageFormat.FOREST_VARIABLES;
   private static final String NAME = "rocksdb";
   private final RocksDBMetricsFactory rocksDBMetricsFactory;
 
-  private final int defaultVersion;
-  private Integer databaseVersion;
+  private final StorageFormat defaultVersion;
+  private StorageFormat databaseVersion;
   private RocksDBColumnarKeyValueStorage segmentedStorage;
   private RocksDBConfiguration rocksDBConfiguration;
 
@@ -76,7 +74,7 @@ public class RocksDBKeyValueStorageFactory implements KeyValueStorageFactory {
       final Supplier<RocksDBFactoryConfiguration> configuration,
       final List<SegmentIdentifier> configuredSegments,
       final List<SegmentIdentifier> ignorableSegments,
-      final int defaultVersion,
+      final StorageFormat defaultVersion,
       final RocksDBMetricsFactory rocksDBMetricsFactory) {
     this.configuration = configuration;
     this.configuredSegments = configuredSegments;
@@ -96,7 +94,7 @@ public class RocksDBKeyValueStorageFactory implements KeyValueStorageFactory {
   public RocksDBKeyValueStorageFactory(
       final Supplier<RocksDBFactoryConfiguration> configuration,
       final List<SegmentIdentifier> configuredSegments,
-      final int defaultVersion,
+      final StorageFormat defaultVersion,
       final RocksDBMetricsFactory rocksDBMetricsFactory) {
     this(configuration, configuredSegments, List.of(), defaultVersion, rocksDBMetricsFactory);
   }
@@ -141,7 +139,7 @@ public class RocksDBKeyValueStorageFactory implements KeyValueStorageFactory {
    *
    * @return the default version
    */
-  int getDefaultVersion() {
+  StorageFormat getDefaultVersion() {
     return defaultVersion;
   }
 
@@ -166,8 +164,6 @@ public class RocksDBKeyValueStorageFactory implements KeyValueStorageFactory {
       final BesuConfiguration commonConfiguration,
       final MetricsSystem metricsSystem)
       throws StorageException {
-    final boolean isForestStorageFormat =
-        DataStorageFormat.FOREST.getDatabaseVersion() == commonConfiguration.getDatabaseVersion();
     if (requiresInit()) {
       init(commonConfiguration);
     }
@@ -182,17 +178,18 @@ public class RocksDBKeyValueStorageFactory implements KeyValueStorageFactory {
                   .collect(Collectors.joining(", ")));
     }
 
+    final List<SegmentIdentifier> segmentsForVersion =
+            configuredSegments.stream()
+                    .filter(segmentId -> segmentId.includedInDatabaseFormat(databaseVersion))
+                    .toList();
+
+
     // It's probably a good idea for the creation logic to be entirely dependent on the database
     // version. Introducing intermediate booleans that represent database properties and dispatching
     // creation logic based on them is error-prone.
     switch (databaseVersion) {
-      case 1, 2 -> {
+      case FOREST, FOREST_VARIABLES -> {
         if (segmentedStorage == null) {
-          final List<SegmentIdentifier> segmentsForVersion =
-              configuredSegments.stream()
-                  .filter(segmentId -> segmentId.includeInDatabaseVersion(databaseVersion))
-                  .collect(Collectors.toList());
-          if (isForestStorageFormat) {
             LOG.debug("FOREST mode detected, using TransactionDB.");
             segmentedStorage =
                 new TransactionDBRocksDBColumnarKeyValueStorage(
@@ -201,24 +198,22 @@ public class RocksDBKeyValueStorageFactory implements KeyValueStorageFactory {
                     ignorableSegments,
                     metricsSystem,
                     rocksDBMetricsFactory);
-          } else {
+        }
+      }
+      case BONSAI, BONSAI_VARIABLES -> {
+        if (segmentedStorage == null) {
             LOG.debug("Using OptimisticTransactionDB.");
             segmentedStorage =
-                new OptimisticRocksDBColumnarKeyValueStorage(
-                    rocksDBConfiguration,
-                    segmentsForVersion,
-                    ignorableSegments,
-                    metricsSystem,
-                    rocksDBMetricsFactory);
-          }
+                    new OptimisticRocksDBColumnarKeyValueStorage(
+                            rocksDBConfiguration,
+                            segmentsForVersion,
+                            ignorableSegments,
+                            metricsSystem,
+                            rocksDBMetricsFactory);
         }
-        return segmentedStorage;
       }
-      default -> throw new IllegalStateException(
-          String.format(
-              "Developer error: A supported database version (%d) was detected but there is no associated creation logic.",
-              databaseVersion));
     }
+    return segmentedStorage;
   }
 
   /**
@@ -251,33 +246,27 @@ public class RocksDBKeyValueStorageFactory implements KeyValueStorageFactory {
     return segmentedStorage == null;
   }
 
-  private int readDatabaseVersion(final BesuConfiguration commonConfiguration) throws IOException {
+  private StorageFormat readDatabaseVersion(final BesuConfiguration commonConfiguration) throws IOException {
     final Path dataDir = commonConfiguration.getDataPath();
     final boolean databaseExists = commonConfiguration.getStoragePath().toFile().exists();
     final boolean dataDirExists = dataDir.toFile().exists();
-    final int databaseVersion;
+    final StorageFormat storageFormat;
     if (databaseExists) {
-      databaseVersion = DatabaseMetadata.lookUpFrom(dataDir).getVersion();
+      storageFormat = DatabaseMetadata.lookUpFrom(dataDir).getFormat();
       LOG.info(
           "Existing database detected at {}. Version {}. Compacting database...",
           dataDir,
-          databaseVersion);
+          storageFormat);
     } else {
-      databaseVersion = commonConfiguration.getDatabaseVersion();
-      LOG.info("No existing database detected at {}. Using version {}", dataDir, databaseVersion);
+      storageFormat = commonConfiguration.getDatabaseVersion();
+      LOG.info("No existing database detected at {}. Using version {}", dataDir, storageFormat);
       if (!dataDirExists) {
         Files.createDirectories(dataDir);
       }
-      new DatabaseMetadata(databaseVersion).writeToDirectory(dataDir);
+      new DatabaseMetadata(storageFormat).writeToDirectory(dataDir);
     }
 
-    if (!SUPPORTED_VERSIONS.contains(databaseVersion)) {
-      final String message = "Unsupported RocksDB Metadata version of: " + databaseVersion;
-      LOG.error(message);
-      throw new StorageException(message);
-    }
-
-    return databaseVersion;
+    return storageFormat;
   }
 
   @Override

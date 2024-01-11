@@ -14,26 +14,28 @@
  */
 package org.hyperledger.besu.ethereum.storage.keyvalue;
 
+import org.hyperledger.besu.plugin.services.storage.StorageFormat;
 import org.hyperledger.besu.plugin.services.storage.SegmentIdentifier;
 
-import org.bouncycastle.util.Arrays;
+import java.util.EnumSet;
 
 public enum KeyValueSegmentIdentifier implements SegmentIdentifier {
   BLOCKCHAIN(new byte[] {1}, true),
-  WORLD_STATE(new byte[] {2}, new int[] {0, 1}),
+  WORLD_STATE(new byte[] {2}, StorageFormat.ALL_FOREST_FORMATS),
   PRIVATE_TRANSACTIONS(new byte[] {3}),
   PRIVATE_STATE(new byte[] {4}),
-  PRUNING_STATE(new byte[] {5}, new int[] {0, 1}),
-  ACCOUNT_INFO_STATE(new byte[] {6}, new int[] {2}),
-  CODE_STORAGE(new byte[] {7}, new int[] {2}),
-  ACCOUNT_STORAGE_STORAGE(new byte[] {8}, new int[] {2}),
-  TRIE_BRANCH_STORAGE(new byte[] {9}, new int[] {2}),
-  TRIE_LOG_STORAGE(new byte[] {10}, new int[] {2}),
-  VARIABLES(new byte[] {11}), // formerly GOQUORUM_PRIVATE_WORLD_STATE
+  @Deprecated
+  PRUNING_STATE(new byte[] {5}, StorageFormat.ALL_FOREST_FORMATS),
+  ACCOUNT_INFO_STATE(new byte[] {6}, StorageFormat.ALL_BONSAI_FORMATS),
+  CODE_STORAGE(new byte[] {7}, StorageFormat.ALL_BONSAI_FORMATS),
+  ACCOUNT_STORAGE_STORAGE(new byte[] {8}, StorageFormat.ALL_BONSAI_FORMATS),
+  TRIE_BRANCH_STORAGE(new byte[] {9}, StorageFormat.ALL_BONSAI_FORMATS),
+  TRIE_LOG_STORAGE(new byte[] {10}, StorageFormat.ALL_BONSAI_FORMATS),
+  VARIABLES(new byte[] {11}, StorageFormat.ALL_VARIABLE_ENABLED_FORMATS), // formerly GOQUORUM_PRIVATE_WORLD_STATE
 
   // previously supported GoQuorum private states
   // no longer used but need to be retained for db backward compatibility
-  GOQUORUM_PRIVATE_STORAGE(new byte[] {12}),
+  GOQUORUM_PRIVATE_STORAGE(new byte[] {12}), // could be reused
 
   BACKWARD_SYNC_HEADERS(new byte[] {13}),
   BACKWARD_SYNC_BLOCKS(new byte[] {14}),
@@ -43,25 +45,25 @@ public enum KeyValueSegmentIdentifier implements SegmentIdentifier {
   CHAIN_PRUNER_STATE(new byte[] {18});
 
   private final byte[] id;
-  private final int[] versionList;
+  private final EnumSet<StorageFormat> storageFormats;
   private final boolean containsStaticData;
 
   KeyValueSegmentIdentifier(final byte[] id) {
-    this(id, new int[] {0, 1, 2});
+    this(id, StorageFormat.ALL_FORMATS);
   }
 
   KeyValueSegmentIdentifier(final byte[] id, final boolean containsStaticData) {
-    this(id, new int[] {0, 1, 2}, containsStaticData);
+    this(id, StorageFormat.ALL_FORMATS, containsStaticData);
   }
 
-  KeyValueSegmentIdentifier(final byte[] id, final int[] versionList) {
-    this(id, versionList, false);
+  KeyValueSegmentIdentifier(final byte[] id, final EnumSet<StorageFormat> storageFormats) {
+    this(id, storageFormats, false);
   }
 
   KeyValueSegmentIdentifier(
-      final byte[] id, final int[] versionList, final boolean containsStaticData) {
+          final byte[] id, final EnumSet<StorageFormat> storageFormats, final boolean containsStaticData) {
     this.id = id;
-    this.versionList = versionList;
+    this.storageFormats = storageFormats;
     this.containsStaticData = containsStaticData;
   }
 
@@ -81,7 +83,7 @@ public enum KeyValueSegmentIdentifier implements SegmentIdentifier {
   }
 
   @Override
-  public boolean includeInDatabaseVersion(final int version) {
-    return Arrays.contains(versionList, version);
+  public boolean includedInDatabaseFormat(final StorageFormat version) {
+    return storageFormats.contains(version);
   }
 }

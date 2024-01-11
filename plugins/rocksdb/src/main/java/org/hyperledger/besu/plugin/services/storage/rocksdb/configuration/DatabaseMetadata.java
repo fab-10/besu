@@ -27,6 +27,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonSetter;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import org.hyperledger.besu.plugin.services.storage.StorageFormat;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,39 +37,39 @@ public class DatabaseMetadata {
 
   private static final String METADATA_FILENAME = "DATABASE_METADATA.json";
   private static final ObjectMapper MAPPER = new ObjectMapper();
-  private final int version;
+  private final StorageFormat format;
 
   private Optional<Integer> privacyVersion;
 
   /**
    * Instantiates a new Database metadata.
    *
-   * @param version the version
+   * @param format the version
    */
   @JsonCreator
-  public DatabaseMetadata(@JsonProperty("version") final int version) {
-    this(version, Optional.empty());
+  public DatabaseMetadata(@JsonProperty("version") final StorageFormat format) {
+    this(format, Optional.empty());
   }
 
   /**
    * Instantiates a new Database metadata.
    *
-   * @param version the version
+   * @param format the version
    * @param privacyVersion the privacy version
    */
-  public DatabaseMetadata(final int version, final Optional<Integer> privacyVersion) {
-    this.version = version;
+  public DatabaseMetadata(final StorageFormat format, final Optional<Integer> privacyVersion) {
+    this.format = format;
     this.privacyVersion = privacyVersion;
   }
 
   /**
    * Instantiates a new Database metadata.
    *
-   * @param version the version
+   * @param format the version
    * @param privacyVersion the privacy version
    */
-  public DatabaseMetadata(final int version, final int privacyVersion) {
-    this(version, Optional.of(privacyVersion));
+  public DatabaseMetadata(final StorageFormat format, final int privacyVersion) {
+    this(format, Optional.of(privacyVersion));
   }
 
   /**
@@ -76,8 +77,8 @@ public class DatabaseMetadata {
    *
    * @return the version
    */
-  public int getVersion() {
-    return version;
+  public StorageFormat getFormat() {
+    return format;
   }
 
   /**
@@ -151,7 +152,7 @@ public class DatabaseMetadata {
     try {
       databaseMetadata = MAPPER.readValue(metadataFile, DatabaseMetadata.class);
     } catch (FileNotFoundException fnfe) {
-      databaseMetadata = new DatabaseMetadata(1, 1);
+      databaseMetadata = new DatabaseMetadata(StorageFormat.FOREST, 1);
     } catch (JsonProcessingException jpe) {
       throw new IllegalStateException(
           String.format("Invalid metadata file %s", metadataFile.getAbsolutePath()), jpe);

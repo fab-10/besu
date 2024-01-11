@@ -69,7 +69,7 @@ public class RocksDBKeyValuePrivacyStorageFactoryTest {
 
     assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).maybePrivacyVersion()).isNotEmpty();
 
-    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getVersion()).isEqualTo(DEFAULT_VERSION);
+    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getFormat()).isEqualTo(DEFAULT_VERSION);
 
     assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).maybePrivacyVersion().get())
         .isEqualTo(DEFAULT_VERSION);
@@ -95,7 +95,7 @@ public class RocksDBKeyValuePrivacyStorageFactoryTest {
 
     assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).maybePrivacyVersion()).isNotEmpty();
 
-    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getVersion()).isEqualTo(DEFAULT_VERSION);
+    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getFormat()).isEqualTo(DEFAULT_VERSION);
 
     assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).maybePrivacyVersion().get())
         .isEqualTo(DEFAULT_PRIVACY_VERSION);
@@ -117,7 +117,7 @@ public class RocksDBKeyValuePrivacyStorageFactoryTest {
 
     assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).maybePrivacyVersion()).isEmpty();
 
-    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getVersion()).isEqualTo(DEFAULT_VERSION);
+    assertThat(DatabaseMetadata.lookUpFrom(tempDataDir).getFormat()).isEqualTo(DEFAULT_VERSION);
 
     final RocksDBKeyValuePrivacyStorageFactory privacyStorageFactory =
         new RocksDBKeyValuePrivacyStorageFactory(storageFactory);
