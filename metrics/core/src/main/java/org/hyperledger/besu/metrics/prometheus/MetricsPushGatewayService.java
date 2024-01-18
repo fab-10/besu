@@ -34,7 +34,7 @@ import org.slf4j.LoggerFactory;
 public class MetricsPushGatewayService implements MetricsService {
   private static final Logger LOG = LoggerFactory.getLogger(MetricsPushGatewayService.class);
 
-  private PushGateway pushGateway;
+  private MetricsPushGatewayService pushGateway;
   private ScheduledExecutorService scheduledExecutorService;
   private final MetricsConfiguration config;
   private final MetricsSystem metricsSystem;

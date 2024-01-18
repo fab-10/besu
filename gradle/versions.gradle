@@ -97,12 +97,10 @@ dependencyManagement {
 
     dependency 'io.pkts:pkts-core:3.0.10'
 
-    dependencySet(group: 'io.prometheus', version: '0.16.0') {
-      entry 'simpleclient'
-      entry 'simpleclient_common'
-      entry 'simpleclient_hotspot'
-      entry 'simpleclient_pushgateway'
-      entry 'simpleclient_guava'
+    dependencySet(group: 'io.prometheus', version: '1.1.0') {
+      entry 'prometheus-metrics-core'
+      entry 'prometheus-metrics-instrumentation-jvm'
+      entry 'prometheus-metrics-exporter-httpserver'
     }
 
     dependency 'io.reactivex.rxjava2:rxjava:2.2.21'

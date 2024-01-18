@@ -44,7 +44,7 @@ dependencies {
   implementation 'com.google.guava:guava'
   implementation 'info.picocli:picocli'
   implementation 'io.opentelemetry:opentelemetry-api'
-  implementation 'io.prometheus:simpleclient'
+  implementation 'io.prometheus:prometheus-metrics-core'
   implementation 'io.tmio:tuweni-bytes'
   implementation 'org.rocksdb:rocksdbjni'
   implementation project(path: ':ethereum:core')

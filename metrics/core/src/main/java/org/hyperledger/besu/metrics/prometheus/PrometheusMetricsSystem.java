@@ -14,6 +14,16 @@
  */
 package org.hyperledger.besu.metrics.prometheus;
 
+import io.prometheus.metrics.core.metrics.Counter;
+import io.prometheus.metrics.core.metrics.Summary;
+import io.prometheus.metrics.instrumentation.jvm.JvmMemoryMetrics;
+import io.prometheus.metrics.model.registry.Collector;
+import io.prometheus.metrics.model.registry.PrometheusRegistry;
+import io.prometheus.metrics.model.snapshots.CounterSnapshot;
+import io.prometheus.metrics.model.snapshots.DataPointSnapshot;
+import io.prometheus.metrics.model.snapshots.Label;
+import io.prometheus.metrics.model.snapshots.Labels;
+import io.prometheus.metrics.model.snapshots.MetricSnapshot;
 import org.hyperledger.besu.metrics.ObservableMetricsSystem;
 import org.hyperledger.besu.metrics.Observation;
 import org.hyperledger.besu.metrics.StandardMetricCategory;
@@ -32,28 +42,17 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.DoubleSupplier;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.google.common.collect.ImmutableSet;
-import io.prometheus.client.Collector;
-import io.prometheus.client.Collector.MetricFamilySamples;
-import io.prometheus.client.Collector.MetricFamilySamples.Sample;
-import io.prometheus.client.CollectorRegistry;
-import io.prometheus.client.Counter;
-import io.prometheus.client.Summary;
-import io.prometheus.client.hotspot.BufferPoolsExports;
-import io.prometheus.client.hotspot.ClassLoadingExports;
-import io.prometheus.client.hotspot.GarbageCollectorExports;
-import io.prometheus.client.hotspot.MemoryPoolsExports;
-import io.prometheus.client.hotspot.StandardExports;
-import io.prometheus.client.hotspot.ThreadExports;
 import io.vertx.core.impl.ConcurrentHashSet;
 
 /** The Prometheus metrics system. */
 public class PrometheusMetricsSystem implements ObservableMetricsSystem {
 
-  private final Map<MetricCategory, Collection<Collector>> collectors = new ConcurrentHashMap<>();
-  private final CollectorRegistry registry = new CollectorRegistry(true);
+  private final Map<MetricCategory, Collection<PrometheusCollector>> collectors = new ConcurrentHashMap<>();
+  private final PrometheusRegistry registry = PrometheusRegistry.defaultRegistry;
   private final Map<String, LabelledMetric<org.hyperledger.besu.plugin.services.metrics.Counter>>
       cachedCounters = new ConcurrentHashMap<>();
   private final Map<String, LabelledMetric<OperationTimer>> cachedTimers =
@@ -77,12 +76,7 @@ public class PrometheusMetricsSystem implements ObservableMetricsSystem {
 
   /** Init. */
   public void init() {
-    addCollector(StandardMetricCategory.PROCESS, StandardExports::new);
-    addCollector(StandardMetricCategory.JVM, MemoryPoolsExports::new);
-    addCollector(StandardMetricCategory.JVM, BufferPoolsExports::new);
-    addCollector(StandardMetricCategory.JVM, GarbageCollectorExports::new);
-    addCollector(StandardMetricCategory.JVM, ThreadExports::new);
-    addCollector(StandardMetricCategory.JVM, ClassLoadingExports::new);
+    JvmMemoryMetrics.builder().register(registry);
   }
 
   @Override
@@ -96,14 +90,14 @@ public class PrometheusMetricsSystem implements ObservableMetricsSystem {
       final String name,
       final String help,
       final String... labelNames) {
-    final String metricName = convertToPrometheusCounterName(category, name);
+//    final String metricName = convertToPrometheusCounterName(category, name);
     return cachedCounters.computeIfAbsent(
-        metricName,
+        name,
         (k) -> {
           if (isCategoryEnabled(category)) {
-            final Counter counter = Counter.build(metricName, help).labelNames(labelNames).create();
+            final var counter = new PrometheusCounter(category, name, help, labelNames);
             addCollectorUnchecked(category, counter);
-            return new PrometheusCounter(counter);
+            return counter;
           } else {
             return NoOpMetricsSystem.getCounterLabelledMetric(labelNames.length);
           }
@@ -116,23 +110,14 @@ public class PrometheusMetricsSystem implements ObservableMetricsSystem {
       final String name,
       final String help,
       final String... labelNames) {
-    final String metricName = convertToPrometheusName(category, name);
+//    final String metricName = convertToPrometheusName(category, name);
     return cachedTimers.computeIfAbsent(
-        metricName,
+        name,
         (k) -> {
           if (timersEnabled && isCategoryEnabled(category)) {
-            final Summary summary =
-                Summary.build(metricName, help)
-                    .quantile(0.2, 0.02)
-                    .quantile(0.5, 0.05)
-                    .quantile(0.8, 0.02)
-                    .quantile(0.95, 0.005)
-                    .quantile(0.99, 0.001)
-                    .quantile(1.0, 0)
-                    .labelNames(labelNames)
-                    .create();
-            addCollectorUnchecked(category, summary);
-            return new PrometheusTimer(summary);
+            final var summary = new PrometheusTimer(category, name, help, labelNames);
+                              addCollectorUnchecked(category, summary);
+            return summary;
           } else {
             return NoOpMetricsSystem.getOperationTimerLabelledMetric(labelNames.length);
           }
@@ -145,10 +130,9 @@ public class PrometheusMetricsSystem implements ObservableMetricsSystem {
       final String name,
       final String help,
       final DoubleSupplier valueSupplier) {
-    final String metricName = convertToPrometheusName(category, name);
+//    final String metricName = convertToPrometheusName(category, name);
     if (isCategoryEnabled(category)) {
-      final Collector collector = new CurrentValueCollector(metricName, help, valueSupplier);
-      addCollectorUnchecked(category, collector);
+      addCollectorUnchecked(category, new PrometheusGauge(category, name, help, valueSupplier));
     }
   }
 
@@ -158,9 +142,9 @@ public class PrometheusMetricsSystem implements ObservableMetricsSystem {
       final String name,
       final String help,
       final String... labelNames) {
-    final String metricName = convertToPrometheusName(category, name);
+//    final String metricName = convertToPrometheusName(category, name);
     if (isCategoryEnabled(category)) {
-      final PrometheusGauge gauge = new PrometheusGauge(metricName, help, List.of(labelNames));
+      final PrometheusGauge gauge = new PrometheusGauge(category, name, help, labelNames);
       addCollectorUnchecked(category, gauge);
       return gauge;
     }
@@ -180,164 +164,159 @@ public class PrometheusMetricsSystem implements ObservableMetricsSystem {
     }
   }
 
-  private void addCollectorUnchecked(final MetricCategory category, final Collector metric) {
-    final Collection<Collector> metrics =
+  private void addCollectorUnchecked(final MetricCategory category, final PrometheusCollector metric) {
+    final Collection<PrometheusCollector> metrics =
         this.collectors.computeIfAbsent(
-            category, key -> Collections.newSetFromMap(new ConcurrentHashMap<>()));
+            category, key -> new ConcurrentHashSet<>());
 
-    final List<String> newSamples =
-        metric.collect().stream().map(metricFamilySamples -> metricFamilySamples.name).toList();
+    // unregister if already present
+    metrics.stream().filter(m -> m.getName().equals(metric.getName())).findFirst().ifPresent(m -> {
+      metrics.remove(m);
+      registry.unregister(m.toCollector());
+    });
 
-    metrics.stream()
-        .filter(
-            collector ->
-                collector.collect().stream()
-                    .anyMatch(metricFamilySamples -> newSamples.contains(metricFamilySamples.name)))
-        .findFirst()
-        .ifPresent(
-            collector -> {
-              metrics.remove(collector);
-              registry.unregister(collector);
-            });
-
-    metrics.add(metric.register(registry));
+    registry.register(metric.toCollector());
+    metrics.add(metric);
   }
 
   @Override
   public Stream<Observation> streamObservations(final MetricCategory category) {
     return collectors.getOrDefault(category, Collections.emptySet()).stream()
-        .flatMap(collector -> collector.collect().stream())
-        .flatMap(familySamples -> convertSamplesToObservations(category, familySamples));
+        .flatMap(collector -> collector.streamObservations());
+//            .map(collector -> collector.collect())
+//        .flatMap(familySamples -> convertSamplesToObservations(category, familySamples));
   }
 
   @Override
   public Stream<Observation> streamObservations() {
     return collectors.keySet().stream().flatMap(this::streamObservations);
   }
-
-  private Stream<Observation> convertSamplesToObservations(
-      final MetricCategory category, final MetricFamilySamples familySamples) {
-    return familySamples.samples.stream()
-        .map(sample -> createObservationFromSample(category, sample, familySamples));
-  }
-
-  private Observation createObservationFromSample(
-      final MetricCategory category, final Sample sample, final MetricFamilySamples familySamples) {
-    if (familySamples.type == Collector.Type.HISTOGRAM) {
-      return convertHistogramSampleNamesToLabels(category, sample, familySamples);
-    }
-    if (familySamples.type == Collector.Type.SUMMARY) {
-      return convertSummarySampleNamesToLabels(category, sample, familySamples);
-    }
-    if (familySamples.type == Collector.Type.COUNTER) {
-      return convertCounterNamesToLabels(category, sample, familySamples);
-    }
-    return new Observation(
-        category,
-        convertFromPrometheusName(category, sample.name),
-        sample.value,
-        sample.labelValues);
-  }
-
-  private Observation convertCounterNamesToLabels(
-      final MetricCategory category, final Sample sample, final MetricFamilySamples familySamples) {
-    final List<String> labelValues = new ArrayList<>(sample.labelValues);
-    if (sample.name.endsWith("_created")) {
-      labelValues.add("created");
-    }
-
-    return new Observation(
-        category,
-        convertFromPrometheusCounterName(category, familySamples.name),
-        sample.value,
-        labelValues);
-  }
-
-  private Observation convertHistogramSampleNamesToLabels(
-      final MetricCategory category, final Sample sample, final MetricFamilySamples familySamples) {
-    final List<String> labelValues = new ArrayList<>(sample.labelValues);
-    if (sample.name.endsWith("_bucket")) {
-      labelValues.add(labelValues.size() - 1, "bucket");
-    } else {
-      labelValues.add(sample.name.substring(sample.name.lastIndexOf("_") + 1));
-    }
-    return new Observation(
-        category,
-        convertFromPrometheusName(category, familySamples.name),
-        sample.value,
-        labelValues);
-  }
-
-  private Observation convertSummarySampleNamesToLabels(
-      final MetricCategory category, final Sample sample, final MetricFamilySamples familySamples) {
-    final List<String> labelValues = new ArrayList<>(sample.labelValues);
-    if (sample.name.endsWith("_sum")) {
-      labelValues.add("sum");
-    } else if (sample.name.endsWith("_count")) {
-      labelValues.add("count");
-    } else if (sample.name.endsWith("_created")) {
-      labelValues.add("created");
-    } else {
-      labelValues.add(labelValues.size() - 1, "quantile");
-    }
-    return new Observation(
-        category,
-        convertFromPrometheusName(category, familySamples.name),
-        sample.value,
-        labelValues);
-  }
-
-  /**
-   * Convert to prometheus name.
-   *
-   * @param category the category
-   * @param name the name
-   * @return the name as string
-   */
-  public String convertToPrometheusName(final MetricCategory category, final String name) {
-    return prometheusPrefix(category) + name;
-  }
-
-  /**
-   * Convert to prometheus counter name. Prometheus adds a _total suffix to the name if not present,
-   * so we remember if the original name already has it, to be able to covert back correctly
-   *
-   * @param category the category
-   * @param name the name
-   * @return the name as string
-   */
-  public String convertToPrometheusCounterName(final MetricCategory category, final String name) {
-    if (name.endsWith("_total")) {
-      totalSuffixedCounters.add(name);
-    }
-    return convertFromPrometheusName(category, name);
-  }
-
-  private String convertFromPrometheusName(final MetricCategory category, final String metricName) {
-    final String prefix = prometheusPrefix(category);
-    return metricName.startsWith(prefix) ? metricName.substring(prefix.length()) : metricName;
-  }
-
-  private String convertFromPrometheusCounterName(
-      final MetricCategory category, final String metricName) {
-    final String prefix = prometheusPrefix(category);
-    final String unPrefixedName =
-        metricName.startsWith(prefix) ? metricName.substring(prefix.length()) : metricName;
-    return totalSuffixedCounters.contains(unPrefixedName + "_total")
-        ? unPrefixedName + "_total"
-        : unPrefixedName;
-  }
-
-  private String prometheusPrefix(final MetricCategory category) {
-    return category.getApplicationPrefix().orElse("") + category.getName() + "_";
-  }
+//
+//  private Stream<Observation> convertSamplesToObservations(
+//      final MetricCategory category, final MetricSnapshot familySamples) {
+//    return familySamples.getDataPoints().stream().map(sample -> createObservationFromSample(category, sample, familySamples));
+//  }
+//
+//  private <T extends DataPointSnapshot> Observation createObservationFromSample(
+//      final MetricCategory category, final T sample, final MetricSnapshot familySamples) {
+//    if(sample instanceof CounterSnapshot.CounterDataPointSnapshot counterSample) {
+//      return convertCounterNamesToLabels(category, counterSample, familySamples);
+//    }
+//    if(sample instanceof )
+//
+//    if (familySamples.type == Collector.Type.HISTOGRAM) {
+//      return convertHistogramSampleNamesToLabels(category, sample, familySamples);
+//    }
+//    if (familySamples.type == Collector.Type.SUMMARY) {
+//      return convertSummarySampleNamesToLabels(category, sample, familySamples);
+//    }
+//    return new Observation(
+//        category,
+//        convertFromPrometheusName(category, sample.name),
+//        sample.value,
+//        sample.labelValues);
+//  }
+//
+//  private Observation convertCounterNamesToLabels(
+//      final MetricCategory category, final CounterSnapshot.CounterDataPointSnapshot sample, final MetricSnapshot familySamples) {
+//    final String name = familySamples.getMetadata().getPrometheusName();
+//    final List<String> labelValues = sample.getLabels().stream().map(Label::getValue).collect(Collectors.toList());
+//    if (name.endsWith("_created")) {
+//      labelValues.add("created");
+//    }
+//
+//    return new Observation(
+//        category,
+//        convertFromPrometheusCounterName(category, name),
+//        sample.getValue(),
+//        labelValues);
+//  }
+//
+//  private Observation convertHistogramSampleNamesToLabels(
+//      final MetricCategory category, final Sample sample, final MetricFamilySamples familySamples) {
+//    final List<String> labelValues = new ArrayList<>(sample.labelValues);
+//    if (sample.name.endsWith("_bucket")) {
+//      labelValues.add(labelValues.size() - 1, "bucket");
+//    } else {
+//      labelValues.add(sample.name.substring(sample.name.lastIndexOf("_") + 1));
+//    }
+//    return new Observation(
+//        category,
+//        convertFromPrometheusName(category, familySamples.name),
+//        sample.value,
+//        labelValues);
+//  }
+//
+//  private Observation convertSummarySampleNamesToLabels(
+//      final MetricCategory category, final Sample sample, final MetricFamilySamples familySamples) {
+//    final List<String> labelValues = new ArrayList<>(sample.labelValues);
+//    if (sample.name.endsWith("_sum")) {
+//      labelValues.add("sum");
+//    } else if (sample.name.endsWith("_count")) {
+//      labelValues.add("count");
+//    } else if (sample.name.endsWith("_created")) {
+//      labelValues.add("created");
+//    } else {
+//      labelValues.add(labelValues.size() - 1, "quantile");
+//    }
+//    return new Observation(
+//        category,
+//        convertFromPrometheusName(category, familySamples.name),
+//        sample.value,
+//        labelValues);
+//  }
+//
+//  /**
+//   * Convert to prometheus name.
+//   *
+//   * @param category the category
+//   * @param name the name
+//   * @return the name as string
+//   */
+//  public String convertToPrometheusName(final MetricCategory category, final String name) {
+//    return prometheusPrefix(category) + name;
+//  }
+//
+//  /**
+//   * Convert to prometheus counter name. Prometheus adds a _total suffix to the name if not present,
+//   * so we remember if the original name already has it, to be able to covert back correctly
+//   *
+//   * @param category the category
+//   * @param name the name
+//   * @return the name as string
+//   */
+//  public String convertToPrometheusCounterName(final MetricCategory category, final String name) {
+//    if (name.endsWith("_total")) {
+//      totalSuffixedCounters.add(name);
+//    }
+//    return convertToPrometheusName(category, name);
+//  }
+//
+//  private String convertFromPrometheusName(final MetricCategory category, final String metricName) {
+//    final String prefix = prometheusPrefix(category);
+//    return metricName.startsWith(prefix) ? metricName.substring(prefix.length()) : metricName;
+//  }
+//
+//  private String convertFromPrometheusCounterName(
+//      final MetricCategory category, final String metricName) {
+//    final String prefix = prometheusPrefix(category);
+//    final String unPrefixedName =
+//        metricName.startsWith(prefix) ? metricName.substring(prefix.length()) : metricName;
+//    return totalSuffixedCounters.contains(unPrefixedName + "_total")
+//        ? unPrefixedName + "_total"
+//        : unPrefixedName;
+//  }
+//
+//  private String prometheusPrefix(final MetricCategory category) {
+//    return category.getApplicationPrefix().orElse("") + category.getName() + "_";
+//  }
 
   /**
    * Gets registry.
    *
    * @return the registry
    */
-  CollectorRegistry getRegistry() {
+  PrometheusRegistry getRegistry() {
     return registry;
   }
 }

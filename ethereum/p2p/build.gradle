@@ -42,7 +42,7 @@ dependencies {
   implementation 'com.google.guava:guava'
   implementation 'dnsjava:dnsjava'
   implementation 'io.netty:netty-transport-native-unix-common'
-  implementation 'io.prometheus:simpleclient'
+  implementation 'io.prometheus:prometheus-metrics-core'
   implementation 'io.vertx:vertx-core'
 
   implementation 'io.tmio:tuweni-bytes'

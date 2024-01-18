@@ -14,37 +14,75 @@
  */
 package org.hyperledger.besu.metrics.prometheus;
 
+import io.prometheus.metrics.core.datapoints.CounterDataPoint;
+import io.prometheus.metrics.model.registry.Collector;
+import io.prometheus.metrics.model.snapshots.CounterSnapshot;
+import io.prometheus.metrics.model.snapshots.Label;
+import io.prometheus.metrics.model.snapshots.MetricSnapshot;
+import io.vertx.core.impl.ConcurrentHashSet;
+import org.hyperledger.besu.metrics.Observation;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
 import org.hyperledger.besu.plugin.services.metrics.LabelledMetric;
+import org.hyperledger.besu.plugin.services.metrics.MetricCategory;
 
-class PrometheusCounter implements LabelledMetric<Counter> {
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
-  private final io.prometheus.client.Counter counter;
+class PrometheusCounter extends CategorizedPrometheusCollector implements LabelledMetric<Counter> {
+  private final io.prometheus.metrics.core.metrics.Counter counter;
 
-  public PrometheusCounter(final io.prometheus.client.Counter counter) {
-    this.counter = counter;
+  public PrometheusCounter(  final MetricCategory category,
+                             final String name,
+                                 final String help,
+                                 final String... labelNames) {
+    super(category, name);
+    this.counter = io.prometheus.metrics.core.metrics.Counter.builder().name(this.prefixedName).help(help).labelNames(labelNames).build();
   }
 
   @Override
   public Counter labels(final String... labels) {
-    return new UnlabelledCounter(counter.labels(labels));
+    return new UnlabelledCounter(counter.labelValues(labels));
   }
 
-  private static class UnlabelledCounter implements Counter {
-    private final io.prometheus.client.Counter.Child counter;
-
-    private UnlabelledCounter(final io.prometheus.client.Counter.Child counter) {
-      this.counter = counter;
-    }
-
-    @Override
-    public void inc() {
-      counter.inc();
-    }
-
-    @Override
-    public void inc(final long amount) {
-      counter.inc((double) amount);
-    }
+  @Override
+  public String getName() {
+    return counter.getPrometheusName();
   }
+
+  @Override
+  public Collector toCollector() {
+    return counter;
+  }
+
+  private Observation convertToObservation(final CounterSnapshot.CounterDataPointSnapshot sample) {
+    final List<String> labelValues = getLabelValues(sample.getLabels());
+
+    return new Observation(
+            category,
+            name,
+            sample.getValue(),
+            labelValues);
+  }
+
+  @Override
+  public Stream<Observation> streamObservations() {
+    final var snapshot = counter.collect();
+    return snapshot.getDataPoints().stream().map(this::convertToObservation);
+  }
+
+  private record UnlabelledCounter(CounterDataPoint counter) implements Counter {
+
+    @Override
+      public void inc() {
+        counter.inc();
+      }
+
+      @Override
+      public void inc(final long amount) {
+        counter.inc((double) amount);
+      }
+    }
+
 }

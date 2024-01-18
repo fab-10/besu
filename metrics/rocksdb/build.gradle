@@ -40,6 +40,6 @@ dependencies {
   implementation project(':plugin-api')
 
   implementation 'com.google.guava:guava'
-  implementation 'io.prometheus:simpleclient'
+  implementation 'io.prometheus:prometheus-metrics-core'
   implementation 'org.rocksdb:rocksdbjni'
 }
