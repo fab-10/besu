@@ -14,6 +14,9 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions.layered;
 
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ADDED;
+import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.DROPPED;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -98,5 +101,24 @@ public class GasPricePrioritizedTransactionsTest extends AbstractPrioritizedTran
 
     shouldPrioritizeValueThenTimeAddedToPool(
         lowValueTxs.iterator(), highGasPriceTransaction, lowValueTxs.get(0));
+  }
+
+  @Test
+  public void txBelowCurrentMineableMinGasPriceIsNotPrioritized() {
+    final PendingTransaction lowGasPriceTx =
+        createRemotePendingTransaction(
+            createTransaction(0, DEFAULT_MIN_GAS_PRICE.subtract(1), KEYS1));
+    assertThat(prioritizeTransaction(lowGasPriceTx)).isEqualTo(DROPPED);
+    assertEvicted(lowGasPriceTx);
+    assertTransactionNotPrioritized(lowGasPriceTx);
+  }
+
+  @Test
+  public void txWithPriorityBelowCurrentMineableMinGasPriceIsPrioritized() {
+    final PendingTransaction lowGasPriceTx =
+        createRemotePendingTransaction(
+            createTransaction(0, DEFAULT_MIN_GAS_PRICE.subtract(1), KEYS1), true);
+    assertThat(prioritizeTransaction(lowGasPriceTx)).isEqualTo(ADDED);
+    assertTransactionPrioritized(lowGasPriceTx);
   }
 }
