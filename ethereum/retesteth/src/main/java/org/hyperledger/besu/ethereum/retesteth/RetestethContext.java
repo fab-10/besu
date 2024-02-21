@@ -263,7 +263,8 @@ public class RetestethContext {
               public void registerTransactionValidatorFactory(
                   final PluginTransactionValidatorFactory transactionValidatorFactory) {}
             },
-            new BlobCache());
+            new BlobCache(),
+            MiningParameters.newDefault());
 
     if (LOG.isTraceEnabled()) {
       LOG.trace("Genesis Block {} ", genesisState.getBlock());
