@@ -42,6 +42,8 @@ public class TransactionSelectionResult {
      */
     boolean discard();
 
+    boolean penalize();
+
     /**
      * Name of this status
      *
@@ -52,29 +54,32 @@ public class TransactionSelectionResult {
 
   private enum BaseStatus implements Status {
     SELECTED,
-    BLOCK_FULL(true, false),
-    BLOCK_OCCUPANCY_ABOVE_THRESHOLD(true, false),
-    BLOCK_SELECTION_TIMEOUT(true, false),
-    TX_EVALUATION_TOO_LONG(true, true),
-    INVALID_TRANSIENT(false, false),
-    INVALID(false, true);
+    BLOCK_FULL(true, false, false),
+    BLOCK_OCCUPANCY_ABOVE_THRESHOLD(true, false, false),
+    BLOCK_SELECTION_TIMEOUT(true, false, false),
+    TX_EVALUATION_TOO_LONG(true, false, true),
+    INVALID_TRANSIENT(false, false, true),
+    INVALID(false, true, false);
 
     private final boolean stop;
     private final boolean discard;
+    private final boolean penalize;
 
     BaseStatus() {
       this.stop = false;
       this.discard = false;
+      this.penalize = false;
     }
 
-    BaseStatus(final boolean stop, final boolean discard) {
+    BaseStatus(final boolean stop, final boolean discard, final boolean penalize) {
       this.stop = stop;
       this.discard = discard;
+      this.penalize = penalize;
     }
 
     @Override
     public String toString() {
-      return name() + " (stop=" + stop + ", discard=" + discard + ")";
+      return name() + " (stop=" + stop + ", discard=" + discard + ", penalize=" + penalize + ")";
     }
 
     @Override
@@ -85,6 +90,11 @@ public class TransactionSelectionResult {
     @Override
     public boolean discard() {
       return discard;
+    }
+
+    @Override
+    public boolean penalize() {
+      return penalize;
     }
   }
 
@@ -201,6 +211,10 @@ public class TransactionSelectionResult {
    */
   public boolean discard() {
     return status.discard();
+  }
+
+  public boolean penalize() {
+    return status.penalize();
   }
 
   /**
