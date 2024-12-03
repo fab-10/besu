@@ -19,6 +19,8 @@ import static org.hyperledger.besu.ethereum.mainnet.feemarket.ExcessBlobGasCalcu
 import org.hyperledger.besu.crypto.SECPSignature;
 import org.hyperledger.besu.crypto.SignatureAlgorithm;
 import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
+import org.hyperledger.besu.datatypes.AccountOverride;
+import org.hyperledger.besu.datatypes.AccountOverrideMap;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.BlobGas;
 import org.hyperledger.besu.datatypes.Hash;
@@ -38,6 +40,7 @@ import org.hyperledger.besu.ethereum.vm.CachingBlockHashLookup;
 import org.hyperledger.besu.ethereum.vm.DebugOperationTracer;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 import org.hyperledger.besu.evm.account.Account;
+import org.hyperledger.besu.evm.account.MutableAccount;
 import org.hyperledger.besu.evm.tracing.OperationTracer;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 
@@ -46,8 +49,10 @@ import java.util.Optional;
 import java.util.function.Supplier;
 import javax.annotation.Nonnull;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.base.Suppliers;
 import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.units.bigints.UInt256;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -100,6 +105,7 @@ public class TransactionSimulator {
     final BlockHeader header = blockchain.getBlockHeader(blockNumber).orElse(null);
     return process(
         callParams,
+        Optional.empty(),
         transactionValidationParams,
         operationTracer,
         (mutableWorldState, transactionSimulatorResult) -> transactionSimulatorResult,
@@ -113,6 +119,22 @@ public class TransactionSimulator {
       final BlockHeader blockHeader) {
     return process(
         callParams,
+        Optional.empty(),
+        transactionValidationParams,
+        operationTracer,
+        (mutableWorldState, transactionSimulatorResult) -> transactionSimulatorResult,
+        blockHeader);
+  }
+
+  public Optional<TransactionSimulatorResult> process(
+      final CallParameter callParams,
+      final Optional<AccountOverrideMap> maybeStateOverrides,
+      final TransactionValidationParams transactionValidationParams,
+      final OperationTracer operationTracer,
+      final BlockHeader blockHeader) {
+    return process(
+        callParams,
+        maybeStateOverrides,
         transactionValidationParams,
         operationTracer,
         (mutableWorldState, transactionSimulatorResult) -> transactionSimulatorResult,
@@ -152,6 +174,35 @@ public class TransactionSimulator {
       final OperationTracer operationTracer,
       final PreCloseStateHandler<U> preWorldStateCloseGuard,
       final BlockHeader header) {
+    return process(
+        callParams,
+        Optional.empty(),
+        transactionValidationParams,
+        operationTracer,
+        preWorldStateCloseGuard,
+        header);
+  }
+
+  /**
+   * Processes a transaction simulation with the provided parameters and executes pre-worldstate
+   * close actions.
+   *
+   * @param callParams The call parameters for the transaction.
+   * @param maybeStateOverrides The map of state overrides to apply to the state for this
+   *     transaction.
+   * @param transactionValidationParams The validation parameters for the transaction.
+   * @param operationTracer The tracer for capturing operations during processing.
+   * @param preWorldStateCloseGuard The pre-worldstate close guard for executing pre-close actions.
+   * @param header The block header.
+   * @return An Optional containing the result of the processing.
+   */
+  public <U> Optional<U> process(
+      final CallParameter callParams,
+      final Optional<AccountOverrideMap> maybeStateOverrides,
+      final TransactionValidationParams transactionValidationParams,
+      final OperationTracer operationTracer,
+      final PreCloseStateHandler<U> preWorldStateCloseGuard,
+      final BlockHeader header) {
     if (header == null) {
       return Optional.empty();
     }
@@ -169,7 +220,12 @@ public class TransactionSimulator {
       return preWorldStateCloseGuard.apply(
           ws,
           processWithWorldUpdater(
-              callParams, transactionValidationParams, operationTracer, header, updater));
+              callParams,
+              maybeStateOverrides,
+              transactionValidationParams,
+              operationTracer,
+              header,
+              updater));
 
     } catch (final Exception e) {
       return Optional.empty();
@@ -208,6 +264,7 @@ public class TransactionSimulator {
   @Nonnull
   public Optional<TransactionSimulatorResult> processWithWorldUpdater(
       final CallParameter callParams,
+      final Optional<AccountOverrideMap> maybeStateOverrides,
       final TransactionValidationParams transactionValidationParams,
       final OperationTracer operationTracer,
       final BlockHeader header,
@@ -226,18 +283,19 @@ public class TransactionSimulator {
               .blockHeaderFunctions(protocolSpec.getBlockHeaderFunctions())
               .buildBlockHeader();
     }
+    if (maybeStateOverrides.isPresent()) {
+      for (Address accountToOverride : maybeStateOverrides.get().keySet()) {
+        final AccountOverride overrides = maybeStateOverrides.get().get(accountToOverride);
+        applyOverrides(updater.getOrCreate(accountToOverride), overrides);
+      }
+    }
 
     final Account sender = updater.get(senderAddress);
     final long nonce = sender != null ? sender.getNonce() : 0L;
 
-    long gasLimit =
-        callParams.getGasLimit() >= 0
-            ? callParams.getGasLimit()
-            : blockHeaderToProcess.getGasLimit();
-    if (rpcGasCap > 0) {
-      gasLimit = rpcGasCap;
-      LOG.info("Capping gasLimit to " + rpcGasCap);
-    }
+    final long simulationGasCap =
+        calculateSimulationGasCap(callParams.getGasLimit(), blockHeaderToProcess.getGasLimit());
+
     final Wei value = callParams.getValue() != null ? callParams.getValue() : Wei.ZERO;
     final Bytes payload = callParams.getPayload() != null ? callParams.getPayload() : Bytes.EMPTY;
 
@@ -263,7 +321,7 @@ public class TransactionSimulator {
             header,
             senderAddress,
             nonce,
-            gasLimit,
+            simulationGasCap,
             value,
             payload,
             blobGasPrice);
@@ -287,6 +345,56 @@ public class TransactionSimulator {
             blobGasPrice);
 
     return Optional.of(new TransactionSimulatorResult(transaction, result));
+  }
+
+  @VisibleForTesting
+  protected void applyOverrides(final MutableAccount account, final AccountOverride override) {
+    LOG.debug("applying overrides to state for account {}", account.getAddress());
+    override.getNonce().ifPresent(account::setNonce);
+    if (override.getBalance().isPresent()) {
+      account.setBalance(override.getBalance().get());
+    }
+    override.getCode().ifPresent(n -> account.setCode(Bytes.fromHexString(n)));
+    override
+        .getStateDiff()
+        .ifPresent(
+            d ->
+                d.forEach(
+                    (key, value) ->
+                        account.setStorageValue(
+                            UInt256.fromHexString(key), UInt256.fromHexString(value))));
+  }
+
+  private long calculateSimulationGasCap(
+      final long userProvidedGasLimit, final long blockGasLimit) {
+    final long simulationGasCap;
+
+    // when not set gas limit is -1
+    if (userProvidedGasLimit >= 0) {
+      if (rpcGasCap > 0 && userProvidedGasLimit > rpcGasCap) {
+        LOG.trace(
+            "User provided gas limit {} is bigger than the value of rpc-gas-cap {}, setting simulation gas cap to the latter",
+            userProvidedGasLimit,
+            rpcGasCap);
+        simulationGasCap = rpcGasCap;
+      } else {
+        LOG.trace("Using provided gas limit {} set as simulation gas cap", userProvidedGasLimit);
+        simulationGasCap = userProvidedGasLimit;
+      }
+    } else {
+      if (rpcGasCap > 0) {
+        LOG.trace(
+            "No user provided gas limit, setting simulation gas cap to the value of rpc-gas-cap {}",
+            rpcGasCap);
+        simulationGasCap = rpcGasCap;
+      } else {
+        simulationGasCap = blockGasLimit;
+        LOG.trace(
+            "No user provided gas limit and rpc-gas-cap options is not set, setting simulation gas cap to block gas limit {}",
+            blockGasLimit);
+      }
+    }
+    return simulationGasCap;
   }
 
   private Optional<Transaction> buildTransaction(
@@ -342,10 +450,13 @@ public class TransactionSimulator {
       transactionBuilder.maxFeePerBlobGas(maxFeePerBlobGas);
     }
     if (transactionBuilder.getTransactionType().requiresChainId()) {
-      transactionBuilder.chainId(
-          protocolSchedule
-              .getChainId()
-              .orElse(BigInteger.ONE)); // needed to make some transactions valid
+      callParams
+          .getChainId()
+          .ifPresentOrElse(
+              transactionBuilder::chainId,
+              () ->
+                  // needed to make some transactions valid
+                  transactionBuilder.chainId(protocolSchedule.getChainId().orElse(BigInteger.ONE)));
     }
 
     final Transaction transaction = transactionBuilder.build();

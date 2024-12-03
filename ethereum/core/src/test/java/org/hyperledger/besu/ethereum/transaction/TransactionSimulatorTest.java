@@ -20,11 +20,13 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.crypto.SECPSignature;
 import org.hyperledger.besu.crypto.SignatureAlgorithm;
 import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
+import org.hyperledger.besu.datatypes.AccountOverride;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.BlobsWithCommitments;
 import org.hyperledger.besu.datatypes.Hash;
@@ -49,15 +51,18 @@ import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult.Status;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 import org.hyperledger.besu.evm.account.Account;
+import org.hyperledger.besu.evm.account.MutableAccount;
 import org.hyperledger.besu.evm.tracing.OperationTracer;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 
 import java.math.BigInteger;
+import java.util.Map;
 import java.util.Optional;
 
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
 import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -79,7 +84,8 @@ public class TransactionSimulatorTest {
 
   private static final Address DEFAULT_FROM =
       Address.fromHexString("0x0000000000000000000000000000000000000000");
-  private static final long GASCAP = 500L;
+  private static final long GAS_CAP = 500000L;
+  private static final long TRANSFER_GAS_LIMIT = 21000L;
   private TransactionSimulator transactionSimulator;
   private TransactionSimulator cappedTransactionSimulator;
 
@@ -96,7 +102,43 @@ public class TransactionSimulatorTest {
     this.transactionSimulator =
         new TransactionSimulator(blockchain, worldStateArchive, protocolSchedule, 0);
     this.cappedTransactionSimulator =
-        new TransactionSimulator(blockchain, worldStateArchive, protocolSchedule, GASCAP);
+        new TransactionSimulator(blockchain, worldStateArchive, protocolSchedule, GAS_CAP);
+  }
+
+  @Test
+  public void testOverrides_whenNoOverrides_noUpdates() {
+    MutableAccount mutableAccount = mock(MutableAccount.class);
+    when(mutableAccount.getAddress()).thenReturn(DEFAULT_FROM); // called from logging
+    AccountOverride.Builder builder = new AccountOverride.Builder();
+    AccountOverride override = builder.build();
+    transactionSimulator.applyOverrides(mutableAccount, override);
+    verify(mutableAccount).getAddress();
+    verifyNoMoreInteractions(mutableAccount);
+  }
+
+  @Test
+  public void testOverrides_whenBalanceOverrides_balanceIsUpdated() {
+    MutableAccount mutableAccount = mock(MutableAccount.class);
+    when(mutableAccount.getAddress()).thenReturn(DEFAULT_FROM);
+    AccountOverride.Builder builder = new AccountOverride.Builder().withBalance(Wei.of(99));
+    AccountOverride override = builder.build();
+    transactionSimulator.applyOverrides(mutableAccount, override);
+    verify(mutableAccount).setBalance(eq(Wei.of(99)));
+  }
+
+  @Test
+  public void testOverrides_whenStateDiffOverrides_stateIsUpdated() {
+    MutableAccount mutableAccount = mock(MutableAccount.class);
+    when(mutableAccount.getAddress()).thenReturn(DEFAULT_FROM);
+    final String storageKey = "0x01a2";
+    final String storageValue = "0x00ff";
+    AccountOverride.Builder builder =
+        new AccountOverride.Builder().withStateDiff(Map.of(storageKey, storageValue));
+    AccountOverride override = builder.build();
+    transactionSimulator.applyOverrides(mutableAccount, override);
+    verify(mutableAccount)
+        .setStorageValue(
+            eq(UInt256.fromHexString(storageKey)), eq(UInt256.fromHexString(storageValue)));
   }
 
   @Test
@@ -124,7 +166,7 @@ public class TransactionSimulatorTest {
             .type(TransactionType.FRONTIER)
             .nonce(1L)
             .gasPrice(callParameter.getGasPrice())
-            .gasLimit(callParameter.getGasLimit())
+            .gasLimit(blockHeader.getGasLimit())
             .to(callParameter.getTo())
             .sender(callParameter.getFrom())
             .value(callParameter.getValue())
@@ -155,7 +197,7 @@ public class TransactionSimulatorTest {
             .type(TransactionType.FRONTIER)
             .nonce(1L)
             .gasPrice(Wei.ZERO)
-            .gasLimit(callParameter.getGasLimit())
+            .gasLimit(blockHeader.getGasLimit())
             .to(callParameter.getTo())
             .sender(callParameter.getFrom())
             .value(callParameter.getValue())
@@ -175,7 +217,8 @@ public class TransactionSimulatorTest {
 
   @Test
   public void shouldSetFeePerGasToZeroWhenExceedingBalanceAllowed() {
-    final CallParameter callParameter = eip1559TransactionCallParameter(Wei.ONE, Wei.ONE);
+    final CallParameter callParameter =
+        eip1559TransactionCallParameter(Wei.ONE, Wei.ONE, TRANSFER_GAS_LIMIT);
 
     final BlockHeader blockHeader = mockBlockHeader(Hash.ZERO, 1L, Wei.ONE);
 
@@ -187,7 +230,7 @@ public class TransactionSimulatorTest {
             .type(TransactionType.EIP1559)
             .chainId(BigInteger.ONE)
             .nonce(1L)
-            .gasLimit(callParameter.getGasLimit())
+            .gasLimit(TRANSFER_GAS_LIMIT)
             .maxFeePerGas(Wei.ZERO)
             .maxPriorityFeePerGas(Wei.ZERO)
             .to(callParameter.getTo())
@@ -223,7 +266,7 @@ public class TransactionSimulatorTest {
             .type(TransactionType.FRONTIER)
             .nonce(1L)
             .gasPrice(callParameter.getGasPrice())
-            .gasLimit(callParameter.getGasLimit())
+            .gasLimit(blockHeader.getGasLimit())
             .to(callParameter.getTo())
             .sender(callParameter.getFrom())
             .value(callParameter.getValue())
@@ -244,7 +287,8 @@ public class TransactionSimulatorTest {
 
   @Test
   public void shouldNotSetFeePerGasToZeroWhenExceedingBalanceIsNotAllowed() {
-    final CallParameter callParameter = eip1559TransactionCallParameter(Wei.ONE, Wei.ONE);
+    final CallParameter callParameter =
+        eip1559TransactionCallParameter(Wei.ONE, Wei.ONE, TRANSFER_GAS_LIMIT);
 
     final BlockHeader blockHeader = mockBlockHeader(Hash.ZERO, 1L, Wei.ONE);
 
@@ -256,7 +300,7 @@ public class TransactionSimulatorTest {
             .type(TransactionType.EIP1559)
             .chainId(BigInteger.ONE)
             .nonce(1L)
-            .gasLimit(callParameter.getGasLimit())
+            .gasLimit(TRANSFER_GAS_LIMIT)
             .maxFeePerGas(callParameter.getMaxFeePerGas().orElseThrow())
             .maxPriorityFeePerGas(callParameter.getMaxPriorityFeePerGas().orElseThrow())
             .to(callParameter.getTo())
@@ -349,7 +393,7 @@ public class TransactionSimulatorTest {
             .type(TransactionType.FRONTIER)
             .nonce(1L)
             .gasPrice(callParameter.getGasPrice())
-            .gasLimit(callParameter.getGasLimit())
+            .gasLimit(blockHeader.getGasLimit())
             .to(callParameter.getTo())
             .sender(callParameter.getFrom())
             .value(callParameter.getValue())
@@ -390,7 +434,7 @@ public class TransactionSimulatorTest {
             .type(TransactionType.FRONTIER)
             .nonce(1L)
             .gasPrice(callParameter.getGasPrice())
-            .gasLimit(callParameter.getGasLimit())
+            .gasLimit(blockHeader.getGasLimit())
             .to(callParameter.getTo())
             .sender(callParameter.getFrom())
             .value(callParameter.getValue())
@@ -479,7 +523,7 @@ public class TransactionSimulatorTest {
             .type(TransactionType.FRONTIER)
             .nonce(1L)
             .gasPrice(callParameter.getGasPrice())
-            .gasLimit(callParameter.getGasLimit())
+            .gasLimit(blockHeader.getGasLimit())
             .to(callParameter.getTo())
             .sender(callParameter.getFrom())
             .value(callParameter.getValue())
@@ -509,7 +553,7 @@ public class TransactionSimulatorTest {
             .type(TransactionType.EIP1559)
             .chainId(BigInteger.ONE)
             .nonce(1L)
-            .gasLimit(callParameter.getGasLimit())
+            .gasLimit(blockHeader.getGasLimit())
             .maxFeePerGas(callParameter.getMaxFeePerGas().orElseThrow())
             .maxPriorityFeePerGas(callParameter.getMaxPriorityFeePerGas().orElseThrow())
             .to(callParameter.getTo())
@@ -530,7 +574,7 @@ public class TransactionSimulatorTest {
   @Test
   public void shouldCapGasLimitWhenOriginalTransactionExceedsGasCap() {
     final CallParameter callParameter =
-        eip1559TransactionCallParameter(Wei.ZERO, Wei.ZERO, GASCAP + 1);
+        eip1559TransactionCallParameter(Wei.ZERO, Wei.ZERO, GAS_CAP + 1);
 
     final BlockHeader blockHeader = mockBlockHeader(Hash.ZERO, 1L, Wei.ONE);
 
@@ -542,7 +586,7 @@ public class TransactionSimulatorTest {
             .type(TransactionType.EIP1559)
             .chainId(BigInteger.ONE)
             .nonce(1L)
-            .gasLimit(GASCAP)
+            .gasLimit(GAS_CAP)
             .maxFeePerGas(callParameter.getMaxFeePerGas().orElseThrow())
             .maxPriorityFeePerGas(callParameter.getMaxPriorityFeePerGas().orElseThrow())
             .to(callParameter.getTo())
@@ -566,11 +610,48 @@ public class TransactionSimulatorTest {
   }
 
   @Test
-  public void shouldUseRpcGasCapWhenCapIsHigherThanGasLimit() {
-    // generate a transaction with a gas limit that is lower than the gas cap,
-    // expect the gas cap to override parameter gas limit
+  public void shouldUseProvidedGasLimitWhenBelowRpcCapGas() {
     final CallParameter callParameter =
-        eip1559TransactionCallParameter(Wei.ZERO, Wei.ZERO, GASCAP - 1);
+        eip1559TransactionCallParameter(Wei.ZERO, Wei.ZERO, GAS_CAP / 2);
+
+    final BlockHeader blockHeader = mockBlockHeader(Hash.ZERO, 1L, Wei.ONE);
+
+    mockBlockchainForBlockHeader(blockHeader);
+    mockWorldStateForAccount(blockHeader, callParameter.getFrom(), 1L);
+
+    final Transaction expectedTransaction =
+        Transaction.builder()
+            .type(TransactionType.EIP1559)
+            .chainId(BigInteger.ONE)
+            .nonce(1L)
+            .gasLimit(GAS_CAP / 2)
+            .maxFeePerGas(callParameter.getMaxFeePerGas().orElseThrow())
+            .maxPriorityFeePerGas(callParameter.getMaxPriorityFeePerGas().orElseThrow())
+            .to(callParameter.getTo())
+            .sender(callParameter.getFrom())
+            .value(callParameter.getValue())
+            .payload(callParameter.getPayload())
+            .signature(FAKE_SIGNATURE)
+            .build();
+
+    mockProtocolSpecForProcessWithWorldUpdater();
+
+    // call process with original transaction
+    cappedTransactionSimulator.process(
+        callParameter,
+        TransactionValidationParams.transactionSimulator(),
+        OperationTracer.NO_TRACING,
+        1L);
+
+    // expect overwritten transaction to be processed
+    verifyTransactionWasProcessed(expectedTransaction);
+  }
+
+  @Test
+  public void shouldUseRpcGasCapWhenGasLimitNoPresent() {
+    // generate call parameters that do not specify a gas limit,
+    // expect the rpc gas cap to be used for simulation
+    final CallParameter callParameter = eip1559TransactionCallParameter(Wei.ZERO, Wei.ZERO, -1);
 
     final BlockHeader blockHeader = mockBlockHeader(Hash.ZERO, 1L, Wei.ONE);
 
@@ -591,7 +672,7 @@ public class TransactionSimulatorTest {
             .value(callParameter.getValue())
             .payload(callParameter.getPayload())
             .signature(FAKE_SIGNATURE)
-            .gasLimit(GASCAP)
+            .gasLimit(GAS_CAP)
             .build();
 
     // call process with original transaction
@@ -781,7 +862,7 @@ public class TransactionSimulatorTest {
     return new CallParameter(
         Address.fromHexString("0x0"),
         Address.fromHexString("0x0"),
-        0,
+        -1,
         gasPrice,
         Wei.of(0),
         Bytes.EMPTY);
@@ -793,7 +874,7 @@ public class TransactionSimulatorTest {
 
   private CallParameter eip1559TransactionCallParameter(
       final Wei maxFeePerGas, final Wei maxPriorityFeePerGas) {
-    return eip1559TransactionCallParameter(maxFeePerGas, maxPriorityFeePerGas, 0L);
+    return eip1559TransactionCallParameter(maxFeePerGas, maxPriorityFeePerGas, -1);
   }
 
   private CallParameter eip1559TransactionCallParameter(
@@ -818,6 +899,7 @@ public class TransactionSimulatorTest {
       final int numberOfBlobs) {
     BlobsWithCommitments bwc = new BlobTestFixture().createBlobsWithCommitments(numberOfBlobs);
     return new CallParameter(
+        Optional.of(BigInteger.ONE),
         Address.fromHexString("0x0"),
         Address.fromHexString("0x0"),
         gasLimit,

@@ -87,7 +87,8 @@ public class CodeDelegationTransactionDecoder {
 
     input.leaveList();
 
-    final SECPSignature signature = SIGNATURE_ALGORITHM.get().createSignature(r, s, yParity);
+    final SECPSignature signature =
+        SIGNATURE_ALGORITHM.get().createCodeDelegationSignature(r, s, yParity);
 
     return new org.hyperledger.besu.ethereum.core.CodeDelegation(
         chainId, address, nonce, signature);

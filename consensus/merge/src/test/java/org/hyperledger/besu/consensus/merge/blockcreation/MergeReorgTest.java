@@ -19,7 +19,7 @@ import static org.hyperledger.besu.ethereum.core.InMemoryKeyValueStorageProvider
 import static org.hyperledger.besu.ethereum.core.InMemoryKeyValueStorageProvider.createInMemoryWorldStateArchive;
 import static org.mockito.Mockito.mock;
 
-import org.hyperledger.besu.config.MergeConfigOptions;
+import org.hyperledger.besu.config.MergeConfiguration;
 import org.hyperledger.besu.consensus.merge.MergeContext;
 import org.hyperledger.besu.consensus.merge.PostMergeContext;
 import org.hyperledger.besu.datatypes.Address;
@@ -34,8 +34,8 @@ import org.hyperledger.besu.ethereum.core.BlockBody;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 import org.hyperledger.besu.ethereum.core.Difficulty;
-import org.hyperledger.besu.ethereum.core.ImmutableMiningParameters;
-import org.hyperledger.besu.ethereum.core.ImmutableMiningParameters.MutableInitValues;
+import org.hyperledger.besu.ethereum.core.ImmutableMiningConfiguration;
+import org.hyperledger.besu.ethereum.core.ImmutableMiningConfiguration.MutableInitValues;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.sync.backwardsync.BackwardSyncContext;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
@@ -89,14 +89,14 @@ public class MergeReorgTest implements MergeGenesisConfigHelper {
     genesisState.writeStateTo(mutable);
     mutable.persist(null);
     mergeContext.setTerminalTotalDifficulty(Difficulty.of(1001));
-    MergeConfigOptions.setMergeEnabled(true);
+    MergeConfiguration.setMergeEnabled(true);
     this.coordinator =
         new MergeCoordinator(
             protocolContext,
             mockProtocolSchedule,
             ethScheduler,
             mockTransactionPool,
-            ImmutableMiningParameters.builder()
+            ImmutableMiningConfiguration.builder()
                 .mutableInitValues(MutableInitValues.builder().coinbase(coinbase).build())
                 .build(),
             mock(BackwardSyncContext.class),
