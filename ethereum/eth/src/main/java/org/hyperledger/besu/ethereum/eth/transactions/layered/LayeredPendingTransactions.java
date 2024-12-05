@@ -50,6 +50,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import kotlin.ranges.LongRange;
 import org.slf4j.Logger;
@@ -433,7 +434,7 @@ public class LayeredPendingTransactions implements PendingTransactions {
   }
 
   @Override
-  public synchronized void manageBlockAdded(
+  public void manageBlockAdded(
       final BlockHeader blockHeader,
       final List<Transaction> confirmedTransactions,
       final List<Transaction> reorgTransactions,
@@ -447,19 +448,21 @@ public class LayeredPendingTransactions implements PendingTransactions {
 
     final var reorgNonceRangeBySender = nonceRangeBySender(reorgTransactions);
 
-    try {
-      prioritizedTransactions.blockAdded(feeMarket, blockHeader, maxConfirmedNonceBySender);
-    } catch (final Throwable throwable) {
-      LOG.warn(
-          "Unexpected error {} when managing added block {}, maxNonceBySender {}, reorgNonceRangeBySender {}",
-          throwable,
-          blockHeader.toLogString(),
-          maxConfirmedNonceBySender,
-          reorgTransactions);
-      LOG.warn("Stack trace", throwable);
-    }
+    synchronized (this) {
+      try {
+        prioritizedTransactions.blockAdded(feeMarket, blockHeader, maxConfirmedNonceBySender);
+      } catch (final Throwable throwable) {
+        LOG.warn(
+            "Unexpected error {} when managing added block {}, maxNonceBySender {}, reorgNonceRangeBySender {}",
+            throwable,
+            blockHeader.toLogString(),
+            maxConfirmedNonceBySender,
+            reorgTransactions);
+        LOG.warn("Stack trace", throwable);
+      }
 
-    logBlockHeaderForReplay(blockHeader, maxConfirmedNonceBySender, reorgNonceRangeBySender);
+      logBlockHeaderForReplay(blockHeader, maxConfirmedNonceBySender, reorgNonceRangeBySender);
+    }
   }
 
   private void logBlockHeaderForReplay(
@@ -498,10 +501,23 @@ public class LayeredPendingTransactions implements PendingTransactions {
   }
 
   private Map<Address, Long> maxNonceBySender(final List<Transaction> confirmedTransactions) {
+    record SenderNonce(Address sender, long nonce) {}
+
     return confirmedTransactions.stream()
+        .flatMap(
+            transaction ->
+                transaction.getType().supportsDelegateCode()
+                    ? transaction.getCodeDelegationList().get().parallelStream()
+                        // doing in parallel since calculate the authority is costly
+                        .map(
+                            cd ->
+                                cd.authorizer()
+                                    .map(address -> new SenderNonce(address, cd.nonce())))
+                        .filter(Optional::isPresent)
+                        .map(Optional::get)
+                    : Stream.of(new SenderNonce(transaction.getSender(), transaction.getNonce())))
         .collect(
-            groupingBy(
-                Transaction::getSender, mapping(Transaction::getNonce, reducing(0L, Math::max))));
+            groupingBy(SenderNonce::sender, mapping(SenderNonce::nonce, reducing(0L, Math::max))));
   }
 
   private Map<Address, LongRange> nonceRangeBySender(
