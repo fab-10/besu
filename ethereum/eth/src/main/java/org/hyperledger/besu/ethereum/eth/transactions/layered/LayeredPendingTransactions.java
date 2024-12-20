@@ -42,12 +42,10 @@ import org.hyperledger.besu.evm.account.AccountState;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 
 import java.util.ArrayDeque;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.Set;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
@@ -315,68 +313,67 @@ public class LayeredPendingTransactions implements PendingTransactions {
 
   @Override
   public void selectTransactions(final PendingTransactions.TransactionSelector selector) {
-    final Set<Address> skipSenders = new HashSet<>();
+    //    final Set<Address> skipSenders = new HashSet<>();
 
-    final Map<Byte, List<SenderPendingTransactions>> candidateTxsByScore;
+    final Map<Byte, List<PendingTransactionsBundle>> candidateSortedTxs;
     synchronized (this) {
       // since selecting transactions for block creation is a potential long operation
       // we want to avoid to keep the lock for all the process, but we just lock to get
       // the candidate transactions
-      candidateTxsByScore = prioritizedTransactions.getByScore();
+      candidateSortedTxs = prioritizedTransactions.getSorted();
     }
 
     selection:
-    for (final var entry : candidateTxsByScore.entrySet()) {
+    for (final var entry : candidateSortedTxs.entrySet()) {
       LOG.trace("Evaluating txs with score {}", entry.getKey());
 
-      for (final var senderTxs : entry.getValue()) {
-        LOG.trace("Evaluating sender txs {}", senderTxs);
+      for (final var txsBundle : entry.getValue()) {
+        LOG.trace("Evaluating txs bundle {}", txsBundle);
+        final var selectionResults = selector.evaluateBundle(txsBundle);
 
-        if (!skipSenders.contains(senderTxs.sender())) {
+        for (final var resultEntry : selectionResults.entrySet()) {
+          final var candidatePendingTx = resultEntry.getKey();
+          final var selectionResult = resultEntry.getValue();
+          LOG.atTrace()
+              .setMessage("Selection result {} for transaction {}")
+              .addArgument(selectionResult)
+              .addArgument(candidatePendingTx::toTraceLog)
+              .log();
 
-          for (final var candidatePendingTx : senderTxs.pendingTransactions()) {
-            final var selectionResult = selector.evaluateTransaction(candidatePendingTx);
-
+          if (selectionResult.discard()) {
+            ethScheduler.scheduleTxWorkerTask(
+                () -> {
+                  synchronized (this) {
+                    prioritizedTransactions.remove(candidatePendingTx, INVALIDATED);
+                  }
+                });
+            logDiscardedTransaction(candidatePendingTx, selectionResult);
+          } else if (selectionResult.penalize()) {
+            ethScheduler.scheduleTxWorkerTask(
+                () -> {
+                  synchronized (this) {
+                    prioritizedTransactions.penalize(candidatePendingTx);
+                  }
+                });
             LOG.atTrace()
-                .setMessage("Selection result {} for transaction {}")
-                .addArgument(selectionResult)
+                .setMessage("Transaction {} penalized")
                 .addArgument(candidatePendingTx::toTraceLog)
                 .log();
-
-            if (selectionResult.discard()) {
-              ethScheduler.scheduleTxWorkerTask(
-                  () -> {
-                    synchronized (this) {
-                      prioritizedTransactions.remove(candidatePendingTx, INVALIDATED);
-                    }
-                  });
-              logDiscardedTransaction(candidatePendingTx, selectionResult);
-            } else if (selectionResult.penalize()) {
-              ethScheduler.scheduleTxWorkerTask(
-                  () -> {
-                    synchronized (this) {
-                      prioritizedTransactions.penalize(candidatePendingTx);
-                    }
-                  });
-              LOG.atTrace()
-                  .setMessage("Transaction {} penalized")
-                  .addArgument(candidatePendingTx::toTraceLog)
-                  .log();
-            }
-
-            if (selectionResult.stop()) {
-              LOG.trace("Stopping selection");
-              break selection;
-            }
-
-            if (!selectionResult.selected()) {
-              // avoid processing other txs from this sender if this one is skipped
-              // since the following will not be selected due to the nonce gap
-              LOG.trace("Skipping remaining txs for sender {}", candidatePendingTx.getSender());
-              skipSenders.add(candidatePendingTx.getSender());
-              break;
-            }
           }
+
+          if (selectionResult.stop()) {
+            LOG.trace("Stopping selection");
+            break selection;
+          }
+          //
+          //          if (!selectionResult.selected()) {
+          //            // avoid processing other txs from this sender if this one is skipped
+          //            // since the following will not be selected due to the nonce gap
+          //            LOG.trace("Skipping remaining txs for sender {}",
+          // candidatePendingTx.getSender());
+          //            skipSenders.add(candidatePendingTx.getSender());
+          //            break;
+          //          }
         }
       }
     }

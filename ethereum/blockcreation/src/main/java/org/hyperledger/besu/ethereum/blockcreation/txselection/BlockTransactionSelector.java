@@ -14,6 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.blockcreation.txselection;
 
+import static org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions.*;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_SELECTION_TIMEOUT;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_SELECTION_TIMEOUT_INVALID_TX;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.INVALID_TX_EVALUATION_TOO_LONG;
@@ -39,6 +40,7 @@ import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.ethereum.eth.transactions.layered.PendingTransactionsBundle;
 import org.hyperledger.besu.ethereum.mainnet.AbstractBlockProcessor;
 import org.hyperledger.besu.ethereum.mainnet.MainnetTransactionProcessor;
 import org.hyperledger.besu.ethereum.mainnet.TransactionValidationParams;
@@ -53,14 +55,21 @@ import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 
 import java.time.Duration;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.SequencedMap;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import com.google.common.base.Stopwatch;
 import org.slf4j.Logger;
@@ -104,7 +113,8 @@ public class BlockTransactionSelector {
   private final AtomicBoolean isTimeout = new AtomicBoolean(false);
   private final long blockTxsSelectionMaxTime;
   private WorldUpdater blockWorldStateUpdater;
-  private volatile TransactionEvaluationContext currTxEvaluationContext;
+  private final AtomicReference<TransactionEvaluationContext> currTxEvaluationContext =
+      new AtomicReference<>();
 
   public BlockTransactionSelector(
       final MiningConfiguration miningConfiguration,
@@ -187,7 +197,24 @@ public class BlockTransactionSelector {
             () ->
                 blockSelectionContext
                     .transactionPool()
-                    .selectTransactions(this::evaluateTransaction),
+                    .selectTransactions(
+                        new TransactionSelector() {
+                          @Override
+                          public TransactionSelectionResult evaluateTransaction(
+                              final PendingTransaction pendingTransaction) {
+                            return BlockTransactionSelector.this.evaluateTransaction(
+                                pendingTransaction);
+                          }
+
+                          @Override
+                          public Map<PendingTransaction, TransactionSelectionResult> evaluateBundle(
+                              final PendingTransactionsBundle bundle) {
+                            if (!bundle.isAtomic()) {
+                              return TransactionSelector.super.evaluateBundle(bundle);
+                            }
+                            return BlockTransactionSelector.this.evaluateBundle(bundle);
+                          }
+                        }),
             null);
     ethScheduler.scheduleBlockCreationTask(txSelectionTask);
 
@@ -216,14 +243,14 @@ public class BlockTransactionSelector {
 
   private void cancelEvaluatingTxWithGraceTime(final FutureTask<Void> txSelectionTask) {
     final long elapsedTime =
-        currTxEvaluationContext.getEvaluationTimer().elapsed(TimeUnit.MILLISECONDS);
+        currTxEvaluationContext.get().getEvaluationTimer().elapsed(TimeUnit.MILLISECONDS);
     // adding 100ms so we are sure it take strictly more than the block selection max time
     final long txRemainingTime = (blockTxsSelectionMaxTime - elapsedTime) + 100;
 
     LOG.atDebug()
         .setMessage(
             "Transaction {} is processing for {}ms, giving it {}ms grace time, before considering it taking too much time to execute")
-        .addArgument(currTxEvaluationContext.getPendingTransaction()::toTraceLog)
+        .addArgument(currTxEvaluationContext.get().getPendingTransaction()::toTraceLog)
         .addArgument(elapsedTime)
         .addArgument(txRemainingTime)
         .log();
@@ -235,10 +262,13 @@ public class BlockTransactionSelector {
                 .setMessage(
                     "Transaction {} is still processing after the grace time, total processing time {}ms,"
                         + " greater than max block selection time of {}ms, forcing an interrupt")
-                .addArgument(currTxEvaluationContext.getPendingTransaction()::toTraceLog)
+                .addArgument(currTxEvaluationContext.get().getPendingTransaction()::toTraceLog)
                 .addArgument(
                     () ->
-                        currTxEvaluationContext.getEvaluationTimer().elapsed(TimeUnit.MILLISECONDS))
+                        currTxEvaluationContext
+                            .get()
+                            .getEvaluationTimer()
+                            .elapsed(TimeUnit.MILLISECONDS))
                 .addArgument(blockTxsSelectionMaxTime)
                 .log();
 
@@ -279,7 +309,7 @@ public class BlockTransactionSelector {
 
     final TransactionEvaluationContext evaluationContext =
         createTransactionEvaluationContext(pendingTransaction);
-    currTxEvaluationContext = evaluationContext;
+    currTxEvaluationContext.set(evaluationContext);
 
     TransactionSelectionResult selectionResult = evaluatePreProcessing(evaluationContext);
     if (!selectionResult.selected()) {
@@ -297,6 +327,53 @@ public class BlockTransactionSelector {
     }
     return handleTransactionNotSelected(
         evaluationContext, postProcessingSelectionResult, txWorldStateUpdater);
+  }
+
+  /**
+   * Evaluate and atomic bundle
+   *
+   * @param bundle the pending transactions atomic bundle
+   * @return a map between a pending transaction and its selection result
+   */
+  private Map<PendingTransaction, TransactionSelectionResult> evaluateBundle(
+      final PendingTransactionsBundle bundle) {
+    checkCancellation();
+
+    final List<TransactionEvaluationContext> evaluationContexts =
+        bundle.stream().map(this::createTransactionEvaluationContext).toList();
+
+    for (final var evaluationContext : evaluationContexts) {
+      currTxEvaluationContext.set(evaluationContext);
+
+      TransactionSelectionResult selectionResult = evaluatePreProcessing(evaluationContext);
+      if (!selectionResult.selected()) {
+        return handleBundleNotSelected(evaluationContexts, evaluationContext, selectionResult);
+      }
+    }
+
+    // create the state updater before processing all the bundle
+    final WorldUpdater bundleWorldStateUpdater = blockWorldStateUpdater.updater();
+
+    final SequencedMap<TransactionEvaluationContext, TransactionProcessingResult>
+        processingResults = LinkedHashMap.newLinkedHashMap(evaluationContexts.size());
+    for (final var evaluationContext : evaluationContexts) {
+      currTxEvaluationContext.set(evaluationContext);
+
+      final TransactionProcessingResult processingResult =
+          processTransaction(evaluationContext.getPendingTransaction(), bundleWorldStateUpdater);
+
+      final var postProcessingSelectionResult =
+          evaluatePostProcessing(evaluationContext, processingResult);
+
+      if (!postProcessingSelectionResult.selected()) {
+        bundleWorldStateUpdater.revert();
+        return handleBundleNotSelected(
+            evaluationContexts, evaluationContext, postProcessingSelectionResult);
+      }
+      processingResults.put(evaluationContext, processingResult);
+    }
+
+    return handleBundleSelected(processingResults, bundleWorldStateUpdater);
   }
 
   private TransactionEvaluationContext createTransactionEvaluationContext(
@@ -425,7 +502,7 @@ public class BlockTransactionSelector {
         blockWorldStateUpdater.commit();
         final TransactionReceipt receipt =
             transactionReceiptFactory.create(
-                transaction.getType(), processingResult, worldState, cumulativeGasUsed);
+                transaction.getType(), processingResult, null, cumulativeGasUsed);
 
         transactionSelectionResults.updateSelected(
             transaction, receipt, gasUsedByTransaction, blobGasUsed);
@@ -450,6 +527,56 @@ public class BlockTransactionSelector {
         .addArgument(evaluationContext.getEvaluationTimer())
         .log();
     return SELECTED;
+  }
+
+  private Map<PendingTransaction, TransactionSelectionResult> handleBundleSelected(
+      final SequencedMap<TransactionEvaluationContext, TransactionProcessingResult>
+          processingResults,
+      final WorldUpdater bundleWorldStateUpdater) {
+    final boolean tooLate;
+
+    synchronized (isTimeout) {
+      tooLate = isTimeout.get();
+      if (!tooLate) {
+        bundleWorldStateUpdater.commit();
+        blockWorldStateUpdater.commit();
+        for (final var resultEntry : processingResults.sequencedEntrySet()) {
+          final var transaction = resultEntry.getKey().getTransaction();
+          final var processingResult = resultEntry.getValue();
+
+          final long gasUsedByTransaction =
+              transaction.getGasLimit() - processingResult.getGasRemaining();
+          final long cumulativeGasUsed =
+              transactionSelectionResults.getCumulativeGasUsed() + gasUsedByTransaction;
+          final long blobGasUsed =
+              blockSelectionContext.gasCalculator().blobGasCost(transaction.getBlobCount());
+
+          final TransactionReceipt receipt =
+              transactionReceiptFactory.create(
+                  transaction.getType(), processingResult, null, cumulativeGasUsed);
+
+          transactionSelectionResults.updateSelected(
+              transaction, receipt, gasUsedByTransaction, blobGasUsed);
+        }
+      }
+    }
+
+    if (tooLate) {
+      final var evaluationContexts = processingResults.sequencedKeySet().stream().toList();
+      // the last tx triggered the timeout
+      return handleBundleNotSelected(
+          evaluationContexts,
+          evaluationContexts.getLast(),
+          TransactionSelectionResult.invalidTransient("BUNDLE BLOCK SELECTION TIMEOUT"));
+    }
+
+    processingResults.forEach(pluginTransactionSelector::onTransactionSelected);
+    blockWorldStateUpdater = worldState.updater();
+
+    return processingResults.sequencedEntrySet().stream()
+        .map(Map.Entry::getKey)
+        .map(TransactionEvaluationContext::getPendingTransaction)
+        .collect(Collectors.toMap(Function.identity(), unused -> SELECTED));
   }
 
   /**
@@ -554,5 +681,29 @@ public class BlockTransactionSelector {
     if (isCancelled.get()) {
       throw new CancellationException("Cancelled during transaction selection.");
     }
+  }
+
+  private Map<PendingTransaction, TransactionSelectionResult> handleBundleNotSelected(
+      final List<TransactionEvaluationContext> evaluationContexts,
+      final TransactionEvaluationContext notSelectedContext,
+      final TransactionSelectionResult selectionResult) {
+    final Map<PendingTransaction, TransactionSelectionResult> selectionResults =
+        HashMap.newHashMap(evaluationContexts.size());
+    boolean afterFailed = false;
+    for (final TransactionEvaluationContext evaluationContext : evaluationContexts) {
+      if (afterFailed) {
+        selectionResults.put(
+            evaluationContext.getPendingTransaction(),
+            TransactionSelectionResult.invalidTransient("AFTER FAILED IN BUNDLE"));
+      } else if (evaluationContext.equals(notSelectedContext)) {
+        selectionResults.put(evaluationContext.getPendingTransaction(), selectionResult);
+        afterFailed = false;
+      } else {
+        selectionResults.put(
+            evaluationContext.getPendingTransaction(),
+            TransactionSelectionResult.invalidTransient("SELECTED BUT BUNDLE FAILURE"));
+      }
+    }
+    return selectionResults;
   }
 }
