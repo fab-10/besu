@@ -18,12 +18,15 @@ import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.eth.transactions.layered.PendingTransactionsBundle;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
 
@@ -77,5 +80,15 @@ public interface PendingTransactions {
   @FunctionalInterface
   interface TransactionSelector {
     TransactionSelectionResult evaluateTransaction(PendingTransaction pendingTransaction);
+
+    default Map<PendingTransaction, TransactionSelectionResult> evaluateBundle(
+        final PendingTransactionsBundle bundle) {
+      final var results =
+          HashMap.<PendingTransaction, TransactionSelectionResult>newHashMap(bundle.size());
+      for (PendingTransaction pendingTransaction : bundle) {
+        results.put(pendingTransaction, evaluateTransaction(pendingTransaction));
+      }
+      return results;
+    }
   }
 }
