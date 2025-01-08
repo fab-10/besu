@@ -14,7 +14,8 @@
  */
 package org.hyperledger.besu.ethereum.blockcreation.txselection;
 
-import static org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions.*;
+import static org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions.TransactionSelector;
+import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.AFTER_NOT_SELECTED_IN_GROUP;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_SELECTION_TIMEOUT;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_SELECTION_TIMEOUT_INVALID_TX;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.INVALID_TX_EVALUATION_TOO_LONG;
@@ -31,6 +32,7 @@ import org.hyperledger.besu.ethereum.blockcreation.txselection.selectors.BlockSi
 import org.hyperledger.besu.ethereum.blockcreation.txselection.selectors.MinPriorityFeePerGasTransactionSelector;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.selectors.PriceTransactionSelector;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.selectors.ProcessingResultTransactionSelector;
+import org.hyperledger.besu.ethereum.blockcreation.txselection.selectors.SkipSenderTransactionSelector;
 import org.hyperledger.besu.ethereum.chain.Blockchain;
 import org.hyperledger.besu.ethereum.core.MiningConfiguration;
 import org.hyperledger.besu.ethereum.core.MutableWorldState;
@@ -40,7 +42,7 @@ import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
-import org.hyperledger.besu.ethereum.eth.transactions.layered.PendingTransactionsBundle;
+import org.hyperledger.besu.ethereum.eth.transactions.layered.PendingTransactionGroup;
 import org.hyperledger.besu.ethereum.mainnet.AbstractBlockProcessor;
 import org.hyperledger.besu.ethereum.mainnet.MainnetTransactionProcessor;
 import org.hyperledger.besu.ethereum.mainnet.TransactionValidationParams;
@@ -161,6 +163,7 @@ public class BlockTransactionSelector {
   private List<AbstractTransactionSelector> createTransactionSelectors(
       final BlockSelectionContext context) {
     return List.of(
+        new SkipSenderTransactionSelector(context),
         new BlockSizeTransactionSelector(context),
         new BlobSizeTransactionSelector(context),
         new PriceTransactionSelector(context),
@@ -207,12 +210,9 @@ public class BlockTransactionSelector {
                           }
 
                           @Override
-                          public Map<PendingTransaction, TransactionSelectionResult> evaluateBundle(
-                              final PendingTransactionsBundle bundle) {
-                            if (!bundle.isAtomic()) {
-                              return TransactionSelector.super.evaluateBundle(bundle);
-                            }
-                            return BlockTransactionSelector.this.evaluateBundle(bundle);
+                          public Map<PendingTransaction, TransactionSelectionResult> evaluateGroup(
+                              final PendingTransactionGroup pendingTxGroup) {
+                            return BlockTransactionSelector.this.evaluateGroup(pendingTxGroup);
                           }
                         }),
             null);
@@ -330,17 +330,17 @@ public class BlockTransactionSelector {
   }
 
   /**
-   * Evaluate and atomic bundle
+   * Evaluate a pending tx group
    *
-   * @param bundle the pending transactions atomic bundle
+   * @param group the pending transactions group
    * @return a map between a pending transaction and its selection result
    */
-  private Map<PendingTransaction, TransactionSelectionResult> evaluateBundle(
-      final PendingTransactionsBundle bundle) {
+  private Map<PendingTransaction, TransactionSelectionResult> evaluateGroup(
+      final PendingTransactionGroup group) {
     checkCancellation();
 
     final List<TransactionEvaluationContext> evaluationContexts =
-        bundle.stream().map(this::createTransactionEvaluationContext).toList();
+        group.stream().map(this::createTransactionEvaluationContext).toList();
 
     for (final var evaluationContext : evaluationContexts) {
       currTxEvaluationContext.set(evaluationContext);
@@ -351,7 +351,7 @@ public class BlockTransactionSelector {
       }
     }
 
-    // create the state updater before processing all the bundle
+    // create the state updater before processing the group
     final WorldUpdater bundleWorldStateUpdater = blockWorldStateUpdater.updater();
 
     final SequencedMap<TransactionEvaluationContext, TransactionProcessingResult>
@@ -567,7 +567,7 @@ public class BlockTransactionSelector {
       return handleBundleNotSelected(
           evaluationContexts,
           evaluationContexts.getLast(),
-          TransactionSelectionResult.invalidTransient("BUNDLE BLOCK SELECTION TIMEOUT"));
+          TransactionSelectionResult.invalidTransient("BUNDLE BLOCK SELECTION TIMEOUT", false));
     }
 
     processingResults.forEach(pluginTransactionSelector::onTransactionSelected);
@@ -689,19 +689,19 @@ public class BlockTransactionSelector {
       final TransactionSelectionResult selectionResult) {
     final Map<PendingTransaction, TransactionSelectionResult> selectionResults =
         HashMap.newHashMap(evaluationContexts.size());
+
     boolean afterFailed = false;
     for (final TransactionEvaluationContext evaluationContext : evaluationContexts) {
       if (afterFailed) {
         selectionResults.put(
-            evaluationContext.getPendingTransaction(),
-            TransactionSelectionResult.invalidTransient("AFTER FAILED IN BUNDLE"));
+            evaluationContext.getPendingTransaction(), AFTER_NOT_SELECTED_IN_GROUP);
       } else if (evaluationContext.equals(notSelectedContext)) {
         selectionResults.put(evaluationContext.getPendingTransaction(), selectionResult);
         afterFailed = false;
       } else {
         selectionResults.put(
             evaluationContext.getPendingTransaction(),
-            TransactionSelectionResult.invalidTransient("SELECTED BUT BUNDLE FAILURE"));
+            TransactionSelectionResult.invalidTransient("SELECTED BUT BUNDLE FAILURE", false));
       }
     }
     return selectionResults;

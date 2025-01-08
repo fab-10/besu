@@ -92,7 +92,7 @@ public class ProcessingResultTransactionSelector extends AbstractTransactionSele
           .addArgument(invalidReason)
           .addArgument(transaction::toTraceLog)
           .log();
-      return TransactionSelectionResult.invalidTransient(invalidReason.name());
+      return TransactionSelectionResult.invalidTransient(invalidReason.name(), true);
     }
     // If the transaction was invalid for any other reason, delete it, and continue.
     LOG.atTrace()

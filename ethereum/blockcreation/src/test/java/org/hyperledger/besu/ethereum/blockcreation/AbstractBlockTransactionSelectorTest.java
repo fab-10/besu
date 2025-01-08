@@ -813,7 +813,7 @@ public abstract class AbstractBlockTransactionSelectorTest {
             entry(
                 futureTransaction,
                 TransactionSelectionResult.invalidTransient(
-                    TransactionInvalidReason.NONCE_TOO_HIGH.name())));
+                    TransactionInvalidReason.NONCE_TOO_HIGH.name(), false)));
   }
 
   @Test
@@ -995,13 +995,15 @@ public abstract class AbstractBlockTransactionSelectorTest {
                 try {
                   Thread.sleep(t);
                 } catch (final InterruptedException e) {
-                  return TransactionSelectionResult.invalidTransient(EXECUTION_INTERRUPTED.name());
+                  return TransactionSelectionResult.invalidTransient(
+                      EXECUTION_INTERRUPTED.name(), true);
                 }
               } else {
                 try {
                   Thread.sleep(fastProcessingTxTime);
                 } catch (final InterruptedException e) {
-                  return TransactionSelectionResult.invalidTransient(EXECUTION_INTERRUPTED.name());
+                  return TransactionSelectionResult.invalidTransient(
+                      EXECUTION_INTERRUPTED.name(), true);
                 }
               }
               return SELECTED;
@@ -1150,13 +1152,15 @@ public abstract class AbstractBlockTransactionSelectorTest {
                 try {
                   Thread.sleep(t);
                 } catch (final InterruptedException e) {
-                  return TransactionSelectionResult.invalidTransient(EXECUTION_INTERRUPTED.name());
+                  return TransactionSelectionResult.invalidTransient(
+                      EXECUTION_INTERRUPTED.name(), true);
                 }
               } else {
                 try {
                   Thread.sleep(fastProcessingTxTime);
                 } catch (final InterruptedException e) {
-                  return TransactionSelectionResult.invalidTransient(EXECUTION_INTERRUPTED.name());
+                  return TransactionSelectionResult.invalidTransient(
+                      EXECUTION_INTERRUPTED.name(), true);
                 }
               }
               return invalidSelectionResult;

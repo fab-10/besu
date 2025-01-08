@@ -22,6 +22,7 @@ import static org.hyperledger.besu.ethereum.eth.transactions.sorter.SequencedRem
 import static org.hyperledger.besu.ethereum.eth.transactions.sorter.SequencedRemovalReason.INVALID;
 import static org.hyperledger.besu.ethereum.eth.transactions.sorter.SequencedRemovalReason.REPLACED;
 import static org.hyperledger.besu.ethereum.eth.transactions.sorter.SequencedRemovalReason.TIMED_EVICTION;
+import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_OCCUPANCY_ABOVE_THRESHOLD;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.SELECTED;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -45,6 +46,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionAddedLis
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionDroppedListener;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.layered.PendingTransactionGroup;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.metrics.StubMetricsSystem;
@@ -55,9 +57,12 @@ import org.hyperledger.besu.util.number.Fraction;
 import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.SequencedMap;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -370,13 +375,23 @@ public abstract class AbstractPendingTransactionsTestBase {
 
     final List<Transaction> parsedTransactions = Lists.newArrayList();
     transactionsLarge.selectTransactions(
-        pendingTx -> {
-          parsedTransactions.add(pendingTx.getTransaction());
+        group -> {
+          final var selectionResults =
+              group.stream()
+                  .collect(
+                      Collectors.toMap(
+                          Function.identity(),
+                          pendingTx ->
+                              parsedTransactions.size() == 6
+                                  ? BLOCK_OCCUPANCY_ABOVE_THRESHOLD
+                                  : SELECTED,
+                          (a, b) -> a,
+                          LinkedHashMap::new));
 
-          if (parsedTransactions.size() == 6) {
-            return TransactionSelectionResult.BLOCK_OCCUPANCY_ABOVE_THRESHOLD;
-          }
-          return SELECTED;
+          parsedTransactions.addAll(
+              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
+
+          return selectionResults;
         });
 
     // All 6 transactions should have been selected
@@ -404,9 +419,11 @@ public abstract class AbstractPendingTransactionsTestBase {
 
     final List<Transaction> parsedTransactions = Lists.newArrayList();
     transactions.selectTransactions(
-        pendingTx -> {
-          parsedTransactions.add(pendingTx.getTransaction());
-          return TransactionSelectionResult.BLOCK_OCCUPANCY_ABOVE_THRESHOLD;
+        group -> {
+          final var selectionResults = selector(group, BLOCK_OCCUPANCY_ABOVE_THRESHOLD);
+          parsedTransactions.addAll(
+              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
+          return selectionResults;
         });
 
     assertThat(parsedTransactions.size()).isEqualTo(1);
@@ -420,9 +437,11 @@ public abstract class AbstractPendingTransactionsTestBase {
 
     final List<Transaction> parsedTransactions = Lists.newArrayList();
     transactions.selectTransactions(
-        pendingTx -> {
-          parsedTransactions.add(pendingTx.getTransaction());
-          return SELECTED;
+        group -> {
+          final var selectionResults = selector(group, SELECTED);
+          parsedTransactions.addAll(
+              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
+          return selectionResults;
         });
 
     assertThat(parsedTransactions.size()).isEqualTo(2);
@@ -440,9 +459,11 @@ public abstract class AbstractPendingTransactionsTestBase {
 
     final List<Transaction> parsedTransactions = Lists.newArrayList();
     transactions.selectTransactions(
-        pendingTx -> {
-          parsedTransactions.add(pendingTx.getTransaction());
-          return SELECTED;
+        group -> {
+          final var selectionResults = selector(group, SELECTED);
+          parsedTransactions.addAll(
+              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
+          return selectionResults;
         });
 
     assertThat(parsedTransactions).containsExactly(transaction2);
@@ -455,10 +476,15 @@ public abstract class AbstractPendingTransactionsTestBase {
 
     final List<Transaction> parsedTransactions = Lists.newArrayList();
     transactions.selectTransactions(
-        pendingTx -> {
-          parsedTransactions.add(pendingTx.getTransaction());
-          return TransactionSelectionResult.invalid(
-              TransactionInvalidReason.UPFRONT_COST_EXCEEDS_BALANCE.name());
+        group -> {
+          final var selectionResults =
+              selector(
+                  group,
+                  TransactionSelectionResult.invalid(
+                      TransactionInvalidReason.UPFRONT_COST_EXCEEDS_BALANCE.name()));
+          parsedTransactions.addAll(
+              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
+          return selectionResults;
         });
 
     assertThat(parsedTransactions.size()).isEqualTo(2);
@@ -658,9 +684,11 @@ public abstract class AbstractPendingTransactionsTestBase {
 
     final List<Transaction> iterationOrder = new ArrayList<>();
     transactions.selectTransactions(
-        pendingTx -> {
-          iterationOrder.add(pendingTx.getTransaction());
-          return SELECTED;
+        group -> {
+          final var selectionResults = selector(group, SELECTED);
+          iterationOrder.addAll(
+              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
+          return selectionResults;
         });
 
     assertThat(iterationOrder).containsExactly(transaction1, transaction2, transaction3);
@@ -676,9 +704,11 @@ public abstract class AbstractPendingTransactionsTestBase {
 
     final List<Transaction> iterationOrder = new ArrayList<>();
     transactions.selectTransactions(
-        pendingTx -> {
-          iterationOrder.add(pendingTx.getTransaction());
-          return SELECTED;
+        group -> {
+          final var selectionResults = selector(group, SELECTED);
+          iterationOrder.addAll(
+              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
+          return selectionResults;
         });
 
     assertThat(iterationOrder).containsExactly(transaction1, transaction2);
@@ -698,9 +728,11 @@ public abstract class AbstractPendingTransactionsTestBase {
 
     final List<Transaction> iterationOrder = new ArrayList<>();
     transactions.selectTransactions(
-        pendingTx -> {
-          iterationOrder.add(pendingTx.getTransaction());
-          return SELECTED;
+        group -> {
+          final var selectionResults = selector(group, SELECTED);
+          iterationOrder.addAll(
+              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
+          return selectionResults;
         });
 
     // Ignoring nonces, the order would be 3, 4, 2, 1 but we have to delay 3 and 2 until after 1.
@@ -933,25 +965,6 @@ public abstract class AbstractPendingTransactionsTestBase {
     addLocalTransactions(3);
   }
 
-  protected void addLocalTransactions(final long... nonces) {
-    addLocalTransactions(transactions, nonces);
-  }
-
-  protected void addLocalTransactions(final PendingTransactions sorter, final long... nonces) {
-    for (final long nonce : nonces) {
-      final Account sender = mock(Account.class);
-      when(sender.getNonce()).thenReturn(1L);
-      sorter.addTransaction(
-          createLocalPendingTransaction(createTransaction(nonce)), Optional.of(sender));
-    }
-  }
-
-  protected static BlockHeader mockBlockHeader() {
-    final BlockHeader blockHeader = mock(BlockHeader.class);
-    when(blockHeader.getBaseFee()).thenReturn(Optional.empty());
-    return blockHeader;
-  }
-
   @Test
   public void shouldPrioritizeGasPriceThenTimeAddedToPool() {
     // Make sure the 100 gas price TX isn't dropped
@@ -988,5 +1001,32 @@ public abstract class AbstractPendingTransactionsTestBase {
     lowGasPriceTransactions.stream()
         .limit(lowGasPriceTransactions.size() - 1)
         .forEach(this::assertTransactionPending);
+  }
+
+  protected void addLocalTransactions(final long... nonces) {
+    addLocalTransactions(transactions, nonces);
+  }
+
+  protected void addLocalTransactions(final PendingTransactions sorter, final long... nonces) {
+    for (final long nonce : nonces) {
+      final Account sender = mock(Account.class);
+      when(sender.getNonce()).thenReturn(1L);
+      sorter.addTransaction(
+          createLocalPendingTransaction(createTransaction(nonce)), Optional.of(sender));
+    }
+  }
+
+  protected static BlockHeader mockBlockHeader() {
+    final BlockHeader blockHeader = mock(BlockHeader.class);
+    when(blockHeader.getBaseFee()).thenReturn(Optional.empty());
+    return blockHeader;
+  }
+
+  private static SequencedMap<PendingTransaction, TransactionSelectionResult> selector(
+      final PendingTransactionGroup group, final TransactionSelectionResult selectionResult) {
+    return group.stream()
+        .collect(
+            Collectors.toMap(
+                Function.identity(), unused -> selectionResult, (a, b) -> a, LinkedHashMap::new));
   }
 }
