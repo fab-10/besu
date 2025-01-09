@@ -25,9 +25,9 @@ import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.SequencedMap;
 
 public interface PendingTransactions {
 
@@ -78,7 +78,7 @@ public interface PendingTransactions {
 
   @FunctionalInterface
   interface TransactionSelector {
-    Map<PendingTransaction, TransactionSelectionResult> evaluateGroup(
+    SequencedMap<PendingTransaction, TransactionSelectionResult> evaluateGroup(
         PendingTransactionGroup group);
 
     default TransactionSelectionResult evaluateTransaction(
