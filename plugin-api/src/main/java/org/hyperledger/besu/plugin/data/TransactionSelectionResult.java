@@ -190,6 +190,13 @@ public class TransactionSelectionResult {
   public static final TransactionSelectionResult AFTER_NOT_SELECTED_IN_GROUP =
       TransactionSelectionResult.invalidTransient("AFTER_NOT_SELECTED_IN_GROUP", false);
 
+  /**
+   * The transaction have not been selected, since it is part of an atomic group where another
+   * transaction was not selected
+   */
+  public static final TransactionSelectionResult ATOMIC_GROUP_FAILURE =
+      TransactionSelectionResult.invalidTransient("ATOMIC_GROUP_FAILURE", false);
+
   private final Status status;
   private final Optional<String> maybeInvalidReason;
 

@@ -71,7 +71,6 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import com.google.common.collect.ImmutableMap;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -417,7 +416,10 @@ public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
         group -> {
           if (group.stream().anyMatch(pendingTx0a::equals)) {
             // the evaluation of the first group tells to the selector to stop
-            return Map.of(pendingTx0a, selectionResult);
+            final var selectionResults =
+                LinkedHashMap.<PendingTransaction, TransactionSelectionResult>newLinkedHashMap(1);
+            selectionResults.put(pendingTx0a, selectionResult);
+            return selectionResults;
           }
           // so the second group must not be evaluated
           // this also ensure the order in which the groups are evaluated
@@ -536,12 +538,14 @@ public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
     final var droppedTxCollector = new DroppedTransactionCollector();
     pendingTransactions.subscribeDroppedTransactions(droppedTxCollector);
     pendingTransactions.selectTransactions(
-        group ->
-            ImmutableMap.of(
-                pendingTx0,
-                TransactionSelectionResult.invalid(NONCE_TOO_LOW.name()),
-                pendingTx1,
-                SENDER_WITH_PREVIOUS_TX_NOT_SELECTED));
+        group -> {
+          final var selectionResults =
+              LinkedHashMap.<PendingTransaction, TransactionSelectionResult>newLinkedHashMap(2);
+          selectionResults.put(
+              pendingTx0, TransactionSelectionResult.invalid(NONCE_TOO_LOW.name()));
+          selectionResults.put(pendingTx1, SENDER_WITH_PREVIOUS_TX_NOT_SELECTED);
+          return selectionResults;
+        });
 
     // assert that first tx is removed from the pool and the score of the following one is not
     // affected
