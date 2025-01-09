@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Configuration level="WARN">
   <Properties>
-    <Property name="root.log.level">INFO</Property>
+    <Property name="root.log.level">TRACE</Property>
     <Property name="console.pattern">%d{yyyy-MM-dd HH:mm:ss.SSSZZZ} | %t | %-5level | %c{1} | %msg</Property>
     <Property name="console.msgdata.maxlen">1000</Property>
   </Properties>
