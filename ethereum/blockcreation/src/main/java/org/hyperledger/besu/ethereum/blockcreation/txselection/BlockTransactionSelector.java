@@ -117,6 +117,7 @@ public class BlockTransactionSelector {
   private final long blockTxsSelectionMaxTime;
   private WorldUpdater blockWorldStateUpdater;
   private volatile TransactionEvaluationContext currTxEvaluationContext;
+  private final SelectorStatesManager selectorStatesManager = new SelectorStatesManager();
 
   public BlockTransactionSelector(
       final MiningConfiguration miningConfiguration,
@@ -164,8 +165,8 @@ public class BlockTransactionSelector {
       final BlockSelectionContext context) {
     return List.of(
         new SkipSenderTransactionSelector(context),
-        new BlockSizeTransactionSelector(context),
-        new BlobSizeTransactionSelector(context),
+        new BlockSizeTransactionSelector(context, selectorStatesManager),
+        new BlobSizeTransactionSelector(context, selectorStatesManager),
         new PriceTransactionSelector(context),
         new BlobPriceTransactionSelector(context),
         new MinPriorityFeePerGasTransactionSelector(context),
@@ -299,6 +300,8 @@ public class BlockTransactionSelector {
     for (final var evaluationContext : evaluationContexts) {
       currTxEvaluationContext = evaluationContext;
 
+      selectorStatesManager.startNewEvaluation(currTxEvaluationContext);
+
       final var preProcessingResult = evaluatePreProcessing(evaluationContext);
       if (!preProcessingResult.selected()) {
         // stop processing the group when a single tx is not selected
@@ -407,6 +410,8 @@ public class BlockTransactionSelector {
       final TransactionEvaluationContext evaluationContext,
       final TransactionProcessingResult processingResult) {
 
+    selectorStatesManager.confirm(evaluationContext.getTransaction().getHash());
+
     for (var selector : transactionSelectors) {
       selector.onTransactionSelected(evaluationContext, processingResult);
     }
@@ -416,6 +421,8 @@ public class BlockTransactionSelector {
   private void notifyNotSelected(
       final TransactionEvaluationContext evaluationContext,
       final TransactionSelectionResult selectionResult) {
+
+    selectorStatesManager.discard(evaluationContext.getTransaction().getHash());
 
     for (var selector : transactionSelectors) {
       selector.onTransactionNotSelected(evaluationContext, selectionResult);
@@ -497,8 +504,8 @@ public class BlockTransactionSelector {
       }
     }
 
-    // do this part outside the synchronized since we do not have control on how log the plugins can
-    // take
+    // do the notification part outside the synchronized block since we have not control on how log
+    // the plugins can take
     if (!tooLate) {
       if (savePendingResults) {
         groupEvaluationResults
@@ -549,27 +556,13 @@ public class BlockTransactionSelector {
   private SequencedMap<PendingTransaction, TransactionSelectionResult> handleGroupEvaluationResults(
       final PendingTransactionGroup group, final GroupEvaluationResults groupEvaluationResults) {
 
-    final var maybeNotSelectedResult = groupEvaluationResults.maybeNotSelected();
+    final var maybeNotSelectedResult = groupEvaluationResults.maybeNotSelectedTx();
 
     maybeNotSelectedResult.ifPresent(
         selRes ->
             // we need to update the selection result because it could be rewritten
             selRes.setSelectionResult(
                 handleTransactionNotSelected(selRes.evaluationContext, selRes.selectionResult)));
-
-    final boolean fullGroupSelected = maybeNotSelectedResult.isEmpty();
-
-    if (fullGroupSelected) {
-      return groupEvaluationResults.stream()
-          .collect(
-              Collectors.toMap(
-                  res -> res.evaluationContext.getPendingTransaction(),
-                  res -> res.selectionResult,
-                  (a, b) -> a,
-                  LinkedHashMap::new));
-    }
-
-    final var failedTx = maybeNotSelectedResult.get().evaluationContext.getPendingTransaction();
 
     boolean afterFailed = false;
 
@@ -581,17 +574,27 @@ public class BlockTransactionSelector {
     while (groupIterator.hasNext()) {
       final var pendingTransaction = groupIterator.next();
       if (afterFailed) {
-        // we do not have results for tx after the failed one, since we skipped processing them
+        // we do not have results for tx after the failed one, since we skipped evaluating them
         selectionResults.put(pendingTransaction, AFTER_NOT_SELECTED_IN_GROUP);
       } else {
         final var selectionResult = resultIterator.next();
 
-        if (failedTx.equals(pendingTransaction)) {
-          selectionResults.put(pendingTransaction, selectionResult.selectionResult);
-          afterFailed = true;
-        } else if (group.isAtomic()) {
-          selectionResults.put(pendingTransaction, ATOMIC_GROUP_FAILURE);
+        if (maybeNotSelectedResult.isPresent()) {
+          // in case a tx in the was not selected, then in case the group is atomic the entire group
+          // is not selected and in any case when we identify the not selected one we need to switch
+          // to the afterFailed branch
+          if (maybeNotSelectedResult
+              .get()
+              .evaluationContext
+              .getPendingTransaction()
+              .equals(pendingTransaction)) {
+            selectionResults.put(pendingTransaction, selectionResult.selectionResult);
+            afterFailed = true;
+          } else if (group.isAtomic()) {
+            selectionResults.put(pendingTransaction, ATOMIC_GROUP_FAILURE);
+          }
         } else {
+          // we reach this point when the tx is selected
           selectionResults.put(pendingTransaction, selectionResult.selectionResult);
         }
       }
@@ -622,7 +625,9 @@ public class BlockTransactionSelector {
             : selectionResult;
 
     transactionSelectionResults.updateNotSelected(evaluationContext.getTransaction(), actualResult);
+
     notifyNotSelected(evaluationContext, actualResult);
+
     LOG.atTrace()
         .setMessage("Not selected {} for block creation with result {}{}, evaluated in {}")
         .addArgument(pendingTransaction::toTraceLog)
@@ -712,10 +717,6 @@ public class BlockTransactionSelector {
       evaluationResults.add(evaluationResult);
     }
 
-    Stream<EvaluationResult> stream() {
-      return evaluationResults.stream();
-    }
-
     Stream<EvaluationResult> streamNotSaved() {
       return evaluationResults.stream().filter(res -> !res.isSaved());
     }
@@ -732,7 +733,7 @@ public class BlockTransactionSelector {
       streamNotNotified().forEach(EvaluationResult::markAsNotified);
     }
 
-    final Optional<EvaluationResult> maybeNotSelected() {
+    final Optional<EvaluationResult> maybeNotSelectedTx() {
       return evaluationResults.stream().filter(res -> !res.selectionResult.selected()).findFirst();
     }
 

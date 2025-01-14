@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.blockcreation.txselection.selectors;
 
 import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockSelectionContext;
+import org.hyperledger.besu.ethereum.blockcreation.txselection.SelectorStatesManager;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionEvaluationContext;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionSelectionResults;
 import org.hyperledger.besu.ethereum.core.Transaction;
@@ -34,8 +35,9 @@ public class BlockSizeTransactionSelector extends AbstractStatefulTransactionSel
 
   private final long blockGasLimit;
 
-  public BlockSizeTransactionSelector(final BlockSelectionContext context) {
-    super(context, 0L);
+  public BlockSizeTransactionSelector(
+      final BlockSelectionContext context, final SelectorStatesManager selectorStatesManager) {
+    super(context, selectorStatesManager, 0L);
     this.blockGasLimit = context.pendingBlockHeader().getGasLimit();
   }
 
@@ -53,7 +55,7 @@ public class BlockSizeTransactionSelector extends AbstractStatefulTransactionSel
       final TransactionEvaluationContext evaluationContext,
       final TransactionSelectionResults transactionSelectionResults) {
 
-    final long cumulativeGasUsed = selectorState.getLast();
+    final long cumulativeGasUsed = getState();
 
     if (transactionTooLargeForBlock(evaluationContext.getTransaction(), cumulativeGasUsed)) {
       LOG.atTrace()
@@ -70,9 +72,7 @@ public class BlockSizeTransactionSelector extends AbstractStatefulTransactionSel
         return TransactionSelectionResult.TX_TOO_LARGE_FOR_REMAINING_GAS;
       }
     }
-    selectorState.appendUnconfirmed(
-        evaluationContext.getPendingTransaction().getHash(),
-        cumulativeGasUsed + evaluationContext.getTransaction().getGasLimit());
+    updateState(cumulativeGasUsed + evaluationContext.getTransaction().getGasLimit());
     return TransactionSelectionResult.SELECTED;
   }
 

@@ -15,46 +15,29 @@
 package org.hyperledger.besu.ethereum.blockcreation.txselection.selectors;
 
 import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockSelectionContext;
-import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionEvaluationContext;
-import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
-import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
+import org.hyperledger.besu.ethereum.blockcreation.txselection.SelectorStatesManager;
 
 /**
  * This class represents an abstract transaction selector which provides methods to evaluate
  * transactions.
  */
-public abstract class AbstractStatefulTransactionSelector<STATE> extends AbstractTransactionSelector {
-  protected final SelectorState<STATE> selectorState;
+public abstract class AbstractStatefulTransactionSelector<S> extends AbstractTransactionSelector {
+  private final SelectorStatesManager selectorStatesManager;
 
   public AbstractStatefulTransactionSelector(
-      final BlockSelectionContext context, final STATE initialState) {
+      final BlockSelectionContext context,
+      final SelectorStatesManager selectorStatesManager,
+      final S initialState) {
     super(context);
-    selectorState = new SelectorState<>(initialState);
+    this.selectorStatesManager = selectorStatesManager;
+    selectorStatesManager.createSelectorState(this, initialState);
   }
 
-  /**
-   * Method called when a transaction is selected to be added to a block.
-   *
-   * @param evaluationContext The current selection context
-   * @param processingResult The result of processing the selected transaction.
-   */
-  @Override
-  public void onTransactionSelected(
-      final TransactionEvaluationContext evaluationContext,
-      final TransactionProcessingResult processingResult) {
-    selectorState.confirm(evaluationContext.getPendingTransaction().getTransaction().getHash());
+  protected void updateState(final S newState) {
+    selectorStatesManager.updateSelectorState(this, newState);
   }
 
-  /**
-   * Method called when a transaction is not selected to be added to a block.
-   *
-   * @param evaluationContext The current selection context
-   * @param transactionSelectionResult The transaction selection result
-   */
-  @Override
-  public void onTransactionNotSelected(
-      final TransactionEvaluationContext evaluationContext,
-      final TransactionSelectionResult transactionSelectionResult) {
-    selectorState.discard(evaluationContext.getPendingTransaction().getTransaction().getHash());
+  protected S getState() {
+    return selectorStatesManager.getSelectorState(this);
   }
 }
