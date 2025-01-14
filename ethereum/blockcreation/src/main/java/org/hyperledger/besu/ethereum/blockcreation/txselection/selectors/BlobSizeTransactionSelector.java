@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.blockcreation.txselection.selectors;
 
 import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockSelectionContext;
+import org.hyperledger.besu.ethereum.blockcreation.txselection.SelectorStatesManager;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionEvaluationContext;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionSelectionResults;
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
@@ -31,8 +32,9 @@ import org.slf4j.LoggerFactory;
 public class BlobSizeTransactionSelector extends AbstractStatefulTransactionSelector<Long> {
   private static final Logger LOG = LoggerFactory.getLogger(BlobSizeTransactionSelector.class);
 
-  public BlobSizeTransactionSelector(final BlockSelectionContext context) {
-    super(context, 0L);
+  public BlobSizeTransactionSelector(
+      final BlockSelectionContext context, final SelectorStatesManager selectorStatesManager) {
+    super(context, selectorStatesManager, 0L);
   }
 
   /**
@@ -55,7 +57,7 @@ public class BlobSizeTransactionSelector extends AbstractStatefulTransactionSele
     final var tx = evaluationContext.getTransaction();
     if (tx.getType().supportsBlob()) {
 
-      final var cumulativeBlobGasUsed = selectorState.getLast();
+      final var cumulativeBlobGasUsed = getState();
 
       final var remainingBlobGas =
           context.gasLimitCalculator().currentBlobGasLimit() - cumulativeBlobGasUsed;
@@ -83,7 +85,7 @@ public class BlobSizeTransactionSelector extends AbstractStatefulTransactionSele
         return TransactionSelectionResult.TX_TOO_LARGE_FOR_REMAINING_BLOB_GAS;
       }
 
-      selectorState.appendUnconfirmed(tx.getHash(), cumulativeBlobGasUsed + requestedBlobGas);
+      updateState(cumulativeBlobGasUsed + requestedBlobGas);
     }
     return TransactionSelectionResult.SELECTED;
   }
