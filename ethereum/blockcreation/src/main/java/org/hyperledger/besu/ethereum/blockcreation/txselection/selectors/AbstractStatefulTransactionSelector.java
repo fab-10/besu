@@ -16,7 +16,6 @@ package org.hyperledger.besu.ethereum.blockcreation.txselection.selectors;
 
 import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockSelectionContext;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionEvaluationContext;
-import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionSelectionResults;
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 
@@ -24,37 +23,14 @@ import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
  * This class represents an abstract transaction selector which provides methods to evaluate
  * transactions.
  */
-public abstract class AbstractTransactionSelector {
-  protected final BlockSelectionContext context;
+public abstract class AbstractStatefulTransactionSelector<T> extends AbstractTransactionSelector {
+  protected final SelectorState<T> selectorState;
 
-  public AbstractTransactionSelector(final BlockSelectionContext context) {
-    this.context = context;
+  public AbstractStatefulTransactionSelector(
+      final BlockSelectionContext context, final T initialState) {
+    super(context);
+    selectorState = new SelectorState<>(initialState);
   }
-
-  /**
-   * Evaluates a transaction in the context of other transactions in the same block.
-   *
-   * @param evaluationContext The current selection session data.
-   * @param blockTransactionResults The results of other transaction evaluations in the same block.
-   * @return The result of the transaction evaluation
-   */
-  public abstract TransactionSelectionResult evaluateTransactionPreProcessing(
-      final TransactionEvaluationContext evaluationContext,
-      final TransactionSelectionResults blockTransactionResults);
-
-  /**
-   * Evaluates a transaction considering other transactions in the same block and a transaction
-   * processing result.
-   *
-   * @param evaluationContext The current selection session data.
-   * @param blockTransactionResults The results of other transaction evaluations in the same block.
-   * @param processingResult The result of transaction processing.
-   * @return The result of the transaction evaluation
-   */
-  public abstract TransactionSelectionResult evaluateTransactionPostProcessing(
-      final TransactionEvaluationContext evaluationContext,
-      final TransactionSelectionResults blockTransactionResults,
-      final TransactionProcessingResult processingResult);
 
   /**
    * Method called when a transaction is selected to be added to a block.
@@ -62,9 +38,12 @@ public abstract class AbstractTransactionSelector {
    * @param evaluationContext The current selection context
    * @param processingResult The result of processing the selected transaction.
    */
+  @Override
   public void onTransactionSelected(
       final TransactionEvaluationContext evaluationContext,
-      final TransactionProcessingResult processingResult) {}
+      final TransactionProcessingResult processingResult) {
+    selectorState.confirm(evaluationContext.getPendingTransaction().getTransaction().getHash());
+  }
 
   /**
    * Method called when a transaction is not selected to be added to a block.
@@ -72,7 +51,10 @@ public abstract class AbstractTransactionSelector {
    * @param evaluationContext The current selection context
    * @param transactionSelectionResult The transaction selection result
    */
+  @Override
   public void onTransactionNotSelected(
       final TransactionEvaluationContext evaluationContext,
-      final TransactionSelectionResult transactionSelectionResult) {}
+      final TransactionSelectionResult transactionSelectionResult) {
+    selectorState.discard(evaluationContext.getPendingTransaction().getTransaction().getHash());
+  }
 }
