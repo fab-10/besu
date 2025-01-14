@@ -28,11 +28,11 @@ import org.slf4j.LoggerFactory;
  * evaluating transactions based on blobs size. It checks if a transaction supports blobs, and if
  * so, checks that there is enough remaining blob gas in the block to fit the blobs of the tx.
  */
-public class BlobSizeTransactionSelector extends AbstractTransactionSelector {
+public class BlobSizeTransactionSelector extends AbstractStatefulTransactionSelector<Long> {
   private static final Logger LOG = LoggerFactory.getLogger(BlobSizeTransactionSelector.class);
 
   public BlobSizeTransactionSelector(final BlockSelectionContext context) {
-    super(context);
+    super(context, 0L);
   }
 
   /**
@@ -55,9 +55,10 @@ public class BlobSizeTransactionSelector extends AbstractTransactionSelector {
     final var tx = evaluationContext.getTransaction();
     if (tx.getType().supportsBlob()) {
 
+      final var cumulativeBlobGasUsed = selectorState.getLast();
+
       final var remainingBlobGas =
-          context.gasLimitCalculator().currentBlobGasLimit()
-              - transactionSelectionResults.getCumulativeBlobGasUsed();
+          context.gasLimitCalculator().currentBlobGasLimit() - cumulativeBlobGasUsed;
 
       if (remainingBlobGas == 0) {
         LOG.atTrace()
@@ -81,6 +82,8 @@ public class BlobSizeTransactionSelector extends AbstractTransactionSelector {
             .log();
         return TransactionSelectionResult.TX_TOO_LARGE_FOR_REMAINING_BLOB_GAS;
       }
+
+      selectorState.appendUnconfirmed(tx.getHash(), cumulativeBlobGasUsed + requestedBlobGas);
     }
     return TransactionSelectionResult.SELECTED;
   }
