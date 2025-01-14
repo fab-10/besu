@@ -470,8 +470,6 @@ public class BlockTransactionSelector {
         transaction.getGasLimit() - processingResult.getGasRemaining();
     final long cumulativeGasUsed =
         transactionSelectionResults.getCumulativeGasUsed() + gasUsedByTransaction;
-    final long blobGasUsed =
-        blockSelectionContext.gasCalculator().blobGasCost(transaction.getBlobCount());
 
     final TransactionReceipt receipt =
         transactionReceiptFactory.create(
@@ -481,8 +479,7 @@ public class BlockTransactionSelector {
     evaluationContext.getEvaluationTimer().stop();
 
     final var evaluationResult =
-        new EvaluationResult(
-            evaluationContext, processingResult, receipt, gasUsedByTransaction, blobGasUsed);
+        new EvaluationResult(evaluationContext, processingResult, receipt, gasUsedByTransaction);
 
     groupEvaluationResults.add(evaluationResult);
 
@@ -535,10 +532,7 @@ public class BlockTransactionSelector {
         .forEach(
             selRes -> {
               transactionSelectionResults.updateSelected(
-                  selRes.evaluationContext.getTransaction(),
-                  selRes.receipt,
-                  selRes.gasUsed,
-                  selRes.blobGasUsed);
+                  selRes.evaluationContext.getTransaction(), selRes.receipt, selRes.gasUsed);
               LOG.atTrace()
                   .setMessage("Selected {} for block creation, evaluated in {}")
                   .addArgument(selRes.evaluationContext.getTransaction()::toTraceLog)
@@ -753,7 +747,6 @@ public class BlockTransactionSelector {
     private final TransactionProcessingResult processingResult;
     private final TransactionReceipt receipt;
     private final long gasUsed;
-    private final long blobGasUsed;
     private boolean saved = false;
     private boolean notified = false;
     private TransactionSelectionResult selectionResult;
@@ -761,7 +754,7 @@ public class BlockTransactionSelector {
     public EvaluationResult(
         final TransactionEvaluationContext evaluationContext,
         final TransactionSelectionResult selectionResult) {
-      this(evaluationContext, null, null, -1, -1);
+      this(evaluationContext, null, null, -1);
       this.setSelectionResult(selectionResult);
     }
 
@@ -769,7 +762,7 @@ public class BlockTransactionSelector {
         final TransactionEvaluationContext evaluationContext,
         final TransactionProcessingResult processingResult,
         final TransactionSelectionResult selectionResult) {
-      this(evaluationContext, processingResult, null, -1, -1);
+      this(evaluationContext, processingResult, null, -1);
       this.setSelectionResult(selectionResult);
     }
 
@@ -777,13 +770,11 @@ public class BlockTransactionSelector {
         final TransactionEvaluationContext evaluationContext,
         final TransactionProcessingResult processingResult,
         final TransactionReceipt receipt,
-        final long gasUsed,
-        final long blobGasUsed) {
+        final long gasUsed) {
       this.evaluationContext = evaluationContext;
       this.processingResult = processingResult;
       this.receipt = receipt;
       this.gasUsed = gasUsed;
-      this.blobGasUsed = blobGasUsed;
     }
 
     void markAsSaved() {
