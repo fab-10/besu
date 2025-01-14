@@ -23,11 +23,11 @@ import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
  * This class represents an abstract transaction selector which provides methods to evaluate
  * transactions.
  */
-public abstract class AbstractStatefulTransactionSelector<T> extends AbstractTransactionSelector {
-  protected final SelectorState<T> selectorState;
+public abstract class AbstractStatefulTransactionSelector<STATE> extends AbstractTransactionSelector {
+  protected final SelectorState<STATE> selectorState;
 
   public AbstractStatefulTransactionSelector(
-      final BlockSelectionContext context, final T initialState) {
+      final BlockSelectionContext context, final STATE initialState) {
     super(context);
     selectorState = new SelectorState<>(initialState);
   }

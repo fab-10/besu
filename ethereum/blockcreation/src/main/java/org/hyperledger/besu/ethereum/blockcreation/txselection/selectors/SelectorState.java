@@ -14,8 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.blockcreation.txselection.selectors;
 
-import static com.google.common.base.Preconditions.checkArgument;
-
 import org.hyperledger.besu.datatypes.Hash;
 
 import java.util.LinkedHashMap;
@@ -50,11 +48,10 @@ public class SelectorState<T> {
    * Sets the state referred by the specified tx hash has the confirmed one, allowing to forget all
    * the preceding entries.
    *
-   * @param txHash the tx hash, it must exist in the pending list, otherwise an exception is thrown
+   * @param txHash the tx hash, could not be present, in which case there is no change to the
+   *     confirmed state
    */
   public void confirm(final Hash txHash) {
-    checkArgument(
-        pendingState.containsKey(txHash), "The specified tx hash has no associated pending state.");
 
     final var it = pendingState.entrySet().iterator();
     while (it.hasNext()) {
