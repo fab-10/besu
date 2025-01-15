@@ -33,7 +33,6 @@ import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.datatypes.VersionedHash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockSelectionContext;
-import org.hyperledger.besu.ethereum.blockcreation.txselection.SelectorStatesManager;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionEvaluationContext;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionSelectionResults;
 import org.hyperledger.besu.ethereum.core.Transaction;
@@ -41,6 +40,7 @@ import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.evm.gascalculator.CancunGasCalculator;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
+import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
 
 import java.util.Optional;
 import java.util.stream.IntStream;
@@ -70,7 +70,7 @@ class BlobSizeTransactionSelectorTest {
 
   @Mock TransactionSelectionResults selectionResults;
 
-  SelectorStatesManager selectorStatesManager;
+  SelectorsStateManager selectorsStateManager;
   BlobSizeTransactionSelector selector;
 
   @BeforeEach
@@ -79,8 +79,8 @@ class BlobSizeTransactionSelectorTest {
     when(blockSelectionContext.gasCalculator().blobGasCost(anyLong()))
         .thenAnswer(iom -> BLOB_GAS_PER_BLOB * iom.getArgument(0, Long.class));
 
-    selectorStatesManager = new SelectorStatesManager();
-    selector = new BlobSizeTransactionSelector(blockSelectionContext, selectorStatesManager);
+    selectorsStateManager = new SelectorsStateManager();
+    selector = new BlobSizeTransactionSelector(blockSelectionContext, selectorsStateManager);
   }
 
   @Test
@@ -92,7 +92,7 @@ class BlobSizeTransactionSelectorTest {
         new TransactionEvaluationContext(
             blockSelectionContext.pendingBlockHeader(), firstBlobTx, null, null, null);
 
-    selectorStatesManager.startNewEvaluation(txEvaluationContext);
+    selectorsStateManager.startNewEvaluation(txEvaluationContext);
 
     final var result =
         selector.evaluateTransactionPreProcessing(txEvaluationContext, selectionResults);
@@ -105,7 +105,7 @@ class BlobSizeTransactionSelectorTest {
         new TransactionEvaluationContext(
             blockSelectionContext.pendingBlockHeader(), nonBlobTx, null, null, null);
 
-    selectorStatesManager.startNewEvaluation(nonBlobTxEvaluationContext);
+    selectorsStateManager.startNewEvaluation(nonBlobTxEvaluationContext);
 
     assertThat(
             selector.evaluateTransactionPreProcessing(nonBlobTxEvaluationContext, selectionResults))
@@ -120,7 +120,7 @@ class BlobSizeTransactionSelectorTest {
         new TransactionEvaluationContext(
             blockSelectionContext.pendingBlockHeader(), firstBlobTx, null, null, null);
 
-    selectorStatesManager.startNewEvaluation(txEvaluationContext);
+    selectorsStateManager.startNewEvaluation(txEvaluationContext);
     final var result =
         selector.evaluateTransactionPreProcessing(txEvaluationContext, selectionResults);
     assertThat(result).isEqualTo(TransactionSelectionResult.SELECTED);
@@ -133,7 +133,7 @@ class BlobSizeTransactionSelectorTest {
         new TransactionEvaluationContext(
             blockSelectionContext.pendingBlockHeader(), blobTx1, null, null, null);
 
-    selectorStatesManager.startNewEvaluation(txEvaluationContext1);
+    selectorsStateManager.startNewEvaluation(txEvaluationContext1);
     selector.evaluateTransactionPreProcessing(txEvaluationContext1, selectionResults);
 
     final var blobTx2 = createBlobPendingTransaction(1);
@@ -141,7 +141,7 @@ class BlobSizeTransactionSelectorTest {
         new TransactionEvaluationContext(
             blockSelectionContext.pendingBlockHeader(), blobTx2, null, null, null);
 
-    selectorStatesManager.startNewEvaluation(txEvaluationContext2);
+    selectorsStateManager.startNewEvaluation(txEvaluationContext2);
     final var result =
         selector.evaluateTransactionPreProcessing(txEvaluationContext2, selectionResults);
     assertThat(result).isEqualTo(TransactionSelectionResult.BLOBS_FULL);
@@ -155,14 +155,14 @@ class BlobSizeTransactionSelectorTest {
     final var txEvaluationContext1 =
         new TransactionEvaluationContext(
             blockSelectionContext.pendingBlockHeader(), blobTx1, null, null, null);
-    selectorStatesManager.startNewEvaluation(txEvaluationContext1);
+    selectorsStateManager.startNewEvaluation(txEvaluationContext1);
     selector.evaluateTransactionPreProcessing(txEvaluationContext1, selectionResults);
 
     final var blobTx2 = createBlobPendingTransaction(MAX_BLOBS);
     final var txEvaluationContext2 =
         new TransactionEvaluationContext(
             blockSelectionContext.pendingBlockHeader(), blobTx2, null, null, null);
-    selectorStatesManager.startNewEvaluation(txEvaluationContext2);
+    selectorsStateManager.startNewEvaluation(txEvaluationContext2);
     final var result =
         selector.evaluateTransactionPreProcessing(txEvaluationContext2, selectionResults);
     assertThat(result).isEqualTo(TransactionSelectionResult.TX_TOO_LARGE_FOR_REMAINING_BLOB_GAS);

@@ -17,6 +17,7 @@ package org.hyperledger.besu.plugin.services;
 import org.hyperledger.besu.plugin.Unstable;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelectorFactory;
+import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
 
 /** Transaction selection service interface */
 @Unstable
@@ -28,6 +29,9 @@ public interface TransactionSelectionService extends BesuService {
    * @return the transaction selector plugin
    */
   PluginTransactionSelector createPluginTransactionSelector();
+
+  PluginTransactionSelector createPluginTransactionSelector(
+      SelectorsStateManager selectorsStateManager);
 
   /**
    * Registers the transaction selector factory with the service

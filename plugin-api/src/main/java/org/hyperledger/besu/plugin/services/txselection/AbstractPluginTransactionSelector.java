@@ -12,23 +12,17 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-package org.hyperledger.besu.ethereum.blockcreation.txselection.selectors;
-
-import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockSelectionContext;
-import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
+package org.hyperledger.besu.plugin.services.txselection;
 
 /**
- * This class represents an abstract transaction selector which provides methods to evaluate
- * transactions.
+ * This class represents an abstract plugin transaction selector which provides manage the selector
+ * state.
  */
-public abstract class AbstractStatefulTransactionSelector<S> extends AbstractTransactionSelector {
+public abstract class AbstractPluginTransactionSelector<S> implements PluginTransactionSelector {
   private final SelectorsStateManager selectorsStateManager;
 
-  public AbstractStatefulTransactionSelector(
-      final BlockSelectionContext context,
-      final SelectorsStateManager selectorsStateManager,
-      final S initialState) {
-    super(context);
+  public AbstractPluginTransactionSelector(
+      final SelectorsStateManager selectorsStateManager, final S initialState) {
     this.selectorsStateManager = selectorsStateManager;
     selectorsStateManager.createSelectorState(this, initialState);
   }
@@ -39,5 +33,9 @@ public abstract class AbstractStatefulTransactionSelector<S> extends AbstractTra
 
   protected S getState() {
     return selectorsStateManager.getSelectorState(this);
+  }
+
+  protected S getConfirmedState() {
+    return selectorsStateManager.getSelectorConfirmedState(this);
   }
 }
