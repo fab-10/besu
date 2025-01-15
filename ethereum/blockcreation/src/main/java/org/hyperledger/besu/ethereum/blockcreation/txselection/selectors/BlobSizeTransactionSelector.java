@@ -15,11 +15,11 @@
 package org.hyperledger.besu.ethereum.blockcreation.txselection.selectors;
 
 import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockSelectionContext;
-import org.hyperledger.besu.ethereum.blockcreation.txselection.SelectorStatesManager;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionEvaluationContext;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionSelectionResults;
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
+import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -33,8 +33,8 @@ public class BlobSizeTransactionSelector extends AbstractStatefulTransactionSele
   private static final Logger LOG = LoggerFactory.getLogger(BlobSizeTransactionSelector.class);
 
   public BlobSizeTransactionSelector(
-      final BlockSelectionContext context, final SelectorStatesManager selectorStatesManager) {
-    super(context, selectorStatesManager, 0L);
+      final BlockSelectionContext context, final SelectorsStateManager selectorsStateManager) {
+    super(context, selectorsStateManager, 0L);
   }
 
   /**

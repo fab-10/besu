@@ -12,60 +12,54 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-package org.hyperledger.besu.ethereum.blockcreation.txselection;
+package org.hyperledger.besu.plugin.services.txselection;
 
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.ethereum.blockcreation.txselection.selectors.AbstractTransactionSelector;
+import org.hyperledger.besu.datatypes.PendingTransaction;
 
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.SequencedMap;
 
-public class SelectorStatesManager {
-  private final SequencedMap<Hash, Map<AbstractTransactionSelector, Object>> selectorStates =
+public class SelectorsStateManager {
+  private final SequencedMap<Hash, Map<TransactionSelector, Object>> unconfirmedStates =
       new LinkedHashMap<>();
-  private Map<AbstractTransactionSelector, Object> initialState = new HashMap<>();
-  private Map<AbstractTransactionSelector, Object> workingState;
+  private Map<TransactionSelector, Object> confirmedState = new HashMap<>();
+  private Map<TransactionSelector, Object> workingState;
 
-  public <S> void createSelectorState(
-      final AbstractTransactionSelector selector, final S initialValue) {
-    initialState.put(selector, initialValue);
+  public <S> void createSelectorState(final TransactionSelector selector, final S initialValue) {
+    confirmedState.put(selector, initialValue);
   }
 
-  public void startNewEvaluation(final TransactionEvaluationContext evaluationContext) {
+  public void startNewEvaluation(
+      final TransactionEvaluationContext<? extends PendingTransaction> evaluationContext) {
     workingState = new HashMap<>(getLast());
-    selectorStates.putLast(evaluationContext.getTransaction().getHash(), workingState);
+    unconfirmedStates.putLast(
+        evaluationContext.getPendingTransaction().getTransaction().getHash(), workingState);
   }
 
-  public <S> void updateSelectorState(
-      final AbstractTransactionSelector selector, final S newValue) {
+  /**
+   * Update the selector unconfirmed state related to the current evaluated tx context. The value
+   * remains unconfirmed, meaning it could be discarded, until {@link
+   * SelectorsStateManager#confirm(Hash)} is called.
+   *
+   * @param selector The selector
+   * @param newValue The state to set as the unconfirmed
+   */
+  public <S> void updateSelectorState(final TransactionSelector selector, final S newValue) {
     workingState.put(selector, newValue);
   }
 
   @SuppressWarnings("unchecked")
-  public <S> S getSelectorState(final AbstractTransactionSelector selector) {
+  public <S> S getSelectorState(final TransactionSelector selector) {
     return (S) workingState.get(selector);
   }
 
-  //  public void endEvaluation(final TransactionEvaluationContext evaluationContext) {
-  //    pendingState.putLast(evaluationContext.getTransaction().getHash(), workingState);
-  //  }
-  //
-  //
-  //  /**
-  //   * Append the unconfirmed state related to the passed tx hash to the pending list. The
-  // appended
-  //   * value remains pending, meaning it could be discarded, until {@link
-  // SelectionStateManager#confirm(Hash)}
-  //   * is called for the same tx hash or a following one.
-  //   *
-  //   * @param txHash Hash of the transaction
-  //   * @param unconfirmedState The state to set as the last unconfirmed
-  //   */
-  //  public void appendUnconfirmed(final Hash txHash, final T unconfirmedState) {
-  //    pendingState.putLast(txHash, unconfirmedState);
-  //  }
+  @SuppressWarnings("unchecked")
+  public <S> S getSelectorConfirmedState(final TransactionSelector selector) {
+    return (S) confirmedState.get(selector);
+  }
 
   /**
    * Sets the state referred by the specified tx hash has the confirmed one, allowing to forget all
@@ -75,13 +69,12 @@ public class SelectorStatesManager {
    *     confirmed state
    */
   public void confirm(final Hash txHash) {
-
-    final var it = selectorStates.entrySet().iterator();
+    final var it = unconfirmedStates.entrySet().iterator();
     while (it.hasNext()) {
       final var entry = it.next();
       it.remove();
       if (entry.getKey().equals(txHash)) {
-        initialState = entry.getValue();
+        confirmedState = entry.getValue();
         break;
       }
     }
@@ -95,7 +88,7 @@ public class SelectorStatesManager {
    */
   public void discard(final Hash txHash) {
     boolean afterRemoved = false;
-    final var it = selectorStates.entrySet().iterator();
+    final var it = unconfirmedStates.entrySet().iterator();
     while (it.hasNext()) {
       final var entry = it.next();
       if (afterRemoved || entry.getKey().equals(txHash)) {
@@ -111,10 +104,10 @@ public class SelectorStatesManager {
    *
    * @return a map with the line count per module
    */
-  public Map<AbstractTransactionSelector, Object> getLast() {
-    if (selectorStates.isEmpty()) {
-      return initialState;
+  private Map<TransactionSelector, Object> getLast() {
+    if (unconfirmedStates.isEmpty()) {
+      return confirmedState;
     }
-    return selectorStates.lastEntry().getValue();
+    return unconfirmedStates.lastEntry().getValue();
   }
 }

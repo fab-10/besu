@@ -15,12 +15,12 @@
 package org.hyperledger.besu.ethereum.blockcreation.txselection.selectors;
 
 import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockSelectionContext;
-import org.hyperledger.besu.ethereum.blockcreation.txselection.SelectorStatesManager;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionEvaluationContext;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionSelectionResults;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
+import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -36,8 +36,8 @@ public class BlockSizeTransactionSelector extends AbstractStatefulTransactionSel
   private final long blockGasLimit;
 
   public BlockSizeTransactionSelector(
-      final BlockSelectionContext context, final SelectorStatesManager selectorStatesManager) {
-    super(context, selectorStatesManager, 0L);
+      final BlockSelectionContext context, final SelectorsStateManager selectorsStateManager) {
+    super(context, selectorsStateManager, 0L);
     this.blockGasLimit = context.pendingBlockHeader().getGasLimit();
   }
 

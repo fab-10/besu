@@ -55,6 +55,7 @@ import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
+import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -117,7 +118,7 @@ public class BlockTransactionSelector {
   private final long blockTxsSelectionMaxTime;
   private WorldUpdater blockWorldStateUpdater;
   private volatile TransactionEvaluationContext currTxEvaluationContext;
-  private final SelectorStatesManager selectorStatesManager = new SelectorStatesManager();
+  private final SelectorsStateManager selectorsStateManager;
 
   public BlockTransactionSelector(
       final MiningConfiguration miningConfiguration,
@@ -135,7 +136,8 @@ public class BlockTransactionSelector {
       final GasLimitCalculator gasLimitCalculator,
       final BlockHashProcessor blockHashProcessor,
       final PluginTransactionSelector pluginTransactionSelector,
-      final EthScheduler ethScheduler) {
+      final EthScheduler ethScheduler,
+      final SelectorsStateManager selectorsStateManager) {
     this.transactionProcessor = transactionProcessor;
     this.blockchain = blockchain;
     this.worldState = worldState;
@@ -153,7 +155,8 @@ public class BlockTransactionSelector {
             blobGasPrice,
             miningBeneficiary,
             transactionPool);
-    transactionSelectors = createTransactionSelectors(blockSelectionContext);
+    this.selectorsStateManager = selectorsStateManager;
+    transactionSelectors = createTransactionSelectors(blockSelectionContext, selectorsStateManager);
     this.pluginTransactionSelector = pluginTransactionSelector;
     this.operationTracer =
         new InterruptibleOperationTracer(pluginTransactionSelector.getOperationTracer());
@@ -162,11 +165,11 @@ public class BlockTransactionSelector {
   }
 
   private List<AbstractTransactionSelector> createTransactionSelectors(
-      final BlockSelectionContext context) {
+      final BlockSelectionContext context, final SelectorsStateManager selectorsStateManager) {
     return List.of(
         new SkipSenderTransactionSelector(context),
-        new BlockSizeTransactionSelector(context, selectorStatesManager),
-        new BlobSizeTransactionSelector(context, selectorStatesManager),
+        new BlockSizeTransactionSelector(context, selectorsStateManager),
+        new BlobSizeTransactionSelector(context, selectorsStateManager),
         new PriceTransactionSelector(context),
         new BlobPriceTransactionSelector(context),
         new MinPriorityFeePerGasTransactionSelector(context),
@@ -300,7 +303,7 @@ public class BlockTransactionSelector {
     for (final var evaluationContext : evaluationContexts) {
       currTxEvaluationContext = evaluationContext;
 
-      selectorStatesManager.startNewEvaluation(currTxEvaluationContext);
+      selectorsStateManager.startNewEvaluation(currTxEvaluationContext);
 
       final var preProcessingResult = evaluatePreProcessing(evaluationContext);
       if (!preProcessingResult.selected()) {
@@ -410,7 +413,7 @@ public class BlockTransactionSelector {
       final TransactionEvaluationContext evaluationContext,
       final TransactionProcessingResult processingResult) {
 
-    selectorStatesManager.confirm(evaluationContext.getTransaction().getHash());
+    selectorsStateManager.confirm(evaluationContext.getTransaction().getHash());
 
     for (var selector : transactionSelectors) {
       selector.onTransactionSelected(evaluationContext, processingResult);
@@ -422,7 +425,7 @@ public class BlockTransactionSelector {
       final TransactionEvaluationContext evaluationContext,
       final TransactionSelectionResult selectionResult) {
 
-    selectorStatesManager.discard(evaluationContext.getTransaction().getHash());
+    selectorsStateManager.discard(evaluationContext.getTransaction().getHash());
 
     for (var selector : transactionSelectors) {
       selector.onTransactionNotSelected(evaluationContext, selectionResult);

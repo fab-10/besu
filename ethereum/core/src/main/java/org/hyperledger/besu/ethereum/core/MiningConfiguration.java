@@ -19,6 +19,7 @@ import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.plugin.services.TransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelectorFactory;
+import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
 import org.hyperledger.besu.util.number.PositiveNumber;
 
 import java.time.Duration;
@@ -169,6 +170,12 @@ public abstract class MiningConfiguration {
     return new TransactionSelectionService() {
       @Override
       public PluginTransactionSelector createPluginTransactionSelector() {
+        return PluginTransactionSelector.ACCEPT_ALL;
+      }
+
+      @Override
+      public PluginTransactionSelector createPluginTransactionSelector(
+          final SelectorsStateManager selectorsStateManager) {
         return PluginTransactionSelector.ACCEPT_ALL;
       }
 
