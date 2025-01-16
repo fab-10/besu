@@ -20,6 +20,7 @@ import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionSelect
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
+import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager.LongState;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -29,12 +30,12 @@ import org.slf4j.LoggerFactory;
  * evaluating transactions based on blobs size. It checks if a transaction supports blobs, and if
  * so, checks that there is enough remaining blob gas in the block to fit the blobs of the tx.
  */
-public class BlobSizeTransactionSelector extends AbstractStatefulTransactionSelector<Long> {
+public class BlobSizeTransactionSelector extends AbstractStatefulTransactionSelector<LongState> {
   private static final Logger LOG = LoggerFactory.getLogger(BlobSizeTransactionSelector.class);
 
   public BlobSizeTransactionSelector(
       final BlockSelectionContext context, final SelectorsStateManager selectorsStateManager) {
-    super(context, selectorsStateManager, 0L);
+    super(context, selectorsStateManager, new LongState(0L));
   }
 
   /**
@@ -57,7 +58,8 @@ public class BlobSizeTransactionSelector extends AbstractStatefulTransactionSele
     final var tx = evaluationContext.getTransaction();
     if (tx.getType().supportsBlob()) {
 
-      final var cumulativeBlobGasUsed = getState();
+      final var selectorState = getWorkingState();
+      final var cumulativeBlobGasUsed = selectorState.getValue();
 
       final var remainingBlobGas =
           context.gasLimitCalculator().currentBlobGasLimit() - cumulativeBlobGasUsed;
@@ -85,7 +87,7 @@ public class BlobSizeTransactionSelector extends AbstractStatefulTransactionSele
         return TransactionSelectionResult.TX_TOO_LARGE_FOR_REMAINING_BLOB_GAS;
       }
 
-      updateState(cumulativeBlobGasUsed + requestedBlobGas);
+      selectorState.setValue(cumulativeBlobGasUsed + requestedBlobGas);
     }
     return TransactionSelectionResult.SELECTED;
   }

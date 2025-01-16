@@ -21,6 +21,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
+import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager.LongState;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -30,14 +31,14 @@ import org.slf4j.LoggerFactory;
  * evaluating transactions based on block size. It checks if a transaction is too large for the
  * block and determines the selection result accordingly.
  */
-public class BlockSizeTransactionSelector extends AbstractStatefulTransactionSelector<Long> {
+public class BlockSizeTransactionSelector extends AbstractStatefulTransactionSelector<LongState> {
   private static final Logger LOG = LoggerFactory.getLogger(BlockSizeTransactionSelector.class);
 
   private final long blockGasLimit;
 
   public BlockSizeTransactionSelector(
       final BlockSelectionContext context, final SelectorsStateManager selectorsStateManager) {
-    super(context, selectorsStateManager, 0L);
+    super(context, selectorsStateManager, new LongState(0L));
     this.blockGasLimit = context.pendingBlockHeader().getGasLimit();
   }
 
@@ -55,7 +56,8 @@ public class BlockSizeTransactionSelector extends AbstractStatefulTransactionSel
       final TransactionEvaluationContext evaluationContext,
       final TransactionSelectionResults transactionSelectionResults) {
 
-    final long cumulativeGasUsed = getState();
+    final var selectorState = getWorkingState();
+    final long cumulativeGasUsed = selectorState.getValue();
 
     if (transactionTooLargeForBlock(evaluationContext.getTransaction(), cumulativeGasUsed)) {
       LOG.atTrace()
@@ -72,7 +74,7 @@ public class BlockSizeTransactionSelector extends AbstractStatefulTransactionSel
         return TransactionSelectionResult.TX_TOO_LARGE_FOR_REMAINING_GAS;
       }
     }
-    updateState(cumulativeGasUsed + evaluationContext.getTransaction().getGasLimit());
+    selectorState.setValue(cumulativeGasUsed + evaluationContext.getTransaction().getGasLimit());
     return TransactionSelectionResult.SELECTED;
   }
 
