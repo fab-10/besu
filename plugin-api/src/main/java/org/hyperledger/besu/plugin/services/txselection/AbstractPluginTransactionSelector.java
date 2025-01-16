@@ -14,11 +14,14 @@
  */
 package org.hyperledger.besu.plugin.services.txselection;
 
+import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager.CopiableState;
+
 /**
  * This class represents an abstract plugin transaction selector which provides manage the selector
  * state.
  */
-public abstract class AbstractPluginTransactionSelector<S> implements PluginTransactionSelector {
+public abstract class AbstractPluginTransactionSelector<S extends CopiableState<S>>
+    implements PluginTransactionSelector {
   private final SelectorsStateManager selectorsStateManager;
 
   public AbstractPluginTransactionSelector(
@@ -27,12 +30,8 @@ public abstract class AbstractPluginTransactionSelector<S> implements PluginTran
     selectorsStateManager.createSelectorState(this, initialState);
   }
 
-  protected void updateState(final S newState) {
-    selectorsStateManager.updateSelectorState(this, newState);
-  }
-
-  protected S getState() {
-    return selectorsStateManager.getSelectorState(this);
+  protected S getWorkingState() {
+    return selectorsStateManager.getSelectorWorkingState(this);
   }
 
   protected S getConfirmedState() {

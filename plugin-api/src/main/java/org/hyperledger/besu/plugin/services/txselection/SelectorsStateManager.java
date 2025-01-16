@@ -21,43 +21,36 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.SequencedMap;
+import java.util.stream.Collectors;
 
+@SuppressWarnings("rawtypes")
 public class SelectorsStateManager {
-  private final SequencedMap<Hash, Map<TransactionSelector, Object>> unconfirmedStates =
+  private final SequencedMap<Hash, Map<TransactionSelector, CopiableState>> unconfirmedStates =
       new LinkedHashMap<>();
-  private Map<TransactionSelector, Object> confirmedState = new HashMap<>();
-  private Map<TransactionSelector, Object> workingState;
+  private Map<TransactionSelector, CopiableState> confirmedState = new HashMap<>();
+  private Map<TransactionSelector, CopiableState> workingState;
 
-  public <S> void createSelectorState(final TransactionSelector selector, final S initialValue) {
+  public <S extends CopiableState> void createSelectorState(
+      final TransactionSelector selector, final S initialValue) {
     confirmedState.put(selector, initialValue);
   }
 
   public void startNewEvaluation(
       final TransactionEvaluationContext<? extends PendingTransaction> evaluationContext) {
-    workingState = new HashMap<>(getLast());
+    workingState =
+        getLast().entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().copy()));
     unconfirmedStates.putLast(
         evaluationContext.getPendingTransaction().getTransaction().getHash(), workingState);
   }
 
-  /**
-   * Update the selector unconfirmed state related to the current evaluated tx context. The value
-   * remains unconfirmed, meaning it could be discarded, until {@link
-   * SelectorsStateManager#confirm(Hash)} is called.
-   *
-   * @param selector The selector
-   * @param newValue The state to set as the unconfirmed
-   */
-  public <S> void updateSelectorState(final TransactionSelector selector, final S newValue) {
-    workingState.put(selector, newValue);
-  }
-
   @SuppressWarnings("unchecked")
-  public <S> S getSelectorState(final TransactionSelector selector) {
+  public <S extends CopiableState> S getSelectorWorkingState(final TransactionSelector selector) {
     return (S) workingState.get(selector);
   }
 
   @SuppressWarnings("unchecked")
-  public <S> S getSelectorConfirmedState(final TransactionSelector selector) {
+  public <S extends CopiableState> S getSelectorConfirmedState(final TransactionSelector selector) {
     return (S) confirmedState.get(selector);
   }
 
@@ -104,10 +97,35 @@ public class SelectorsStateManager {
    *
    * @return a map with the line count per module
    */
-  private Map<TransactionSelector, Object> getLast() {
+  private Map<TransactionSelector, CopiableState> getLast() {
     if (unconfirmedStates.isEmpty()) {
       return confirmedState;
     }
     return unconfirmedStates.lastEntry().getValue();
+  }
+
+  public interface CopiableState<T extends CopiableState> {
+    T copy();
+  }
+
+  public static class LongState implements CopiableState<LongState> {
+    private long value;
+
+    public LongState(final long value) {
+      this.value = value;
+    }
+
+    @Override
+    public LongState copy() {
+      return new LongState(value);
+    }
+
+    public long getValue() {
+      return value;
+    }
+
+    public void setValue(final long value) {
+      this.value = value;
+    }
   }
 }
