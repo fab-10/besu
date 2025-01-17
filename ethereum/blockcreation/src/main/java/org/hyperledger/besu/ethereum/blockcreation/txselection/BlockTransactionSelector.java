@@ -111,6 +111,7 @@ public class BlockTransactionSelector {
   private final TransactionSelectionResults transactionSelectionResults =
       new TransactionSelectionResults();
   private final List<AbstractTransactionSelector> transactionSelectors;
+  private final SelectorsStateManager selectorsStateManager;
   private final PluginTransactionSelector pluginTransactionSelector;
   private final BlockAwareOperationTracer operationTracer;
   private final EthScheduler ethScheduler;
@@ -118,7 +119,6 @@ public class BlockTransactionSelector {
   private final long blockTxsSelectionMaxTime;
   private WorldUpdater blockWorldStateUpdater;
   private volatile TransactionEvaluationContext currTxEvaluationContext;
-  private final SelectorsStateManager selectorsStateManager;
 
   public BlockTransactionSelector(
       final MiningConfiguration miningConfiguration,
@@ -413,8 +413,6 @@ public class BlockTransactionSelector {
       final TransactionEvaluationContext evaluationContext,
       final TransactionProcessingResult processingResult) {
 
-    selectorsStateManager.confirm(evaluationContext.getTransaction().getHash());
-
     for (var selector : transactionSelectors) {
       selector.onTransactionSelected(evaluationContext, processingResult);
     }
@@ -424,8 +422,6 @@ public class BlockTransactionSelector {
   private void notifyNotSelected(
       final TransactionEvaluationContext evaluationContext,
       final TransactionSelectionResult selectionResult) {
-
-    selectorsStateManager.discard(evaluationContext.getTransaction().getHash());
 
     for (var selector : transactionSelectors) {
       selector.onTransactionNotSelected(evaluationContext, selectionResult);
@@ -513,8 +509,11 @@ public class BlockTransactionSelector {
       if (savePendingResults) {
         groupEvaluationResults
             .streamNotNotified()
-            .forEach(selRes -> notifySelected(selRes.evaluationContext, selRes.processingResult));
-        groupEvaluationResults.markAsNotified();
+            .forEach(
+                evalRes -> {
+                  notifySelected(evalRes.evaluationContext, evalRes.processingResult);
+                  evalRes.markAsNotified();
+                });
       }
 
       evaluationResult.setSelectionResult(SELECTED);
@@ -531,26 +530,26 @@ public class BlockTransactionSelector {
   }
 
   private void savePendingResults(
-      final GroupEvaluationResults pendingSelectedResults,
+      final GroupEvaluationResults groupEvaluationResults,
       final MutableObject<WorldUpdater> currStateUpdaterSupplier) {
     // save consists in updating then state now and saving the selected txs and their results,
     // and recreate the world state updater and intermediate data structures
     currStateUpdaterSupplier.getValue().commit();
     blockWorldStateUpdater.commit();
-    pendingSelectedResults
+    groupEvaluationResults
         .streamNotSaved()
         .forEach(
-            selRes -> {
-              transactionSelectionResults.updateSelected(
-                  selRes.evaluationContext.getTransaction(), selRes.receipt, selRes.gasUsed);
+            evalRes -> {
+              final var tx = evalRes.evaluationContext.getTransaction();
+              selectorsStateManager.confirm(tx.getHash());
+              transactionSelectionResults.updateSelected(tx, evalRes.receipt, evalRes.gasUsed);
+              evalRes.markAsSaved();
               LOG.atTrace()
                   .setMessage("Selected {} for block creation, evaluated in {}")
-                  .addArgument(selRes.evaluationContext.getTransaction()::toTraceLog)
-                  .addArgument(selRes.evaluationContext.getEvaluationTimer())
+                  .addArgument(tx::toTraceLog)
+                  .addArgument(evalRes.evaluationContext.getEvaluationTimer())
                   .log();
             });
-
-    pendingSelectedResults.markAsSaved();
 
     blockWorldStateUpdater = worldState.updater();
     currStateUpdaterSupplier.setValue(blockWorldStateUpdater.updater());
@@ -627,7 +626,9 @@ public class BlockTransactionSelector {
             ? rewriteSelectionResultForTimeout(evaluationContext, selectionResult)
             : selectionResult;
 
-    transactionSelectionResults.updateNotSelected(evaluationContext.getTransaction(), actualResult);
+    selectorsStateManager.discard(pendingTransaction.getHash());
+    transactionSelectionResults.updateNotSelected(
+        pendingTransaction.getTransaction(), actualResult);
 
     notifyNotSelected(evaluationContext, actualResult);
 
@@ -724,16 +725,8 @@ public class BlockTransactionSelector {
       return evaluationResults.stream().filter(res -> !res.isSaved());
     }
 
-    void markAsSaved() {
-      streamNotSaved().forEach(EvaluationResult::markAsSaved);
-    }
-
     Stream<EvaluationResult> streamNotNotified() {
       return evaluationResults.stream().filter(res -> !res.isNotified());
-    }
-
-    void markAsNotified() {
-      streamNotNotified().forEach(EvaluationResult::markAsNotified);
     }
 
     final Optional<EvaluationResult> maybeNotSelectedTx() {

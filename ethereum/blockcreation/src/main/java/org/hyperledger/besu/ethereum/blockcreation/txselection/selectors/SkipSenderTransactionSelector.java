@@ -27,11 +27,6 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-/**
- * This class extends AbstractTransactionSelector and provides a specific implementation for
- * evaluating transactions based on Blob price. It checks if a transaction's current blob price is
- * below the minimum and determines the selection result accordingly.
- */
 public class SkipSenderTransactionSelector extends AbstractTransactionSelector {
   private static final Logger LOG = LoggerFactory.getLogger(SkipSenderTransactionSelector.class);
   private final Set<Address> skippedSenders = new HashSet<>();
@@ -40,13 +35,6 @@ public class SkipSenderTransactionSelector extends AbstractTransactionSelector {
     super(context);
   }
 
-  /**
-   * Evaluates a transaction considering its blob price.
-   *
-   * @param evaluationContext The current selection session data.
-   * @param ignored The results of other transaction evaluations in the same block.
-   * @return The result of the transaction selection.
-   */
   @Override
   public TransactionSelectionResult evaluateTransactionPreProcessing(
       final TransactionEvaluationContext evaluationContext,

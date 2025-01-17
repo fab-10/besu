@@ -25,12 +25,12 @@ import java.util.stream.Collectors;
 
 @SuppressWarnings("rawtypes")
 public class SelectorsStateManager {
-  private final SequencedMap<Hash, Map<TransactionSelector, CopiableState>> unconfirmedStates =
+  private final SequencedMap<Hash, Map<TransactionSelector, DuplicableState>> unconfirmedStates =
       new LinkedHashMap<>();
-  private Map<TransactionSelector, CopiableState> confirmedState = new HashMap<>();
-  private Map<TransactionSelector, CopiableState> workingState;
+  private Map<TransactionSelector, DuplicableState> confirmedState = new HashMap<>();
+  private Map<TransactionSelector, DuplicableState> workingState;
 
-  public <S extends CopiableState> void createSelectorState(
+  public <S extends DuplicableState> void createSelectorState(
       final TransactionSelector selector, final S initialValue) {
     confirmedState.put(selector, initialValue);
   }
@@ -39,18 +39,19 @@ public class SelectorsStateManager {
       final TransactionEvaluationContext<? extends PendingTransaction> evaluationContext) {
     workingState =
         getLast().entrySet().stream()
-            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().copy()));
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().deepCopy()));
     unconfirmedStates.putLast(
         evaluationContext.getPendingTransaction().getTransaction().getHash(), workingState);
   }
 
   @SuppressWarnings("unchecked")
-  public <S extends CopiableState> S getSelectorWorkingState(final TransactionSelector selector) {
+  public <S extends DuplicableState> S getSelectorWorkingState(final TransactionSelector selector) {
     return (S) workingState.get(selector);
   }
 
   @SuppressWarnings("unchecked")
-  public <S extends CopiableState> S getSelectorConfirmedState(final TransactionSelector selector) {
+  public <S extends DuplicableState> S getSelectorConfirmedState(
+      final TransactionSelector selector) {
     return (S) confirmedState.get(selector);
   }
 
@@ -97,35 +98,40 @@ public class SelectorsStateManager {
    *
    * @return a map with the line count per module
    */
-  private Map<TransactionSelector, CopiableState> getLast() {
+  private Map<TransactionSelector, DuplicableState> getLast() {
     if (unconfirmedStates.isEmpty()) {
       return confirmedState;
     }
     return unconfirmedStates.lastEntry().getValue();
   }
 
-  public interface CopiableState<T extends CopiableState> {
-    T copy();
-  }
+  public abstract static class DuplicableState<V> {
+    private V value;
 
-  public static class LongState implements CopiableState<LongState> {
-    private long value;
-
-    public LongState(final long value) {
+    public DuplicableState(final V value) {
       this.value = value;
     }
 
-    @Override
-    public LongState copy() {
-      return new LongState(value);
-    }
+    protected abstract DuplicableState<V> deepCopy();
 
-    public long getValue() {
+    public V getValue() {
       return value;
     }
 
-    public void setValue(final long value) {
+    public void setValue(final V value) {
       this.value = value;
+    }
+  }
+
+  public static class DuplicableLongState extends DuplicableState<Long> {
+
+    public DuplicableLongState(final Long value) {
+      super(value);
+    }
+
+    @Override
+    public DuplicableLongState deepCopy() {
+      return new DuplicableLongState(getValue());
     }
   }
 }
