@@ -24,10 +24,10 @@ import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 
 /** Interface for the transaction selector */
 @Unstable
-public interface PluginTransactionSelector {
+public interface TransactionSelector {
   /** Plugin transaction selector that unconditionally select every transaction */
-  PluginTransactionSelector ACCEPT_ALL =
-      new PluginTransactionSelector() {
+  TransactionSelector ACCEPT_ALL =
+      new TransactionSelector() {
         @Override
         public TransactionSelectionResult evaluateTransactionPreProcessing(
             TransactionEvaluationContext<? extends PendingTransaction> evaluationContext) {
@@ -41,16 +41,6 @@ public interface PluginTransactionSelector {
           return SELECTED;
         }
       };
-
-  /**
-   * Method that returns an OperationTracer that will be used when executing transactions that are
-   * candidates to be added to a block.
-   *
-   * @return OperationTracer to be used to trace candidate transactions
-   */
-  default BlockAwareOperationTracer getOperationTracer() {
-    return BlockAwareOperationTracer.NO_TRACING;
-  }
 
   /**
    * Method called to decide whether a transaction is added to a block. The result can also indicate

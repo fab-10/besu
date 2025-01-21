@@ -73,7 +73,7 @@ import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.metrics.prometheus.MetricsConfiguration;
 import org.hyperledger.besu.plugin.services.PicoCLIOptions;
 import org.hyperledger.besu.plugin.services.StorageService;
-import org.hyperledger.besu.plugin.services.TransactionSelectionService;
+import org.hyperledger.besu.plugin.services.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.securitymodule.SecurityModule;
 import org.hyperledger.besu.plugin.services.storage.KeyValueStorageFactory;
 import org.hyperledger.besu.plugin.services.storage.PrivacyKeyValueStorageFactory;
@@ -87,7 +87,7 @@ import org.hyperledger.besu.services.RpcEndpointServiceImpl;
 import org.hyperledger.besu.services.SecurityModuleServiceImpl;
 import org.hyperledger.besu.services.StorageServiceImpl;
 import org.hyperledger.besu.services.TransactionPoolValidatorServiceImpl;
-import org.hyperledger.besu.services.TransactionSelectionServiceImpl;
+import org.hyperledger.besu.services.BlockTransactionSelectionServiceImpl;
 import org.hyperledger.besu.services.TransactionSimulationServiceImpl;
 import org.hyperledger.besu.services.kvstore.InMemoryKeyValueStorage;
 
@@ -216,7 +216,7 @@ public abstract class CommandTestAbstract {
   @Mock protected JsonBlockImporter jsonBlockImporter;
   @Mock protected RlpBlockImporter rlpBlockImporter;
   @Mock protected StorageServiceImpl storageService;
-  @Mock protected TransactionSelectionServiceImpl txSelectionService;
+  @Mock protected BlockTransactionSelectionServiceImpl txSelectionService;
   @Mock protected SecurityModuleServiceImpl securityModuleService;
   @Mock protected SecurityModule securityModule;
   @Spy protected BesuConfigurationImpl commonPluginConfiguration = new BesuConfigurationImpl();
@@ -383,7 +383,7 @@ public abstract class CommandTestAbstract {
         .when(mockBesuPluginContext.getService(StorageService.class))
         .thenReturn(Optional.of(storageService));
     lenient()
-        .when(mockBesuPluginContext.getService(TransactionSelectionService.class))
+        .when(mockBesuPluginContext.getService(BlockTransactionSelectionService.class))
         .thenReturn(Optional.of(txSelectionService));
   }
 
@@ -560,7 +560,7 @@ public abstract class CommandTestAbstract {
           new PermissioningServiceImpl(),
           privacyPluginService,
           rpcEndpointServiceImpl,
-          new TransactionSelectionServiceImpl(),
+          new BlockTransactionSelectionServiceImpl(),
           new TransactionPoolValidatorServiceImpl(),
           new TransactionSimulationServiceImpl(),
           new BlockchainServiceImpl(),

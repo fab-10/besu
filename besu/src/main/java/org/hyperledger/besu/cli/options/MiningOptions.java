@@ -38,7 +38,7 @@ import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.ImmutableMiningConfiguration;
 import org.hyperledger.besu.ethereum.core.ImmutableMiningConfiguration.MutableInitValues;
 import org.hyperledger.besu.ethereum.core.MiningConfiguration;
-import org.hyperledger.besu.plugin.services.TransactionSelectionService;
+import org.hyperledger.besu.plugin.services.BlockTransactionSelectionService;
 import org.hyperledger.besu.util.number.PositiveNumber;
 
 import java.util.List;
@@ -207,7 +207,7 @@ public class MiningOptions implements CLIOptions<MiningConfiguration> {
         DEFAULT_POS_BLOCK_CREATION_REPETITION_MIN_DURATION;
   }
 
-  private TransactionSelectionService transactionSelectionService;
+  private BlockTransactionSelectionService blockTransactionSelectionService;
 
   private MiningOptions() {}
 
@@ -223,11 +223,11 @@ public class MiningOptions implements CLIOptions<MiningConfiguration> {
   /**
    * Set the transaction selection service
    *
-   * @param transactionSelectionService the transaction selection service
+   * @param blockTransactionSelectionService the transaction selection service
    */
   public void setTransactionSelectionService(
-      final TransactionSelectionService transactionSelectionService) {
-    this.transactionSelectionService = transactionSelectionService;
+      final BlockTransactionSelectionService blockTransactionSelectionService) {
+    this.blockTransactionSelectionService = blockTransactionSelectionService;
   }
 
   /**
@@ -320,7 +320,7 @@ public class MiningOptions implements CLIOptions<MiningConfiguration> {
   static MiningOptions fromConfig(final MiningConfiguration miningConfiguration) {
     final MiningOptions miningOptions = MiningOptions.create();
     miningOptions.setTransactionSelectionService(
-        miningConfiguration.getTransactionSelectionService());
+        miningConfiguration.getBlockTransactionSelectionService());
     miningOptions.isMiningEnabled = miningConfiguration.isMiningEnabled();
     miningOptions.iStratumMiningEnabled = miningConfiguration.isStratumMiningEnabled();
     miningOptions.stratumNetworkInterface = miningConfiguration.getStratumNetworkInterface();
@@ -357,7 +357,7 @@ public class MiningOptions implements CLIOptions<MiningConfiguration> {
   @Override
   public MiningConfiguration toDomainObject() {
     checkNotNull(
-        transactionSelectionService,
+        blockTransactionSelectionService,
         "transactionSelectionService must be set before using this object");
 
     final var updatableInitValuesBuilder =
@@ -376,7 +376,7 @@ public class MiningOptions implements CLIOptions<MiningConfiguration> {
     }
 
     return ImmutableMiningConfiguration.builder()
-        .transactionSelectionService(transactionSelectionService)
+        .transactionSelectionService(blockTransactionSelectionService)
         .mutableInitValues(updatableInitValuesBuilder.build())
         .isStratumMiningEnabled(iStratumMiningEnabled)
         .stratumNetworkInterface(stratumNetworkInterface)

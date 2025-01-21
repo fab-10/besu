@@ -16,9 +16,10 @@ package org.hyperledger.besu.ethereum.core;
 
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Wei;
-import org.hyperledger.besu.plugin.services.TransactionSelectionService;
-import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
-import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelectorFactory;
+import org.hyperledger.besu.plugin.services.BlockTransactionSelectionService;
+import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
+import org.hyperledger.besu.plugin.services.txselection.TransactionSelector;
+import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectorFactory;
 import org.hyperledger.besu.util.number.PositiveNumber;
 
 import java.time.Duration;
@@ -165,16 +166,21 @@ public abstract class MiningConfiguration {
   }
 
   @Value.Default
-  public TransactionSelectionService getTransactionSelectionService() {
-    return new TransactionSelectionService() {
+  public BlockTransactionSelectionService getBlockTransactionSelectionService() {
+    return new BlockTransactionSelectionService() {
       @Override
-      public PluginTransactionSelector createPluginTransactionSelector() {
-        return PluginTransactionSelector.ACCEPT_ALL;
+      public TransactionSelector createPluginTransactionSelector() {
+        return TransactionSelector.ACCEPT_ALL;
+      }
+
+      @Override
+      public BlockAwareOperationTracer createBlockAwareOperationTracer() {
+        return BlockAwareOperationTracer.NO_TRACING;
       }
 
       @Override
       public void registerPluginTransactionSelectorFactory(
-          final PluginTransactionSelectorFactory transactionSelectorFactory) {}
+          final BlockTransactionSelectorFactory blockTransactionSelectorFactory) {}
     };
   }
 

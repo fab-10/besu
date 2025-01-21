@@ -62,6 +62,7 @@ import org.hyperledger.besu.metrics.prometheus.MetricsConfiguration;
 import org.hyperledger.besu.plugin.data.EnodeURL;
 import org.hyperledger.besu.plugin.services.BesuConfiguration;
 import org.hyperledger.besu.plugin.services.BesuEvents;
+import org.hyperledger.besu.plugin.services.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.BlockchainService;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.PermissioningService;
@@ -71,7 +72,6 @@ import org.hyperledger.besu.plugin.services.RpcEndpointService;
 import org.hyperledger.besu.plugin.services.SecurityModuleService;
 import org.hyperledger.besu.plugin.services.StorageService;
 import org.hyperledger.besu.plugin.services.TransactionPoolValidatorService;
-import org.hyperledger.besu.plugin.services.TransactionSelectionService;
 import org.hyperledger.besu.plugin.services.TransactionSimulationService;
 import org.hyperledger.besu.plugin.services.metrics.MetricCategoryRegistry;
 import org.hyperledger.besu.plugin.services.mining.MiningService;
@@ -80,6 +80,7 @@ import org.hyperledger.besu.plugin.services.transactionpool.TransactionPoolServi
 import org.hyperledger.besu.services.BesuConfigurationImpl;
 import org.hyperledger.besu.services.BesuEventsImpl;
 import org.hyperledger.besu.services.BesuPluginContextImpl;
+import org.hyperledger.besu.services.BlockTransactionSelectionServiceImpl;
 import org.hyperledger.besu.services.BlockchainServiceImpl;
 import org.hyperledger.besu.services.MiningServiceImpl;
 import org.hyperledger.besu.services.PermissioningServiceImpl;
@@ -90,7 +91,6 @@ import org.hyperledger.besu.services.SecurityModuleServiceImpl;
 import org.hyperledger.besu.services.StorageServiceImpl;
 import org.hyperledger.besu.services.TransactionPoolServiceImpl;
 import org.hyperledger.besu.services.TransactionPoolValidatorServiceImpl;
-import org.hyperledger.besu.services.TransactionSelectionServiceImpl;
 import org.hyperledger.besu.services.TransactionSimulationServiceImpl;
 import org.hyperledger.besu.services.kvstore.InMemoryStoragePlugin;
 
@@ -369,8 +369,8 @@ public class ThreadBesuNodeRunner implements BesuNodeRunner {
 
     @Provides
     @Singleton
-    TransactionSelectionServiceImpl provideTransactionSelectionService() {
-      return new TransactionSelectionServiceImpl();
+    BlockTransactionSelectionServiceImpl provideTransactionSelectionService() {
+      return new BlockTransactionSelectionServiceImpl();
     }
 
     @Provides
@@ -503,7 +503,7 @@ public class ThreadBesuNodeRunner implements BesuNodeRunner {
         final StorageServiceImpl storageService,
         final SecurityModuleServiceImpl securityModuleService,
         final TransactionSimulationServiceImpl transactionSimulationServiceImpl,
-        final TransactionSelectionServiceImpl transactionSelectionServiceImpl,
+        final BlockTransactionSelectionServiceImpl transactionSelectionServiceImpl,
         final TransactionPoolValidatorServiceImpl transactionPoolValidatorServiceImpl,
         final BlockchainServiceImpl blockchainServiceImpl,
         final RpcEndpointServiceImpl rpcEndpointServiceImpl,
@@ -521,7 +521,7 @@ public class ThreadBesuNodeRunner implements BesuNodeRunner {
       besuPluginContext.addService(PicoCLIOptions.class, new PicoCLIOptionsImpl(commandLine));
       besuPluginContext.addService(RpcEndpointService.class, rpcEndpointServiceImpl);
       besuPluginContext.addService(
-          TransactionSelectionService.class, transactionSelectionServiceImpl);
+          BlockTransactionSelectionService.class, transactionSelectionServiceImpl);
       besuPluginContext.addService(
           TransactionPoolValidatorService.class, transactionPoolValidatorServiceImpl);
       besuPluginContext.addService(
@@ -582,7 +582,7 @@ public class ThreadBesuNodeRunner implements BesuNodeRunner {
 
     @Provides
     public MiningConfiguration provideMiningParameters(
-        final TransactionSelectionServiceImpl transactionSelectionServiceImpl,
+        final BlockTransactionSelectionServiceImpl transactionSelectionServiceImpl,
         final BesuNode node) {
       final var miningParameters =
           ImmutableMiningConfiguration.builder()

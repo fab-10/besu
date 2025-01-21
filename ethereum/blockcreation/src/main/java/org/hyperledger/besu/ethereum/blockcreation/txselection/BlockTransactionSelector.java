@@ -49,8 +49,9 @@ import org.hyperledger.besu.evm.blockhash.BlockHashLookup;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
+import org.hyperledger.besu.plugin.services.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
-import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
+import org.hyperledger.besu.plugin.services.txselection.TransactionSelector;
 
 import java.time.Duration;
 import java.util.List;
@@ -98,7 +99,7 @@ public class BlockTransactionSelector {
   private final TransactionSelectionResults transactionSelectionResults =
       new TransactionSelectionResults();
   private final List<AbstractTransactionSelector> transactionSelectors;
-  private final PluginTransactionSelector pluginTransactionSelector;
+  private final TransactionSelector transactionSelector;
   private final BlockAwareOperationTracer operationTracer;
   private final EthScheduler ethScheduler;
   private final AtomicBoolean isTimeout = new AtomicBoolean(false);
@@ -121,7 +122,7 @@ public class BlockTransactionSelector {
       final GasCalculator gasCalculator,
       final GasLimitCalculator gasLimitCalculator,
       final BlockHashProcessor blockHashProcessor,
-      final PluginTransactionSelector pluginTransactionSelector,
+      final BlockTransactionSelectionService transactionSelector,
       final EthScheduler ethScheduler) {
     this.transactionProcessor = transactionProcessor;
     this.blockchain = blockchain;
@@ -141,9 +142,9 @@ public class BlockTransactionSelector {
             miningBeneficiary,
             transactionPool);
     transactionSelectors = createTransactionSelectors(blockSelectionContext);
-    this.pluginTransactionSelector = pluginTransactionSelector;
+    this.transactionSelector = transactionSelector;
     this.operationTracer =
-        new InterruptibleOperationTracer(pluginTransactionSelector.getOperationTracer());
+        new InterruptibleOperationTracer(transactionSelector.getOperationTracer());
     blockWorldStateUpdater = worldState.updater();
     blockTxsSelectionMaxTime = miningConfiguration.getBlockTxsSelectionMaxTime();
   }
@@ -336,7 +337,7 @@ public class BlockTransactionSelector {
         return result;
       }
     }
-    return pluginTransactionSelector.evaluateTransactionPreProcessing(evaluationContext);
+    return transactionSelector.evaluateTransactionPreProcessing(evaluationContext);
   }
 
   /**
@@ -361,7 +362,7 @@ public class BlockTransactionSelector {
         return result;
       }
     }
-    return pluginTransactionSelector.evaluateTransactionPostProcessing(
+    return transactionSelector.evaluateTransactionPostProcessing(
         evaluationContext, processingResult);
   }
 
@@ -442,7 +443,7 @@ public class BlockTransactionSelector {
           evaluationContext, BLOCK_SELECTION_TIMEOUT, txWorldStateUpdater);
     }
 
-    pluginTransactionSelector.onTransactionSelected(evaluationContext, processingResult);
+    transactionSelector.onTransactionSelected(evaluationContext, processingResult);
     blockWorldStateUpdater = worldState.updater();
     LOG.atTrace()
         .setMessage("Selected {} for block creation, evaluated in {}")
@@ -475,7 +476,7 @@ public class BlockTransactionSelector {
             : selectionResult;
 
     transactionSelectionResults.updateNotSelected(evaluationContext.getTransaction(), actualResult);
-    pluginTransactionSelector.onTransactionNotSelected(evaluationContext, actualResult);
+    transactionSelector.onTransactionNotSelected(evaluationContext, actualResult);
     LOG.atTrace()
         .setMessage(
             "Not selected {} for block creation with result {} (original result {}), evaluated in {}")

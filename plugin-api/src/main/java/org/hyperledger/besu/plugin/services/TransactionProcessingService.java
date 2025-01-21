@@ -14,26 +14,13 @@
  */
 package org.hyperledger.besu.plugin.services;
 
+import org.hyperledger.besu.datatypes.Transaction;
 import org.hyperledger.besu.plugin.Unstable;
-import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
-import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelectorFactory;
+import org.hyperledger.besu.plugin.services.txvalidator.PluginTransactionPoolValidator;
+import org.hyperledger.besu.plugin.services.txvalidator.PluginTransactionPoolValidatorFactory;
 
-/** Transaction selection service interface */
+/** Transaction validator for addition of transactions to the transaction pool */
 @Unstable
-public interface TransactionSelectionService extends BesuService {
-
-  /**
-   * Create a transaction selector plugin
-   *
-   * @return the transaction selector plugin
-   */
-  PluginTransactionSelector createPluginTransactionSelector();
-
-  /**
-   * Registers the transaction selector factory with the service
-   *
-   * @param transactionSelectorFactory transaction selector factory to be used
-   */
-  void registerPluginTransactionSelectorFactory(
-      PluginTransactionSelectorFactory transactionSelectorFactory);
+public interface TransactionProcessingService extends BesuService {
+  void process(Transaction transaction);
 }
