@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods;
 
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.JsonCallParameterUtil.validateAndGetCallParams;
 
+import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.StateOverrideMap;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcErrorConverter;
@@ -69,8 +70,9 @@ public abstract class AbstractEstimateGas extends AbstractBlockParameterMethod {
   protected abstract Object simulate(
       final JsonRpcRequestContext requestContext,
       final CallParameter callParams,
-      final long gasLimit,
-      final TransactionSimulationFunction simulationFunction);
+      final long blockGasLimit,
+      final TransactionSimulationFunction simulationFunction,
+      final Optional<Hash> maybeBlockHash);
 
   @Override
   protected Object pendingResult(final JsonRpcRequestContext requestContext) {
@@ -83,7 +85,11 @@ public abstract class AbstractEstimateGas extends AbstractBlockParameterMethod {
             transactionSimulator.processOnPending(
                 cp, maybeStateOverrides, validationParams, op, pendingBlockHeader);
     return simulate(
-        requestContext, jsonCallParameter, pendingBlockHeader.getGasLimit(), simulationFunction);
+        requestContext,
+        jsonCallParameter,
+        pendingBlockHeader.getGasLimit(),
+        simulationFunction,
+        Optional.empty());
   }
 
   @Override
@@ -109,7 +115,11 @@ public abstract class AbstractEstimateGas extends AbstractBlockParameterMethod {
             transactionSimulator.process(
                 cp, maybeStateOverrides, validationParams, op, blockHeader);
     return simulate(
-        requestContext, jsonCallParameter, blockHeader.getGasLimit(), simulationFunction);
+        requestContext,
+        jsonCallParameter,
+        blockHeader.getGasLimit(),
+        simulationFunction,
+        Optional.of(blockHeader.getHash()));
   }
 
   private Optional<BlockHeader> blockHeader(final long blockNumber) {

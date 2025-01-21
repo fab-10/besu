@@ -14,6 +14,8 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods;
 
+import org.hyperledger.besu.datatypes.Hash;
+import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcErrorResponse;
@@ -47,14 +49,19 @@ public class EthEstimateGas extends AbstractEstimateGas {
   protected Object simulate(
       final JsonRpcRequestContext requestContext,
       final CallParameter callParams,
-      final long gasLimit,
-      final TransactionSimulationFunction simulationFunction) {
+      final long blockGasLimit,
+      final TransactionSimulationFunction simulationFunction,
+      final Optional<Hash> maybeBlockHash) {
 
     final EstimateGasOperationTracer operationTracer = new EstimateGasOperationTracer();
 
+    final long gasLimitUpperBound =
+        calculateGasLimitUpperBound(callParams, blockGasLimit, maybeBlockHash);
+
     LOG.debug("Processing transaction with params: {}", callParams);
     final var maybeResult =
-        simulationFunction.simulate(overrideGasLimit(callParams, gasLimit), operationTracer);
+        simulationFunction.simulate(
+            overrideGasLimit(callParams, gasLimitUpperBound), operationTracer);
 
     final Optional<JsonRpcErrorResponse> maybeErrorResponse =
         validateSimulationResult(requestContext, maybeResult);
@@ -104,5 +111,53 @@ public class EthEstimateGas extends AbstractEstimateGas {
       return Optional.of(errorResponse(requestContext, maybeResult.get()));
     }
     return Optional.empty();
+  }
+
+  private long calculateGasLimitUpperBound(
+      final CallParameter callParams,
+      final long blockGasLimit,
+      final Optional<Hash> maybeBlockHash) {
+    if (callParams.getFrom() != null) {
+      final var sender = callParams.getFrom();
+      final var maxGasPrice = calculateTxMaxGasPrice(callParams);
+      if (maxGasPrice != null) {
+        final var atBlockHash =
+            maybeBlockHash.orElseGet(
+                () -> blockchainQueriesSupplier.get().getBlockchain().getChainHeadHash());
+        final var senderBalance =
+            blockchainQueriesSupplier.get().accountBalance(sender, atBlockHash).orElse(Wei.ZERO);
+
+        if (senderBalance.greaterThan(Wei.ZERO)) {
+          final var txValue = callParams.getValue();
+          final var senderBalanceForGas =
+              txValue == null ? senderBalance : senderBalance.subtract(txValue);
+
+          try {
+            final long gasLimitForBalance = senderBalanceForGas.divide(maxGasPrice).toLong();
+
+            if (gasLimitForBalance < blockGasLimit) {
+              LOG.atTrace()
+                  .setMessage(
+                      "Set max gas limit to {} according to sender balance: balance {}, txValue {}, senderBalanceForGas {}, maxGasPrice {}")
+                  .addArgument(gasLimitForBalance)
+                  .addArgument(senderBalance::toHumanReadableString)
+                  .addArgument(txValue::toHumanReadableString)
+                  .addArgument(senderBalanceForGas::toHumanReadableString)
+                  .addArgument(maxGasPrice::toHumanReadableString)
+                  .log();
+              return gasLimitForBalance;
+            }
+          } catch (final IllegalArgumentException | ArithmeticException e) {
+            // if the value is too big to fit a long, ignore the exception and just return the
+            // block gas limit
+          }
+        }
+      }
+    }
+    return blockGasLimit;
+  }
+
+  private static Wei calculateTxMaxGasPrice(final CallParameter callParameters) {
+    return callParameters.getMaxFeePerGas().orElseGet(callParameters::getGasPrice);
   }
 }

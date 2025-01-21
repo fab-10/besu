@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods;
 
 import org.hyperledger.besu.datatypes.AccessListEntry;
+import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
@@ -47,18 +48,19 @@ public class EthCreateAccessList extends AbstractEstimateGas {
   protected Object simulate(
       final JsonRpcRequestContext requestContext,
       final CallParameter callParams,
-      final long gasLimit,
-      final TransactionSimulationFunction simulationFunction) {
+      final long blockGasLimit,
+      final TransactionSimulationFunction simulationFunction,
+      final Optional<Hash> maybeBlockHash) {
 
     final AccessListOperationTracer tracer = AccessListOperationTracer.create();
     final Optional<TransactionSimulatorResult> firstResult =
-        simulationFunction.simulate(overrideGasLimit(callParams, gasLimit), tracer);
+        simulationFunction.simulate(overrideGasLimit(callParams, blockGasLimit), tracer);
 
     // if the call accessList is different from the simulation result, calculate gas and return
     if (shouldProcessWithAccessListOverride(callParams, tracer)) {
       final AccessListSimulatorResult result =
           processTransactionWithAccessListOverride(
-              callParams, gasLimit, tracer.getAccessList(), simulationFunction);
+              callParams, blockGasLimit, tracer.getAccessList(), simulationFunction);
       return createResponse(requestContext, result);
     } else {
       return createResponse(requestContext, new AccessListSimulatorResult(firstResult, tracer));
