@@ -1902,7 +1902,7 @@ public class LayersTest extends BaseTransactionPoolTest {
     private void assertExpectedPrioritized(
         final AbstractPrioritizedTransactions prioLayer, final List<PendingTransaction> expected) {
       final var flatOrder =
-          prioLayer.getByScore().stream().flatMap(PendingTransactionGroup::stream).toList();
+          prioLayer.getGrouped().stream().flatMap(PendingTransactionGroup::stream).toList();
       assertThat(flatOrder).describedAs("Prioritized").containsExactlyElementsOf(expected);
     }
 

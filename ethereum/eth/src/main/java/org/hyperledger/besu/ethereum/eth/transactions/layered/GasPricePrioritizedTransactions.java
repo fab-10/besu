@@ -16,8 +16,10 @@ package org.hyperledger.besu.ethereum.eth.transactions.layered;
 
 import static java.util.Comparator.comparing;
 
+import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.MiningConfiguration;
+import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
@@ -25,6 +27,8 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfigurati
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 
+import java.util.Optional;
+import java.util.SequencedCollection;
 import java.util.function.BiFunction;
 
 /**
@@ -61,6 +65,12 @@ public class GasPricePrioritizedTransactions extends AbstractPrioritizedTransact
         .thenComparing(PendingTransaction::getGasPrice)
         .thenComparing(PendingTransaction::getSequence)
         .compare(pt1, pt2);
+  }
+
+  @Override
+  protected PendingTransactionGroup createPendingTransactionGroup(
+      final SequencedCollection<PendingTransaction> pendingTxs) {
+    return new GasPricePendingTransactionGroup(pendingTxs);
   }
 
   @Override
@@ -107,5 +117,24 @@ public class GasPricePrioritizedTransactions extends AbstractPrioritizedTransact
         + ", hash: "
         + lowest.getHash()
         + "]";
+  }
+
+  static class GasPricePendingTransactionGroup extends AbstractPendingTransactionGroup {
+    public GasPricePendingTransactionGroup(
+        final SequencedCollection<PendingTransaction> pendingTxs) {
+      super(pendingTxs, calculateAvgFee(pendingTxs));
+    }
+
+    private static Wei calculateAvgFee(final SequencedCollection<PendingTransaction> pendingTxs) {
+      if (pendingTxs.size() == 1) {
+        return pendingTxs.getFirst().getTransaction().getGasPrice().orElseThrow();
+      }
+      return pendingTxs.stream()
+          .map(PendingTransaction::getTransaction)
+          .map(Transaction::getGasPrice)
+          .map(Optional::get)
+          .reduce(Wei.ZERO, Wei::add)
+          .divide(pendingTxs.size());
+    }
   }
 }

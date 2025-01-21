@@ -18,6 +18,7 @@ import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.eth.transactions.layered.AbstractPendingTransactionGroup;
 import org.hyperledger.besu.ethereum.eth.transactions.layered.PendingTransactionGroup;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.account.Account;
@@ -83,7 +84,7 @@ public interface PendingTransactions {
 
     default TransactionSelectionResult evaluateTransaction(
         final PendingTransaction pendingTransaction) {
-      return evaluateGroup(new PendingTransactionGroup(List.of(pendingTransaction)))
+      return evaluateGroup(new AbstractPendingTransactionGroup(List.of(pendingTransaction)))
           .get(pendingTransaction);
     }
   }

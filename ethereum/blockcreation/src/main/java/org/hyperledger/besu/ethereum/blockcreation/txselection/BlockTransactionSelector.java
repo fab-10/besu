@@ -42,6 +42,7 @@ import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.ethereum.eth.transactions.layered.AbstractPendingTransactionGroup;
 import org.hyperledger.besu.ethereum.eth.transactions.layered.PendingTransactionGroup;
 import org.hyperledger.besu.ethereum.mainnet.AbstractBlockProcessor;
 import org.hyperledger.besu.ethereum.mainnet.MainnetTransactionProcessor;
@@ -276,7 +277,7 @@ public class BlockTransactionSelector {
    */
   public TransactionSelectionResults evaluateTransactions(final List<Transaction> transactions) {
     evaluateGroup(
-        new PendingTransactionGroup(
+        new AbstractPendingTransactionGroup(
             transactions.stream()
                 .map(PendingTransaction.Local.Priority::new)
                 .collect(Collectors.toCollection(ArrayList::new))));

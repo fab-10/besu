@@ -30,6 +30,7 @@ import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 
 import java.util.Comparator;
 import java.util.Optional;
+import java.util.SequencedCollection;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
@@ -77,6 +78,12 @@ public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransacti
         .thenComparing(Comparator.comparing(PendingTransaction::getNonce).reversed())
         .thenComparing(PendingTransaction::getSequence)
         .compare(pt1, pt2);
+  }
+
+  @Override
+  protected PendingTransactionGroup createPendingTransactionGroup(
+      final SequencedCollection<PendingTransaction> pendingTxs) {
+    return new BaseFeePendingTransactionGroup(pendingTxs, nextBlockBaseFee);
   }
 
   /**
@@ -232,5 +239,26 @@ public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransacti
         + lowest.getHash()
         + "], next block base fee: "
         + nextBlockBaseFee.get().toHumanReadableString();
+  }
+
+  static class BaseFeePendingTransactionGroup extends AbstractPendingTransactionGroup {
+    public BaseFeePendingTransactionGroup(
+        final SequencedCollection<PendingTransaction> pendingTxs,
+        final Optional<Wei> maybeBaseFee) {
+      super(pendingTxs, calculateAvgFee(pendingTxs, maybeBaseFee));
+    }
+
+    private static Wei calculateAvgFee(
+        final SequencedCollection<PendingTransaction> pendingTxs,
+        final Optional<Wei> maybeBaseFee) {
+      if (pendingTxs.size() == 1) {
+        return pendingTxs.getFirst().getTransaction().getEffectivePriorityFeePerGas(maybeBaseFee);
+      }
+      return pendingTxs.stream()
+          .map(PendingTransaction::getTransaction)
+          .map(tx -> tx.getEffectivePriorityFeePerGas(maybeBaseFee))
+          .reduce(Wei.ZERO, Wei::add)
+          .divide(pendingTxs.size());
+    }
   }
 }

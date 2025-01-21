@@ -1,5 +1,5 @@
 /*
- * Copyright contributors to Hyperledger Besu.
+ * Copyright contributors to Besu.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -14,40 +14,25 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions.layered;
 
+import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 
-import java.util.Collection;
 import java.util.Iterator;
 import java.util.stream.Stream;
 
-/** A group of related pending transactions */
-public class PendingTransactionGroup implements Iterable<PendingTransaction> {
-  private final Collection<PendingTransaction> pendingTxs;
-  private final byte score;
+public interface PendingTransactionGroup extends Iterable<PendingTransaction> {
+  boolean hasPriority();
 
-  public PendingTransactionGroup(final Collection<PendingTransaction> pendingTxs) {
-    this.pendingTxs = pendingTxs;
-    this.score = pendingTxs.stream().map(PendingTransaction::getScore).min(Byte::compareTo).get();
-  }
+  Wei getAverageFee();
 
-  public byte getScore() {
-    return score;
-  }
+  byte getScore();
 
-  public boolean isAtomic() {
-    return false;
-  }
+  boolean isAtomic();
 
-  public int size() {
-    return pendingTxs.size();
-  }
+  int size();
 
-  public Stream<PendingTransaction> stream() {
-    return pendingTxs.stream();
-  }
+  Stream<PendingTransaction> stream();
 
   @Override
-  public Iterator<PendingTransaction> iterator() {
-    return pendingTxs.iterator();
-  }
+  Iterator<PendingTransaction> iterator();
 }

@@ -314,12 +314,12 @@ public class LayeredPendingTransactions implements PendingTransactions {
   @Override
   public void selectTransactions(final PendingTransactions.TransactionSelector selector) {
 
-    final List<PendingTransactionGroup> pendingTxGroupsByScore;
+    final List<? extends PendingTransactionGroup> pendingTxGroupsByScore;
     synchronized (this) {
       // since selecting transactions for block creation is a potential long operation
       // we want to avoid to keep the lock for all the process, but we just lock to get
       // the candidate transactions
-      pendingTxGroupsByScore = prioritizedTransactions.getByScore();
+      pendingTxGroupsByScore = prioritizedTransactions.getGrouped();
     }
 
     selection:

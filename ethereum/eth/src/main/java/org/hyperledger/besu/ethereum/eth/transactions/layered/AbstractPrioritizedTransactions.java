@@ -29,6 +29,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
+import java.util.SequencedCollection;
 import java.util.TreeSet;
 import java.util.function.BiFunction;
 import java.util.function.Predicate;
@@ -38,6 +39,11 @@ import java.util.function.Predicate;
  * next block. The pending transactions are kept sorted by paid fee descending.
  */
 public abstract class AbstractPrioritizedTransactions extends AbstractSequentialTransactionsLayer {
+  private static final Comparator<PendingTransactionGroup> PENDING_TRANSACTION_GROUP_COMPARATOR =
+      Comparator.comparing(PendingTransactionGroup::getScore)
+          .thenComparing(PendingTransactionGroup::hasPriority)
+          .thenComparing(PendingTransactionGroup::getAverageFee)
+          .reversed();
   protected final TreeSet<PendingTransaction> orderByFee;
   protected final MiningConfiguration miningConfiguration;
 
@@ -201,15 +207,18 @@ public abstract class AbstractPrioritizedTransactions extends AbstractSequential
    *
    * @return pending tx groups ordered by score desc
    */
-  public List<PendingTransactionGroup> getByScore() {
+  public List<? extends PendingTransactionGroup> getGrouped() {
     final var sendersToAdd = new HashSet<>(txsBySender.keySet());
     return orderByFee.descendingSet().stream()
         .map(PendingTransaction::getSender)
         .filter(sendersToAdd::remove)
-        .map(sender -> new PendingTransactionGroup(txsBySender.get(sender).values()))
-        .sorted(Comparator.comparing(PendingTransactionGroup::getScore).reversed())
+        .map(sender -> createPendingTransactionGroup(txsBySender.get(sender).sequencedValues()))
+        .sorted(PENDING_TRANSACTION_GROUP_COMPARATOR)
         .toList();
   }
+
+  protected abstract PendingTransactionGroup createPendingTransactionGroup(
+      final SequencedCollection<PendingTransaction> pendingTxs);
 
   //
   //  /**
