@@ -38,7 +38,7 @@ import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.ImmutableMiningConfiguration;
 import org.hyperledger.besu.ethereum.core.ImmutableMiningConfiguration.MutableInitValues;
 import org.hyperledger.besu.ethereum.core.MiningConfiguration;
-import org.hyperledger.besu.plugin.services.BlockTransactionSelectionService;
+import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.util.number.PositiveNumber;
 
 import java.util.List;

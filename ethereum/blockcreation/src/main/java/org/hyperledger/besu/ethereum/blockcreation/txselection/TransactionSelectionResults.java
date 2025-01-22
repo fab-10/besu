@@ -17,6 +17,7 @@ package org.hyperledger.besu.ethereum.blockcreation.txselection;
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
+import org.hyperledger.besu.plugin.data.BlockTransactionSelectionResult;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 
 import java.util.ArrayList;
@@ -32,7 +33,7 @@ import com.google.common.collect.Lists;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class TransactionSelectionResults {
+public class TransactionSelectionResults implements BlockTransactionSelectionResult {
   private static final Logger LOG = LoggerFactory.getLogger(TransactionSelectionResults.class);
 
   private final List<Transaction> selectedTransactions = Lists.newArrayList();

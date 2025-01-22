@@ -22,7 +22,7 @@ import static org.mockito.Mockito.mock;
 import org.hyperledger.besu.config.GenesisConfig;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Wei;
-import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockTransactionSelector;
+import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockTransactionsSelector;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionSelectionResults;
 import org.hyperledger.besu.ethereum.chain.BadBlockManager;
 import org.hyperledger.besu.ethereum.core.AddressHelpers;
@@ -114,7 +114,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     final ProcessableBlockHeader blockHeader = createBlock(301_000, Wei.ONE);
 
     final Address miningBeneficiary = AddressHelpers.ofValue(1);
-    final BlockTransactionSelector selector =
+    final BlockTransactionsSelector selector =
         createBlockSelectorAndSetupTxPool(
             createMiningParameters(
                 blockTransactionSelectionService,
@@ -133,7 +133,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     final var addResults = transactionPool.addRemoteTransactions(List.of(tx));
     assertThat(addResults).extractingByKey(tx.getHash()).isEqualTo(ValidationResult.valid());
 
-    final TransactionSelectionResults results = selector.buildTransactionListForBlock();
+    final TransactionSelectionResults results = selector.selectTransactionsForBlock();
 
     assertThat(results.getSelectedTransactions()).isEmpty();
     assertThat(results.getNotSelectedTransactions())
@@ -146,7 +146,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     final ProcessableBlockHeader blockHeader = createBlock(301_000, Wei.of(5));
 
     final Address miningBeneficiary = AddressHelpers.ofValue(1);
-    final BlockTransactionSelector selector =
+    final BlockTransactionsSelector selector =
         createBlockSelectorAndSetupTxPool(
             createMiningParameters(
                 blockTransactionSelectionService,
@@ -166,7 +166,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
 
     ensureTransactionIsValid(tx);
 
-    final TransactionSelectionResults results = selector.buildTransactionListForBlock();
+    final TransactionSelectionResults results = selector.selectTransactionsForBlock();
 
     assertThat(results.getSelectedTransactions()).containsExactly(tx);
     assertThat(results.getNotSelectedTransactions()).isEmpty();
@@ -177,7 +177,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     final ProcessableBlockHeader blockHeader = createBlock(301_000, Wei.ONE);
 
     final Address miningBeneficiary = AddressHelpers.ofValue(1);
-    final BlockTransactionSelector selector =
+    final BlockTransactionsSelector selector =
         createBlockSelectorAndSetupTxPool(
             createMiningParameters(
                 blockTransactionSelectionService,
@@ -199,7 +199,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
 
     ensureTransactionIsValid(tx);
 
-    final TransactionSelectionResults results = selector.buildTransactionListForBlock();
+    final TransactionSelectionResults results = selector.selectTransactionsForBlock();
 
     assertThat(results.getSelectedTransactions()).containsExactly(tx);
     assertThat(results.getNotSelectedTransactions()).isEmpty();
@@ -220,7 +220,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     ensureTransactionIsValid(txLondon2);
 
     final Address miningBeneficiary = AddressHelpers.ofValue(1);
-    final BlockTransactionSelector selector =
+    final BlockTransactionsSelector selector =
         createBlockSelectorAndSetupTxPool(
             defaultTestMiningConfiguration,
             transactionProcessor,
@@ -231,7 +231,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
 
     transactionPool.addRemoteTransactions(List.of(txFrontier1, txLondon1, txFrontier2, txLondon2));
 
-    final TransactionSelectionResults results = selector.buildTransactionListForBlock();
+    final TransactionSelectionResults results = selector.selectTransactionsForBlock();
 
     assertThat(results.getSelectedTransactions())
         .containsExactly(txFrontier1, txLondon1, txFrontier2, txLondon2);
@@ -261,7 +261,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     final Transaction txNotSelected2 = createEIP1559Transaction(4, Wei.of(8), Wei.of(6), 100_000);
     ensureTransactionIsValid(txNotSelected2);
 
-    final BlockTransactionSelector selector =
+    final BlockTransactionsSelector selector =
         createBlockSelectorAndSetupTxPool(
             miningConfiguration,
             transactionProcessor,
@@ -275,7 +275,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
 
     assertThat(transactionPool.getPendingTransactions().size()).isEqualTo(4);
 
-    final TransactionSelectionResults results = selector.buildTransactionListForBlock();
+    final TransactionSelectionResults results = selector.selectTransactionsForBlock();
 
     assertThat(results.getSelectedTransactions()).containsOnly(txSelected1, txSelected2);
     assertThat(results.getNotSelectedTransactions())

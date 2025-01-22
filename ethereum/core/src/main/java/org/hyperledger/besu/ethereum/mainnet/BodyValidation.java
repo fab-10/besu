@@ -59,7 +59,7 @@ public final class BodyValidation {
    * @param transactions the transactions
    * @return the transaction root
    */
-  public static Hash transactionsRoot(final List<Transaction> transactions) {
+  public static Hash transactionsRoot(final List<? extends Transaction> transactions) {
     final MerkleTrie<Bytes, Bytes> trie = trie();
 
     IntStream.range(0, transactions.size())

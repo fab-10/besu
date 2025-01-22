@@ -12,12 +12,11 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-package org.hyperledger.besu.plugin.services;
+package org.hyperledger.besu.plugin.services.txselection;
 
 import org.hyperledger.besu.plugin.Unstable;
+import org.hyperledger.besu.plugin.services.BesuService;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
-import org.hyperledger.besu.plugin.services.txselection.TransactionSelector;
-import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectorFactory;
 
 /** Block transaction selection service interface */
 @Unstable
@@ -31,6 +30,8 @@ public interface BlockTransactionSelectionService extends BesuService {
   TransactionSelector createPluginTransactionSelector();
 
   BlockAwareOperationTracer createBlockAwareOperationTracer();
+
+  BlockTransactionSelector createBlockTransactionSelector();
 
   /**
    * Registers the block transaction selector factory with the service

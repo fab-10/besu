@@ -14,8 +14,9 @@
  */
 package org.hyperledger.besu.services;
 
-import org.hyperledger.besu.plugin.services.BlockTransactionSelectionService;
+import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
+import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.TransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectorFactory;
 
@@ -41,6 +42,11 @@ public class BlockTransactionSelectionServiceImpl implements BlockTransactionSel
   public BlockAwareOperationTracer createBlockAwareOperationTracer() {
     return factory.map(BlockTransactionSelectorFactory::createOperationTracer)
         .orElse(BlockAwareOperationTracer.NO_TRACING);
+  }
+
+  @Override
+  public BlockTransactionSelector createBlockTransactionSelector() {
+    return null;
   }
 
   @Override

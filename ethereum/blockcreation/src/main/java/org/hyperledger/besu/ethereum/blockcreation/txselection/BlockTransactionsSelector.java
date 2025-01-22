@@ -49,7 +49,7 @@ import org.hyperledger.besu.evm.blockhash.BlockHashLookup;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
-import org.hyperledger.besu.plugin.services.BlockTransactionSelectionService;
+import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 import org.hyperledger.besu.plugin.services.txselection.TransactionSelector;
 
@@ -88,8 +88,8 @@ import org.slf4j.LoggerFactory;
  * Once "used" this class must be discarded and another created. This class contains state which is
  * not cleared between executions of buildTransactionListForBlock().
  */
-public class BlockTransactionSelector {
-  private static final Logger LOG = LoggerFactory.getLogger(BlockTransactionSelector.class);
+public class BlockTransactionsSelector implements org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelector {
+  private static final Logger LOG = LoggerFactory.getLogger(BlockTransactionsSelector.class);
   private final Supplier<Boolean> isCancelled;
   private final MainnetTransactionProcessor transactionProcessor;
   private final Blockchain blockchain;
@@ -107,7 +107,7 @@ public class BlockTransactionSelector {
   private WorldUpdater blockWorldStateUpdater;
   private volatile TransactionEvaluationContext currTxEvaluationContext;
 
-  public BlockTransactionSelector(
+  public BlockTransactionsSelector(
       final MiningConfiguration miningConfiguration,
       final MainnetTransactionProcessor transactionProcessor,
       final Blockchain blockchain,
@@ -169,7 +169,7 @@ public class BlockTransactionSelector {
    * @return The {@code TransactionSelectionResults} containing the results of transaction
    *     evaluation.
    */
-  public TransactionSelectionResults buildTransactionListForBlock() {
+  public TransactionSelectionResults selectTransactionsForBlock() {
     LOG.atDebug()
         .setMessage("Transaction pool stats {}")
         .addArgument(blockSelectionContext.transactionPool()::logStats)

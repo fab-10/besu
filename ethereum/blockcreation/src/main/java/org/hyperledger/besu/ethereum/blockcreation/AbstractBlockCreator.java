@@ -23,7 +23,7 @@ import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.ProtocolContext;
-import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockTransactionSelector;
+import org.hyperledger.besu.ethereum.blockcreation.txselection.BlockTransactionsSelector;
 import org.hyperledger.besu.ethereum.blockcreation.txselection.TransactionSelectionResults;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockBody;
@@ -51,7 +51,8 @@ import org.hyperledger.besu.ethereum.mainnet.requests.ProcessRequestContext;
 import org.hyperledger.besu.ethereum.mainnet.requests.RequestProcessorCoordinator;
 import org.hyperledger.besu.evm.account.MutableAccount;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
-import org.hyperledger.besu.plugin.services.BlockTransactionSelectionService;
+import org.hyperledger.besu.plugin.data.BlockTransactionSelectionResult;
+import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.exception.StorageException;
 import org.hyperledger.besu.plugin.services.securitymodule.SecurityModuleException;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
@@ -59,6 +60,10 @@ import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import com.google.common.collect.Lists;
@@ -222,7 +227,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
 
       operationTracer.traceStartBlock(processableBlockHeader, miningBeneficiary);
       timings.register("preTxsSelection");
-      final TransactionSelectionResults transactionResults =
+      final BlockTransactionSelectionResult transactionResults =
           selectTransactions(
               processableBlockHeader,
               disposableWorldState,
@@ -333,7 +338,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
   record GasUsage(BlobGas excessBlobGas, BlobGas used) {}
 
   private GasUsage computeExcessBlobGas(
-      final TransactionSelectionResults transactionResults,
+      final BlockTransactionSelectionResult transactionResults,
       final ProtocolSpec newProtocolSpec,
       final BlockHeader parentHeader) {
 
@@ -354,7 +359,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
     return null;
   }
 
-  private TransactionSelectionResults selectTransactions(
+  private BlockTransactionSelectionResult selectTransactions(
       final ProcessableBlockHeader processableBlockHeader,
       final MutableWorldState disposableWorldState,
       final Optional<List<Transaction>> transactions,
@@ -373,8 +378,8 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
             .getFeeMarket()
             .blobGasPricePerGas(calculateExcessBlobGasForParent(protocolSpec, parentHeader));
 
-    final BlockTransactionSelector selector =
-        new BlockTransactionSelector(
+    final BlockTransactionsSelector selector =
+        new BlockTransactionsSelector(
             miningConfiguration,
             transactionProcessor,
             protocolContext.getBlockchain(),
@@ -395,7 +400,52 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
     if (transactions.isPresent()) {
       return selector.evaluateTransactions(transactions.get());
     } else {
-      return selector.buildTransactionListForBlock();
+      return selectTransactionsForBlock(selector);
+    }
+  }
+
+  private BlockTransactionSelectionResult selectTransactionsForBlock(final BlockTransactionsSelector selector) {
+    LOG.atDebug()
+        .setMessage("Transaction pool stats {}")
+        .addArgument(transactionPool::logStats)
+        .log();
+    timeLimitedSelection(selector);
+    LOG.atTrace()
+        .setMessage("Transaction selection result {}")
+        .addArgument(transactionSelectionResults::toTraceLog)
+        .log();
+    return selector.selectTransactionsForBlock();
+  }
+
+  private void timeLimitedSelection(final BlockTransactionsSelector selector) {
+    final var txSelectionTask =
+        new FutureTask<Void>(
+            () ->
+                transactionPool
+                    .selectTransactions(selector::evaluateTransaction),
+            null);
+    ethScheduler.scheduleBlockCreationTask(txSelectionTask);
+
+    try {
+      txSelectionTask.get(blockTxsSelectionMaxTime, TimeUnit.MILLISECONDS);
+    } catch (InterruptedException | ExecutionException e) {
+      if (isCancelled.get()) {
+        throw new CancellationException("Cancelled during transaction selection");
+      }
+      LOG.warn("Error during block transaction selection", e);
+    } catch (TimeoutException e) {
+      // synchronize since we want to be sure that there is no concurrent state update
+      synchronized (isTimeout) {
+        isTimeout.set(true);
+      }
+
+      cancelEvaluatingTxWithGraceTime(txSelectionTask);
+
+      LOG.warn(
+          "Interrupting the selection of transactions for block inclusion as it exceeds the maximum configured duration of "
+              + blockTxsSelectionMaxTime
+              + "ms",
+          e);
     }
   }
 
