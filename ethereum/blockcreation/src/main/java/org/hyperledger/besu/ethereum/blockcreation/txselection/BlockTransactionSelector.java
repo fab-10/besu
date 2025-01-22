@@ -281,7 +281,7 @@ public class BlockTransactionSelector {
     evaluateGroup(
         new AbstractPendingTransactionGroup(
             transactions.stream()
-                .map(PendingTransaction.Local.Priority::new)
+                .map(tx -> PendingTransaction.builder(tx).isLocal(true).hasPriority(true).build())
                 .collect(Collectors.toCollection(ArrayList::new))));
     return transactionSelectionResults;
   }

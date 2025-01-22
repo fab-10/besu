@@ -220,43 +220,6 @@ public abstract class AbstractPrioritizedTransactions extends AbstractSequential
   protected abstract PendingTransactionGroup createPendingTransactionGroup(
       final SequencedCollection<PendingTransaction> pendingTxs);
 
-  //
-  //  /**
-  //   * Split and group sender txs by score. In case a sender has pending txs with different
-  // scores,
-  //   * then in nonce sequence, every time there is a score decrease, his pending txs will be put
-  // in a
-  //   * new group with that score. For example if a sender has 3 pending txs (where the first
-  // number is
-  //   * the nonce and the score is between parenthesis): 0(127), 1(126), 2(127), then for the user
-  //   * there will be 2 groups:
-  //   *
-  //   * <ul>
-  //   *   <li>0(127)
-  //   *   <li>1(126), 2(127)
-  //   * </ul>
-  //   *
-  //   * @param senderTxs sender transactions ordered by nonce
-  //   * @return sender tx groups split by score
-  //   */
-  //  private List<PendingTransactionGroup> splitByScore(
-  //      final NavigableMap<Long, PendingTransaction> senderTxs) {
-  //    final var splitByScore = new HashMap<Byte, PendingTransactionGroup>();
-  //    byte currScore = senderTxs.firstEntry().getValue().getScore();
-  //    var currSplit = new PendingTransactionGroup();
-  //    for (final Entry<Long, PendingTransaction> entry : senderTxs.entrySet()) {
-  //      if (entry.getValue().getScore() < currScore) {
-  //        // score decreased, we need to save current split and start a new one
-  //        splitByScore.put(currScore, currSplit);
-  //        currSplit = new PendingTransactionGroup();
-  //        currScore = entry.getValue().getScore();
-  //      }
-  //      currSplit.add(entry.getValue());
-  //    }
-  //    splitByScore.put(currScore, currSplit);
-  //    return splitByScore;
-  //  }
-
   @Override
   protected long cacheFreeSpace() {
     return Integer.MAX_VALUE;

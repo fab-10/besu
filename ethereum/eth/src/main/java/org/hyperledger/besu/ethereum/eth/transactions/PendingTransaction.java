@@ -46,54 +46,61 @@ import java.util.concurrent.atomic.AtomicLong;
  * Tracks the additional metadata associated with transactions to enable prioritization for mining
  * and deciding which transactions to drop when the transaction pool reaches its size limit.
  */
-public abstract class PendingTransaction
-    implements org.hyperledger.besu.datatypes.PendingTransaction {
+public class PendingTransaction implements org.hyperledger.besu.datatypes.PendingTransaction {
   static final int NOT_INITIALIZED = -1;
   private static final AtomicLong TRANSACTIONS_ADDED = new AtomicLong();
   private final Transaction transaction;
+  private final List<PendingTransaction> bundledTransactions;
+  private final boolean isLocal;
+  private final boolean hasPriority;
+  private final boolean isPrivate;
   private final long addedAt;
-  private final long sequence; // Allows prioritization based on order transactions are added
+  private final long sequence;
   private volatile byte score;
 
   private int memorySize = NOT_INITIALIZED;
 
   private PendingTransaction(
-      final Transaction transaction, final long addedAt, final long sequence, final byte score) {
+      final Transaction transaction,
+      final List<PendingTransaction> bundledTransactions,
+      final boolean isLocal,
+      final boolean hasPriority,
+      final boolean isPrivate,
+      final long addedAt,
+      final long sequence,
+      final byte score) {
     this.transaction = transaction;
+    this.bundledTransactions = bundledTransactions;
+    this.isLocal = isLocal;
+    this.hasPriority = hasPriority;
+    this.isPrivate = isPrivate;
     this.addedAt = addedAt;
     this.sequence = sequence;
     this.score = score;
   }
 
-  private PendingTransaction(final Transaction transaction, final long addedAt) {
-    this(transaction, addedAt, TRANSACTIONS_ADDED.getAndIncrement(), Byte.MAX_VALUE);
+  public static Builder builder(final Transaction transaction) {
+    return new Builder(transaction);
   }
 
   public static PendingTransaction newPendingTransaction(
       final Transaction transaction, final boolean isLocal, final boolean hasPriority) {
-    return newPendingTransaction(transaction, isLocal, hasPriority, System.currentTimeMillis());
-  }
-
-  public static PendingTransaction newPendingTransaction(
-      final Transaction transaction,
-      final boolean isLocal,
-      final boolean hasPriority,
-      final long addedAt) {
-    if (isLocal) {
-      if (hasPriority) {
-        return new Local.Priority(transaction, addedAt);
-      }
-      return new Local(transaction, addedAt);
-    }
-    if (hasPriority) {
-      return new Remote.Priority(transaction, addedAt);
-    }
-    return new Remote(transaction, addedAt);
+    return new Builder(transaction).isLocal(isLocal).hasPriority(hasPriority).build();
   }
 
   @Override
   public Transaction getTransaction() {
     return transaction;
+  }
+
+  @Override
+  public boolean isReceivedFromLocalSource() {
+    return isLocal;
+  }
+
+  @Override
+  public boolean hasPriority() {
+    return hasPriority;
   }
 
   public Wei getGasPrice() {
@@ -142,9 +149,20 @@ public abstract class PendingTransaction
     }
   }
 
-  public abstract PendingTransaction detachedCopy();
+  public PendingTransaction detachedCopy() {
+    return new PendingTransaction(
+        transaction.detachedCopy(),
+        bundledTransactions.stream().map(PendingTransaction::detachedCopy).toList(),
+        isLocal,
+        hasPriority,
+        isPrivate,
+        addedAt,
+        sequence,
+        score);
+  }
 
   private int computeMemorySize() {
+    // ToDo: new boolean fields and & bundledTxs
     return switch (transaction.getType()) {
           case FRONTIER -> computeFrontierMemorySize();
           case ACCESS_LIST -> computeAccessListMemorySize();
@@ -272,6 +290,7 @@ public abstract class PendingTransaction
 
   @Override
   public String toString() {
+    // ToDo: isPrivate & bundledTxs
     return "Hash="
         + transaction.getHash().toShortHexString()
         + ", nonce="
@@ -292,6 +311,7 @@ public abstract class PendingTransaction
   }
 
   public String toTraceLog() {
+    // ToDo: isPrivate & bundledTxs
     return "{sequence: "
         + sequence
         + ", addedAt: "
@@ -307,111 +327,47 @@ public abstract class PendingTransaction
         + "}";
   }
 
-  public static class Local extends PendingTransaction {
+  public static class Builder {
+    final Transaction transaction;
+    boolean isLocal;
+    boolean hasPriority;
+    boolean isPrivate;
+    List<PendingTransaction> bundledTransactions = List.of();
 
-    public Local(final Transaction transaction, final long addedAt) {
-      super(transaction, addedAt);
+    public Builder(final Transaction transaction) {
+      this.transaction = transaction;
     }
 
-    public Local(final Transaction transaction) {
-      this(transaction, System.currentTimeMillis());
+    public Builder isLocal(final boolean isLocal) {
+      this.isLocal = isLocal;
+      return this;
     }
 
-    private Local(final long sequence, final byte score, final Transaction transaction) {
-      super(transaction, System.currentTimeMillis(), sequence, score);
+    public Builder hasPriority(final boolean hasPriority) {
+      this.hasPriority = hasPriority;
+      return this;
     }
 
-    @Override
-    public PendingTransaction detachedCopy() {
-      return new Local(getSequence(), getScore(), getTransaction().detachedCopy());
+    public Builder isPrivate(final boolean isPrivate) {
+      this.isPrivate = isPrivate;
+      return this;
     }
 
-    @Override
-    public boolean isReceivedFromLocalSource() {
-      return true;
+    public Builder bundledTransactions(final List<PendingTransaction> bundledTransactions) {
+      this.bundledTransactions = bundledTransactions;
+      return this;
     }
 
-    @Override
-    public boolean hasPriority() {
-      return false;
-    }
-
-    public static class Priority extends Local {
-      public Priority(final Transaction transaction) {
-        this(transaction, System.currentTimeMillis());
-      }
-
-      public Priority(final Transaction transaction, final long addedAt) {
-        super(transaction, addedAt);
-      }
-
-      public Priority(final long sequence, final byte score, final Transaction transaction) {
-        super(sequence, score, transaction);
-      }
-
-      @Override
-      public PendingTransaction detachedCopy() {
-        return new Priority(getSequence(), getScore(), getTransaction().detachedCopy());
-      }
-
-      @Override
-      public boolean hasPriority() {
-        return true;
-      }
-    }
-  }
-
-  public static class Remote extends PendingTransaction {
-
-    public Remote(final Transaction transaction, final long addedAt) {
-      super(transaction, addedAt);
-    }
-
-    public Remote(final Transaction transaction) {
-      this(transaction, System.currentTimeMillis());
-    }
-
-    private Remote(final long sequence, final byte score, final Transaction transaction) {
-      super(transaction, System.currentTimeMillis(), sequence, score);
-    }
-
-    @Override
-    public PendingTransaction detachedCopy() {
-      return new Remote(getSequence(), getScore(), getTransaction().detachedCopy());
-    }
-
-    @Override
-    public boolean isReceivedFromLocalSource() {
-      return false;
-    }
-
-    @Override
-    public boolean hasPriority() {
-      return false;
-    }
-
-    public static class Priority extends Remote {
-      public Priority(final Transaction transaction) {
-        this(transaction, System.currentTimeMillis());
-      }
-
-      public Priority(final Transaction transaction, final long addedAt) {
-        super(transaction, addedAt);
-      }
-
-      public Priority(final long sequence, final byte score, final Transaction transaction) {
-        super(sequence, score, transaction);
-      }
-
-      @Override
-      public PendingTransaction detachedCopy() {
-        return new Priority(getSequence(), getScore(), getTransaction().detachedCopy());
-      }
-
-      @Override
-      public boolean hasPriority() {
-        return true;
-      }
+    public PendingTransaction build() {
+      return new PendingTransaction(
+          transaction,
+          bundledTransactions,
+          isLocal,
+          hasPriority,
+          isPrivate,
+          System.currentTimeMillis(),
+          TRANSACTIONS_ADDED.getAndIncrement(),
+          Byte.MAX_VALUE);
     }
   }
 

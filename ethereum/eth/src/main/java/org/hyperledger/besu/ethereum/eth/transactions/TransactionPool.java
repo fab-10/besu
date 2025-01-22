@@ -189,12 +189,73 @@ public class TransactionPool implements BlockAddedObserver {
   public ValidationResult<TransactionInvalidReason> addTransactionViaApi(
       final Transaction transaction) {
 
-    final var result = addTransaction(transaction, true);
-    if (result.isValid()) {
-      localSenders.add(transaction.getSender());
-      transactionBroadcaster.onTransactionsAdded(List.of(transaction));
+    final boolean hasPriority = isPriorityTransaction(transaction, true);
+    final var validationAndAccount = validateTransactionWithMetrics(transaction, true, hasPriority);
+
+    if (validationAndAccount.result.isValid()) {
+      final var pendingTransaction =
+          PendingTransaction.builder(transaction).isLocal(true).hasPriority(hasPriority).build();
+      final var result =
+          addTransaction(pendingTransaction, true, hasPriority, validationAndAccount.maybeAccount);
+      if (result.isValid()) {
+        localSenders.add(transaction.getSender());
+        transactionBroadcaster.onTransactionsAdded(List.of(transaction));
+      }
+      return result;
     }
-    return result;
+    return validationAndAccount.result;
+  }
+
+  public Map<Hash, ValidationResult<TransactionInvalidReason>> addBundleViaApi(
+      final List<Transaction> transactions) {
+    final var validationResultsAndAccounts =
+        HashMap.<Hash, ValidationResultAndAccount>newHashMap(transactions.size());
+
+    for (final Transaction transaction : transactions) {
+      final boolean hasPriority = isPriorityTransaction(transaction, true);
+      final var validationAndAccount =
+          validateTransactionWithMetrics(transaction, true, hasPriority);
+
+      validationResultsAndAccounts.put(transaction.getHash(), validationAndAccount);
+
+      if (!validationAndAccount.result.isValid()) {
+        // avoid further processing and just return what we found until now
+        return validationResultsAndAccounts.entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().result));
+      }
+    }
+
+    List<PendingTransaction> allTxButFirst =
+        transactions.stream()
+            .skip(1)
+            .map(
+                tx ->
+                    PendingTransaction.builder(tx)
+                        .isPrivate(true)
+                        .isLocal(true)
+                        .hasPriority(isPriorityTransaction(tx, true))
+                        .build())
+            .toList();
+
+    final var firstTx = transactions.getFirst();
+    final boolean firstTxHasPriority = isPriorityTransaction(firstTx, true);
+    final var firstTxMaybeAccount =
+        validationResultsAndAccounts.get(firstTx.getHash()).maybeAccount;
+    // at this point build a PendingTransaction.Bundle
+    final var pendingTransactionBundle =
+        PendingTransaction.builder(firstTx)
+            .isPrivate(true)
+            .isLocal(true)
+            .hasPriority(firstTxHasPriority)
+            .bundledTransactions(allTxButFirst)
+            .build();
+
+    final var result =
+        addTransaction(pendingTransactionBundle, true, firstTxHasPriority, firstTxMaybeAccount);
+    if (result.isValid()) {
+      transactionBroadcaster.onTransactionsAdded(transactions);
+    }
+    return transactions.stream().collect(Collectors.toMap(Transaction::getHash, unused -> result));
   }
 
   public Map<Hash, ValidationResult<TransactionInvalidReason>> addRemoteTransactions(
@@ -210,11 +271,28 @@ public class TransactionPool implements BlockAddedObserver {
                 Collectors.toMap(
                     Transaction::getHash,
                     transaction -> {
-                      final var result = addTransaction(transaction, false);
-                      if (result.isValid()) {
-                        addedTransactions.add(transaction);
+                      final boolean hasPriority = isPriorityTransaction(transaction, false);
+                      final var validationAndAccount =
+                          validateTransactionWithMetrics(transaction, false, hasPriority);
+                      if (validationAndAccount.result.isValid()) {
+                        final var pendingTransaction =
+                            PendingTransaction.builder(transaction)
+                                .isLocal(false)
+                                .hasPriority(hasPriority)
+                                .isPrivate(false)
+                                .build();
+                        final var result =
+                            addTransaction(
+                                pendingTransaction,
+                                false,
+                                hasPriority,
+                                validationAndAccount.maybeAccount);
+                        if (result.isValid()) {
+                          addedTransactions.add(transaction);
+                        }
+                        return result;
                       }
-                      return result;
+                      return validationAndAccount.result;
                     },
                     (transaction1, transaction2) -> transaction1));
 
@@ -240,63 +318,38 @@ public class TransactionPool implements BlockAddedObserver {
   }
 
   private ValidationResult<TransactionInvalidReason> addTransaction(
-      final Transaction transaction, final boolean isLocal) {
+      final PendingTransaction pendingTransaction,
+      final boolean isLocal,
+      final boolean hasPriority,
+      final Optional<Account> maybeAccount) {
 
-    final boolean hasPriority = isPriorityTransaction(transaction, isLocal);
-
-    if (pendingTransactions.containsTransaction(transaction)) {
+    final TransactionAddedResult status =
+        pendingTransactions.addTransaction(pendingTransaction, maybeAccount);
+    if (status.isSuccess()) {
       LOG.atTrace()
-          .setMessage("Discard already present transaction {}")
-          .addArgument(transaction::toTraceLog)
+          .setMessage("Added {} transaction {}")
+          .addArgument(() -> isLocal ? "local" : "remote")
+          .addArgument(pendingTransaction::toTraceLog)
           .log();
-      // We already have this transaction, don't even validate it.
-      metrics.incrementRejected(isLocal, hasPriority, TRANSACTION_ALREADY_KNOWN, "txpool");
-      return ValidationResult.invalid(TRANSACTION_ALREADY_KNOWN);
-    }
-
-    final ValidationResultAndAccount validationResult =
-        validateTransaction(transaction, isLocal, hasPriority);
-
-    if (validationResult.result.isValid()) {
-      final TransactionAddedResult status =
-          pendingTransactions.addTransaction(
-              PendingTransaction.newPendingTransaction(transaction, isLocal, hasPriority),
-              validationResult.maybeAccount);
-      if (status.isSuccess()) {
-        LOG.atTrace()
-            .setMessage("Added {} transaction {}")
-            .addArgument(() -> isLocal ? "local" : "remote")
-            .addArgument(transaction::toTraceLog)
-            .log();
-      } else {
-        final var rejectReason =
-            status
-                .maybeInvalidReason()
-                .orElseGet(
-                    () -> {
-                      LOG.warn("Missing invalid reason for status {}", status);
-                      return INTERNAL_ERROR;
-                    });
-        LOG.atTrace()
-            .setMessage("Transaction {} rejected reason {}")
-            .addArgument(transaction::toTraceLog)
-            .addArgument(rejectReason)
-            .log();
-        metrics.incrementRejected(isLocal, hasPriority, rejectReason, "txpool");
-        return ValidationResult.invalid(rejectReason);
-      }
     } else {
+      final var rejectReason =
+          status
+              .maybeInvalidReason()
+              .orElseGet(
+                  () -> {
+                    LOG.warn("Missing invalid reason for status {}", status);
+                    return INTERNAL_ERROR;
+                  });
       LOG.atTrace()
-          .setMessage("Discard invalid transaction {}, reason {}, because {}")
-          .addArgument(transaction::toTraceLog)
-          .addArgument(validationResult.result::getInvalidReason)
-          .addArgument(validationResult.result::getErrorMessage)
+          .setMessage("Transaction {} rejected reason {}")
+          .addArgument(pendingTransaction::toTraceLog)
+          .addArgument(rejectReason)
           .log();
-      metrics.incrementRejected(
-          isLocal, hasPriority, validationResult.result.getInvalidReason(), "txpool");
+      metrics.incrementRejected(isLocal, hasPriority, rejectReason, "txpool");
+      return ValidationResult.invalid(rejectReason);
     }
 
-    return validationResult.result;
+    return ValidationResult.valid();
   }
 
   private Optional<Wei> getMaxGasPrice(final Transaction transaction) {
@@ -405,8 +458,27 @@ public class TransactionPool implements BlockAddedObserver {
         .get();
   }
 
+  private ValidationResultAndAccount validateTransactionWithMetrics(
+      final Transaction transaction, final boolean isLocal, final boolean hasPriority) {
+    final var validationAndAccount = validateTransaction(transaction, isLocal, hasPriority);
+    if (!validationAndAccount.result.isValid()) {
+      metrics.incrementRejected(
+          isLocal, hasPriority, validationAndAccount.result.getInvalidReason(), "txpool");
+    }
+    return validationAndAccount;
+  }
+
   private ValidationResultAndAccount validateTransaction(
       final Transaction transaction, final boolean isLocal, final boolean hasPriority) {
+
+    if (pendingTransactions.containsTransaction(transaction)) {
+      LOG.atTrace()
+          .setMessage("Discard already present transaction {}")
+          .addArgument(transaction::toTraceLog)
+          .log();
+      // We already have this transaction, don't even validate it.
+      return ValidationResultAndAccount.invalid(TRANSACTION_ALREADY_KNOWN);
+    }
 
     final BlockHeader chainHeadBlockHeader = getChainHeadBlockHeader().orElse(null);
     if (chainHeadBlockHeader == null) {
@@ -822,6 +894,8 @@ public class TransactionPool implements BlockAddedObserver {
                     ptx -> {
                       final BytesValueRLPOutput rlp = new BytesValueRLPOutput();
                       ptx.getTransaction().writeTo(rlp);
+                      // ToDo .isPrivate()
+                      // ToDo bundledTransactions
                       return (ptx.isReceivedFromLocalSource() ? "l" : "r")
                           + rlp.encoded().toBase64String();
                     })
@@ -873,9 +947,28 @@ public class TransactionPool implements BlockAddedObserver {
                           final Transaction tx =
                               Transaction.readFrom(Bytes.fromBase64String(line.substring(1)));
 
-                          final ValidationResult<TransactionInvalidReason> result =
-                              addTransaction(tx, isLocal);
-                          return result.isValid() ? "OK" : result.getInvalidReason().name();
+                          final boolean hasPriority = isPriorityTransaction(tx, isLocal);
+                          final var validationAndAccount =
+                              validateTransactionWithMetrics(tx, isLocal, hasPriority);
+
+                          if (validationAndAccount.result.isValid()) {
+                            final var pendingTransaction =
+                                PendingTransaction.builder(tx)
+                                    .isLocal(isLocal)
+                                    .hasPriority(hasPriority)
+                                    // ToDo .isPrivate()
+                                    // ToDo bundledTransactions
+                                    .build();
+                            final var result =
+                                addTransaction(
+                                    pendingTransaction,
+                                    isLocal,
+                                    hasPriority,
+                                    validationAndAccount.maybeAccount);
+                            return result.isValid() ? "OK" : result.getInvalidReason().name();
+                          }
+
+                          return validationAndAccount.result.getInvalidReason().name();
                         })
                     .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
 
