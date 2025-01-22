@@ -187,15 +187,15 @@ public class TransactionSelectionResult {
   /**
    * The transaction has not been selected since a previous selection in the group was not selected
    */
-  public static final TransactionSelectionResult AFTER_NOT_SELECTED_IN_GROUP =
-      TransactionSelectionResult.invalidTransient("AFTER_NOT_SELECTED_IN_GROUP", false);
+  public static final TransactionSelectionResult AFTER_NOT_SELECTED_IN_BUNDLE =
+      TransactionSelectionResult.invalidTransient("AFTER_NOT_SELECTED_IN_BUNDLE", false);
 
   /**
    * The transaction have not been selected, since it is part of an atomic group where another
    * transaction was not selected
    */
-  public static final TransactionSelectionResult ATOMIC_GROUP_FAILURE =
-      TransactionSelectionResult.invalidTransient("ATOMIC_GROUP_FAILURE", false);
+  public static final TransactionSelectionResult BUNDLE_FAILURE =
+      TransactionSelectionResult.invalidTransient("BUNDLE_FAILURE", false);
 
   private final Status status;
   private final Optional<String> maybeInvalidReason;
@@ -243,6 +243,11 @@ public class TransactionSelectionResult {
    */
   public static TransactionSelectionResult invalid(final String invalidReason) {
     return new TransactionSelectionResult(BaseStatus.INVALID, invalidReason);
+  }
+
+  public static TransactionSelectionResult copyWithReason(
+      final TransactionSelectionResult selectionResult, final String reason) {
+    return new TransactionSelectionResult(selectionResult.status, reason);
   }
 
   /**

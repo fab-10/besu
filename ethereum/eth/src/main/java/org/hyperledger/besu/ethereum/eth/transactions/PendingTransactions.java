@@ -18,8 +18,6 @@ import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
-import org.hyperledger.besu.ethereum.eth.transactions.layered.AbstractPendingTransactionGroup;
-import org.hyperledger.besu.ethereum.eth.transactions.layered.PendingTransactionGroup;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
@@ -28,7 +26,6 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.SequencedMap;
 
 public interface PendingTransactions {
 
@@ -79,13 +76,13 @@ public interface PendingTransactions {
 
   @FunctionalInterface
   interface TransactionSelector {
-    SequencedMap<PendingTransaction, TransactionSelectionResult> evaluateGroup(
-        PendingTransactionGroup group);
+    //    SequencedMap<PendingTransaction, TransactionSelectionResult> evaluateGroup(
+    //        PendingTransactionGroup group);
 
-    default TransactionSelectionResult evaluateTransaction(
-        final PendingTransaction pendingTransaction) {
-      return evaluateGroup(new AbstractPendingTransactionGroup(List.of(pendingTransaction)))
-          .get(pendingTransaction);
-    }
+    TransactionSelectionResult evaluateTransaction(final PendingTransaction pendingTransaction);
+    //
+    //      return evaluateGroup(new AbstractPendingTransactionGroup(List.of(pendingTransaction)))
+    //          .get(pendingTransaction);
+    //    }
   }
 }

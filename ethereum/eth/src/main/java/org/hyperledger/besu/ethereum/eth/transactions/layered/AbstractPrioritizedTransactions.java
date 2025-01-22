@@ -207,13 +207,14 @@ public abstract class AbstractPrioritizedTransactions extends AbstractSequential
    *
    * @return pending tx groups ordered by score desc
    */
-  public List<? extends PendingTransactionGroup> getGrouped() {
+  public List<PendingTransaction> getForBlockSelection() {
     final var sendersToAdd = new HashSet<>(txsBySender.keySet());
     return orderByFee.descendingSet().stream()
         .map(PendingTransaction::getSender)
         .filter(sendersToAdd::remove)
         .map(sender -> createPendingTransactionGroup(txsBySender.get(sender).sequencedValues()))
         .sorted(PENDING_TRANSACTION_GROUP_COMPARATOR)
+        .flatMap(PendingTransactionGroup::stream)
         .toList();
   }
 

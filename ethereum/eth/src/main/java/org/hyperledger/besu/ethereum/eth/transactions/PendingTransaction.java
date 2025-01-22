@@ -38,6 +38,7 @@ import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.Transaction;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
@@ -101,6 +102,21 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
   @Override
   public boolean hasPriority() {
     return hasPriority;
+  }
+
+  public boolean isBundle() {
+    return !bundledTransactions.isEmpty();
+  }
+
+  public List<PendingTransaction> getBundledTransactions() {
+    if (isBundle()) {
+      final var bundledTransactions =
+          new ArrayList<PendingTransaction>(this.bundledTransactions.size() + 1);
+      bundledTransactions.add(this);
+      bundledTransactions.addAll(this.bundledTransactions);
+      return bundledTransactions;
+    }
+    return List.of();
   }
 
   public Wei getGasPrice() {
@@ -328,11 +344,11 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
   }
 
   public static class Builder {
-    final Transaction transaction;
+    Transaction transaction;
     boolean isLocal;
     boolean hasPriority;
     boolean isPrivate;
-    List<PendingTransaction> bundledTransactions = List.of();
+    List<PendingTransaction> bundledTransactions;
 
     public Builder(final Transaction transaction) {
       this.transaction = transaction;

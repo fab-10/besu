@@ -17,22 +17,16 @@ package org.hyperledger.besu.ethereum.eth.transactions.layered;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 
-import java.util.Iterator;
 import java.util.stream.Stream;
 
-public interface PendingTransactionGroup extends Iterable<PendingTransaction> {
+public interface PendingTransactionGroup {
   boolean hasPriority();
 
   Wei getAverageFee();
 
   byte getScore();
 
-  boolean isAtomic();
-
   int size();
 
   Stream<PendingTransaction> stream();
-
-  @Override
-  Iterator<PendingTransaction> iterator();
 }

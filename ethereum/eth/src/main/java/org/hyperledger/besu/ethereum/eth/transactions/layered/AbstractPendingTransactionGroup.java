@@ -17,7 +17,6 @@ package org.hyperledger.besu.ethereum.eth.transactions.layered;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 
-import java.util.Iterator;
 import java.util.SequencedCollection;
 import java.util.stream.Stream;
 
@@ -56,11 +55,6 @@ public class AbstractPendingTransactionGroup implements PendingTransactionGroup 
   }
 
   @Override
-  public boolean isAtomic() {
-    return false;
-  }
-
-  @Override
   public int size() {
     return pendingTxs.size();
   }
@@ -68,10 +62,5 @@ public class AbstractPendingTransactionGroup implements PendingTransactionGroup 
   @Override
   public Stream<PendingTransaction> stream() {
     return pendingTxs.stream();
-  }
-
-  @Override
-  public Iterator<PendingTransaction> iterator() {
-    return pendingTxs.iterator();
   }
 }

@@ -314,54 +314,56 @@ public class LayeredPendingTransactions implements PendingTransactions {
   @Override
   public void selectTransactions(final PendingTransactions.TransactionSelector selector) {
 
-    final List<? extends PendingTransactionGroup> pendingTxGroupsByScore;
+    final List<PendingTransaction> candidatePendingTxs;
     synchronized (this) {
       // since selecting transactions for block creation is a potential long operation
       // we want to avoid to keep the lock for all the process, but we just lock to get
       // the candidate transactions
-      pendingTxGroupsByScore = prioritizedTransactions.getGrouped();
+      candidatePendingTxs = prioritizedTransactions.getForBlockSelection();
     }
 
-    selection:
-    for (final var scoredGroup : pendingTxGroupsByScore) {
-      LOG.trace("Evaluating pending tx group {}", scoredGroup);
-      final var selectionResults = selector.evaluateGroup(scoredGroup);
+    for (final var candidatePendingTx : candidatePendingTxs) {
+      LOG.atTrace()
+          .setMessage("Evaluating pending tx {}")
+          .addArgument(candidatePendingTx::toTraceLog)
+          .log();
+      final var selectionResult = selector.evaluateTransaction(candidatePendingTx);
+      //
+      //      for (final var resultEntry : selectionResults.entrySet()) {
+      //        final var candidatePendingTx = resultEntry.getKey();
+      //        final var selectionResult = resultEntry.getValue();
+      LOG.atTrace()
+          .setMessage("Selection result {} for transaction {}")
+          .addArgument(selectionResult)
+          .addArgument(candidatePendingTx::toTraceLog)
+          .log();
 
-      for (final var resultEntry : selectionResults.entrySet()) {
-        final var candidatePendingTx = resultEntry.getKey();
-        final var selectionResult = resultEntry.getValue();
+      if (selectionResult.discard()) {
+        ethScheduler.scheduleTxWorkerTask(
+            () -> {
+              synchronized (this) {
+                prioritizedTransactions.remove(candidatePendingTx, INVALIDATED);
+              }
+            });
+        logDiscardedTransaction(candidatePendingTx, selectionResult);
+      } else if (selectionResult.penalize()) {
+        ethScheduler.scheduleTxWorkerTask(
+            () -> {
+              synchronized (this) {
+                prioritizedTransactions.penalize(candidatePendingTx);
+              }
+            });
         LOG.atTrace()
-            .setMessage("Selection result {} for transaction {}")
-            .addArgument(selectionResult)
+            .setMessage("Transaction {} penalized")
             .addArgument(candidatePendingTx::toTraceLog)
             .log();
-
-        if (selectionResult.discard()) {
-          ethScheduler.scheduleTxWorkerTask(
-              () -> {
-                synchronized (this) {
-                  prioritizedTransactions.remove(candidatePendingTx, INVALIDATED);
-                }
-              });
-          logDiscardedTransaction(candidatePendingTx, selectionResult);
-        } else if (selectionResult.penalize()) {
-          ethScheduler.scheduleTxWorkerTask(
-              () -> {
-                synchronized (this) {
-                  prioritizedTransactions.penalize(candidatePendingTx);
-                }
-              });
-          LOG.atTrace()
-              .setMessage("Transaction {} penalized")
-              .addArgument(candidatePendingTx::toTraceLog)
-              .log();
-        }
-
-        if (selectionResult.stop()) {
-          LOG.trace("Stopping selection");
-          break selection;
-        }
       }
+
+      if (selectionResult.stop()) {
+        LOG.trace("Stopping selection");
+        break;
+      }
+      //      }
     }
   }
 
