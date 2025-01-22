@@ -54,7 +54,6 @@ import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.plugin.services.exception.StorageException;
 import org.hyperledger.besu.plugin.services.securitymodule.SecurityModuleException;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
-import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
 
 import java.util.List;
@@ -217,13 +216,10 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
       throwIfStopped();
 
       final var selectorsStateManager = new SelectorsStateManager();
-      final PluginTransactionSelector pluginTransactionSelector =
+      final BlockAwareOperationTracer operationTracer =
           miningConfiguration
               .getTransactionSelectionService()
-              .createPluginTransactionSelector(selectorsStateManager);
-
-      final BlockAwareOperationTracer operationTracer =
-          pluginTransactionSelector.getOperationTracer();
+              .createTransactionSelectionOperationTracer();
 
       operationTracer.traceStartBlock(processableBlockHeader, miningBeneficiary);
       timings.register("preTxsSelection");
@@ -234,7 +230,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
               maybeTransactions,
               miningBeneficiary,
               newProtocolSpec,
-              pluginTransactionSelector,
+              operationTracer,
               parentHeader,
               selectorsStateManager);
       transactionResults.logSelectionStats();
@@ -366,7 +362,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
       final Optional<List<Transaction>> transactions,
       final Address miningBeneficiary,
       final ProtocolSpec protocolSpec,
-      final PluginTransactionSelector pluginTransactionSelector,
+      final BlockAwareOperationTracer operationTracer,
       final BlockHeader parentHeader,
       final SelectorsStateManager selectorsStateManager)
       throws RuntimeException {
@@ -396,7 +392,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
             protocolSpec.getGasCalculator(),
             protocolSpec.getGasLimitCalculator(),
             protocolSpec.getBlockHashProcessor(),
-            pluginTransactionSelector,
+            operationTracer,
             ethScheduler,
             selectorsStateManager);
 

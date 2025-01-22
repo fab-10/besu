@@ -15,6 +15,7 @@
 package org.hyperledger.besu.plugin.services.txselection;
 
 import org.hyperledger.besu.plugin.Unstable;
+import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 
 /** Interface for a factory that creates transaction selectors */
 @Unstable
@@ -25,8 +26,15 @@ public interface PluginTransactionSelectorFactory {
    *
    * @return the transaction selector
    */
-  @Deprecated
-  PluginTransactionSelector create();
-
   PluginTransactionSelector create(SelectorsStateManager selectorsStateManager);
+
+  /**
+   * Method that returns an OperationTracer that will be used when executing transactions that are
+   * candidates to be added to a block.
+   *
+   * @return OperationTracer to be used to trace candidate transactions
+   */
+  default BlockAwareOperationTracer createOperationTracer() {
+    return BlockAwareOperationTracer.NO_TRACING;
+  }
 }

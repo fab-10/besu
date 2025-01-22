@@ -15,6 +15,7 @@
 package org.hyperledger.besu.services;
 
 import org.hyperledger.besu.plugin.services.TransactionSelectionService;
+import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelectorFactory;
 import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
@@ -30,14 +31,6 @@ public class TransactionSelectionServiceImpl implements TransactionSelectionServ
   private Optional<PluginTransactionSelectorFactory> factory = Optional.empty();
 
   @Override
-  @Deprecated
-  public PluginTransactionSelector createPluginTransactionSelector() {
-    return factory
-        .map(PluginTransactionSelectorFactory::create)
-        .orElse(PluginTransactionSelector.ACCEPT_ALL);
-  }
-
-  @Override
   public PluginTransactionSelector createPluginTransactionSelector(
       final SelectorsStateManager selectorsStateManager) {
     return factory
@@ -45,6 +38,13 @@ public class TransactionSelectionServiceImpl implements TransactionSelectionServ
             pluginTransactionSelectorFactory ->
                 pluginTransactionSelectorFactory.create(selectorsStateManager))
         .orElse(PluginTransactionSelector.ACCEPT_ALL);
+  }
+
+  @Override
+  public BlockAwareOperationTracer createTransactionSelectionOperationTracer() {
+    return factory
+        .map(PluginTransactionSelectorFactory::createOperationTracer)
+        .orElse(BlockAwareOperationTracer.NO_TRACING);
   }
 
   @Override

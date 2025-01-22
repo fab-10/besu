@@ -136,7 +136,7 @@ public class BlockTransactionSelector {
       final GasCalculator gasCalculator,
       final GasLimitCalculator gasLimitCalculator,
       final BlockHashProcessor blockHashProcessor,
-      final PluginTransactionSelector pluginTransactionSelector,
+      final BlockAwareOperationTracer operationTracer,
       final EthScheduler ethScheduler,
       final SelectorsStateManager selectorsStateManager) {
     this.transactionProcessor = transactionProcessor;
@@ -158,9 +158,11 @@ public class BlockTransactionSelector {
             transactionPool);
     this.selectorsStateManager = selectorsStateManager;
     transactionSelectors = createTransactionSelectors(blockSelectionContext, selectorsStateManager);
-    this.pluginTransactionSelector = pluginTransactionSelector;
-    this.operationTracer =
-        new InterruptibleOperationTracer(pluginTransactionSelector.getOperationTracer());
+    this.pluginTransactionSelector =
+        miningConfiguration
+            .getTransactionSelectionService()
+            .createPluginTransactionSelector(selectorsStateManager);
+    this.operationTracer = new InterruptibleOperationTracer(operationTracer);
     blockWorldStateUpdater = worldState.updater();
     blockTxsSelectionMaxTime = miningConfiguration.getBlockTxsSelectionMaxTime();
   }
