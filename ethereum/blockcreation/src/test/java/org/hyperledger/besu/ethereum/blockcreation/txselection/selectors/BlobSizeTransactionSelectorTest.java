@@ -169,13 +169,11 @@ class BlobSizeTransactionSelectorTest {
   }
 
   private PendingTransaction createEIP1559PendingTransaction() {
-    return PendingTransaction.newPendingTransaction(
-        createTransaction(TransactionType.EIP1559, 0), false, false);
+    return PendingTransaction.builder(createTransaction(TransactionType.EIP1559, 0)).build();
   }
 
   private PendingTransaction createBlobPendingTransaction(final int blobCount) {
-    return PendingTransaction.newPendingTransaction(
-        createTransaction(TransactionType.BLOB, blobCount), false, false);
+    return PendingTransaction.builder(createTransaction(TransactionType.BLOB, blobCount)).build();
   }
 
   private Transaction createTransaction(final TransactionType type, final int blobCount) {

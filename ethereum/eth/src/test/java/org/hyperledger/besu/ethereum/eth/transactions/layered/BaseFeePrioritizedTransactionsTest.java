@@ -132,12 +132,14 @@ public class BaseFeePrioritizedTransactionsTest extends AbstractPrioritizedTrans
         IntStream.range(0, MAX_TRANSACTIONS)
             .mapToObj(
                 i ->
-                    new PendingTransaction.Remote(
-                        createTransaction(
-                            0,
-                            DEFAULT_MIN_GAS_PRICE.add(1),
-                            SIGNATURE_ALGORITHM.get().generateKeyPair())))
-            .collect(Collectors.toUnmodifiableList());
+                    PendingTransaction.builder(
+                            createTransaction(
+                                0,
+                                DEFAULT_MIN_GAS_PRICE.add(1),
+                                SIGNATURE_ALGORITHM.get().generateKeyPair()))
+                        .isLocal(false)
+                        .build())
+            .toList();
 
     final var lowestPriorityFee =
         lowValueTxs.stream()

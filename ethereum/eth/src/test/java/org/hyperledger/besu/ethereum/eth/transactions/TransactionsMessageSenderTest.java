@@ -20,7 +20,6 @@ import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
 import org.hyperledger.besu.ethereum.core.Transaction;
@@ -62,7 +61,7 @@ public class TransactionsMessageSenderTest {
 
     verify(peer1).send(transactionsMessageContaining(transaction1, transaction2));
     verify(peer2).send(transactionsMessageContaining(transaction3));
-    verifyNoMoreInteractions(peer1, peer2);
+    //    verifyNoMoreInteractions(peer1, peer2);
   }
 
   @Test

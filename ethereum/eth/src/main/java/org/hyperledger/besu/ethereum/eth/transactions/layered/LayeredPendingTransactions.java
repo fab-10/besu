@@ -328,10 +328,7 @@ public class LayeredPendingTransactions implements PendingTransactions {
           .addArgument(candidatePendingTx::toTraceLog)
           .log();
       final var selectionResult = selector.evaluateTransaction(candidatePendingTx);
-      //
-      //      for (final var resultEntry : selectionResults.entrySet()) {
-      //        final var candidatePendingTx = resultEntry.getKey();
-      //        final var selectionResult = resultEntry.getValue();
+
       LOG.atTrace()
           .setMessage("Selection result {} for transaction {}")
           .addArgument(selectionResult)
@@ -363,7 +360,6 @@ public class LayeredPendingTransactions implements PendingTransactions {
         LOG.trace("Stopping selection");
         break;
       }
-      //      }
     }
   }
 

@@ -348,7 +348,7 @@ public class PendingTransactionEstimatedMemorySizeTest extends BaseTransactionPo
     System.out.println(txPayload.getHash());
     System.out.println(txPayload.getSize());
 
-    final PendingTransaction pendingTx = new PendingTransaction.Remote(txPayload);
+    final PendingTransaction pendingTx = PendingTransaction.builder(txPayload).build();
 
     final ClassLayout cl = ClassLayout.parseInstance(pendingTx);
     System.out.println(cl.toPrintable());

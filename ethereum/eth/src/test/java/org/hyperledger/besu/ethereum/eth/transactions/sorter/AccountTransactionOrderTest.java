@@ -30,10 +30,10 @@ public class AccountTransactionOrderTest {
 
   private static final KeyPair KEYS = SignatureAlgorithmFactory.getInstance().generateKeyPair();
 
-  private final PendingTransaction pendingTx1 = new PendingTransaction.Remote((transaction(1)));
-  private final PendingTransaction pendingTx2 = new PendingTransaction.Remote((transaction(2)));
-  private final PendingTransaction pendingTx3 = new PendingTransaction.Remote((transaction(3)));
-  private final PendingTransaction pendingTx4 = new PendingTransaction.Remote((transaction(4)));
+  private final PendingTransaction pendingTx1 = PendingTransaction.builder(transaction(1)).build();
+  private final PendingTransaction pendingTx2 = PendingTransaction.builder(transaction(2)).build();
+  private final PendingTransaction pendingTx3 = PendingTransaction.builder(transaction(3)).build();
+  private final PendingTransaction pendingTx4 = PendingTransaction.builder(transaction(4)).build();
   private final AccountTransactionOrder accountTransactionOrder =
       new AccountTransactionOrder(Stream.of(pendingTx1, pendingTx2, pendingTx3, pendingTx4));
 

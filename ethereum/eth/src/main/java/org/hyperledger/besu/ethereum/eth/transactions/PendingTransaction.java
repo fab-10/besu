@@ -84,11 +84,6 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
     return new Builder(transaction);
   }
 
-  public static PendingTransaction newPendingTransaction(
-      final Transaction transaction, final boolean isLocal, final boolean hasPriority) {
-    return new Builder(transaction).isLocal(isLocal).hasPriority(hasPriority).build();
-  }
-
   @Override
   public Transaction getTransaction() {
     return transaction;
@@ -102,6 +97,10 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
   @Override
   public boolean hasPriority() {
     return hasPriority;
+  }
+
+  public boolean isPrivate() {
+    return isPrivate;
   }
 
   public boolean isBundle() {
@@ -348,7 +347,8 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
     boolean isLocal;
     boolean hasPriority;
     boolean isPrivate;
-    List<PendingTransaction> bundledTransactions;
+    long addedAt = NOT_INITIALIZED;
+    List<PendingTransaction> bundledTransactions = List.of();
 
     public Builder(final Transaction transaction) {
       this.transaction = transaction;
@@ -369,6 +369,11 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
       return this;
     }
 
+    public Builder addedAt(final long addedAt) {
+      this.addedAt = addedAt;
+      return this;
+    }
+
     public Builder bundledTransactions(final List<PendingTransaction> bundledTransactions) {
       this.bundledTransactions = bundledTransactions;
       return this;
@@ -381,7 +386,7 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
           isLocal,
           hasPriority,
           isPrivate,
-          System.currentTimeMillis(),
+          addedAt == NOT_INITIALIZED ? System.currentTimeMillis() : addedAt,
           TRANSACTIONS_ADDED.getAndIncrement(),
           Byte.MAX_VALUE);
     }
@@ -409,6 +414,6 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
     int KZG_COMMITMENT_OR_PROOF_SIZE = 112;
     int BLOB_SIZE = 131136;
     int BLOBS_WITH_COMMITMENTS_SIZE = 40;
-    int PENDING_TRANSACTION_SHALLOW_SIZE = 40;
+    int PENDING_TRANSACTION_SHALLOW_SIZE = 48;
   }
 }

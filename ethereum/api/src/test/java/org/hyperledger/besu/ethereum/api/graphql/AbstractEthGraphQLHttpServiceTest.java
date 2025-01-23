@@ -102,13 +102,15 @@ public abstract class AbstractEthGraphQLHttpServiceTest {
     Mockito.when(transactionPoolMock.getPendingTransactions())
         .thenReturn(
             Collections.singleton(
-                new PendingTransaction.Local(
-                    Transaction.builder()
-                        .type(TransactionType.FRONTIER)
-                        .nonce(42)
-                        .gasLimit(654321)
-                        .gasPrice(Wei.ONE)
-                        .build())));
+                PendingTransaction.builder(
+                        Transaction.builder()
+                            .type(TransactionType.FRONTIER)
+                            .nonce(42)
+                            .gasLimit(654321)
+                            .gasPrice(Wei.ONE)
+                            .build())
+                    .isLocal(true)
+                    .build()));
 
     final MutableBlockchain blockchain = blockchainSetupUtil.getBlockchain();
     ProtocolContext context =

@@ -307,8 +307,7 @@ public class ReplayTest {
     }
     assertThat(
             pendingTransactions.addTransaction(
-                PendingTransaction.newPendingTransaction(tx, false, false),
-                Optional.of(mockAccount)))
+                PendingTransaction.builder(tx).build(), Optional.of(mockAccount)))
         .isNotEqualTo(TransactionAddedResult.INTERNAL_ERROR);
     if (tx.getSender().equals(senderToLog)) {
       LOG.warn("After {}", prioritizedTransactions.logSender(senderToLog));
@@ -322,7 +321,8 @@ public class ReplayTest {
     if (tx.getSender().equals(senderToLog)) {
       LOG.warn("D {}, Before {}", tx.getNonce(), prioritizedTransactions.logSender(senderToLog));
     }
-    prioritizedTransactions.remove(new PendingTransaction.Remote(tx), INVALIDATED);
+    prioritizedTransactions.remove(
+        PendingTransaction.builder(tx).isLocal(false).build(), INVALIDATED);
     if (tx.getSender().equals(senderToLog)) {
       LOG.warn("After {}", prioritizedTransactions.logSender(senderToLog));
     }

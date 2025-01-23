@@ -91,8 +91,10 @@ public class LayersTest extends BaseTransactionPoolTest {
           .maxFutureBySender(MAX_FUTURE_FOR_SENDER)
           .minScore(MIN_SCORE)
           .pendingTransactionsLayerMaxCapacityBytes(
-              new PendingTransaction.Remote(
+              PendingTransaction.builder(
                           new BaseTransactionPoolTest().createEIP1559Transaction(0, KEYS1, 1))
+                      .isLocal(false)
+                      .build()
                       .memorySize()
                   * 3L)
           .build();
@@ -104,8 +106,10 @@ public class LayersTest extends BaseTransactionPoolTest {
           .maxFutureBySender(MAX_FUTURE_FOR_SENDER)
           .minScore(MIN_SCORE)
           .pendingTransactionsLayerMaxCapacityBytes(
-              new PendingTransaction.Remote(
+              PendingTransaction.builder(
                           new BaseTransactionPoolTest().createEIP4844Transaction(0, KEYS1, 1, 1))
+                      .isLocal(false)
+                      .build()
                       .memorySize()
                   * 3L)
           .build();
@@ -1901,10 +1905,7 @@ public class LayersTest extends BaseTransactionPoolTest {
 
     private void assertExpectedPrioritized(
         final AbstractPrioritizedTransactions prioLayer, final List<PendingTransaction> expected) {
-      final var flatOrder =
-          prioLayer.getForBlockSelection().stream()
-              .flatMap(PendingTransactionGroup::stream)
-              .toList();
+      final var flatOrder = prioLayer.getForBlockSelection();
       assertThat(flatOrder).describedAs("Prioritized").containsExactlyElementsOf(expected);
     }
 

@@ -94,7 +94,7 @@ public class EthGetFilterChangesIntegrationTest {
   private static final int MAX_TRANSACTIONS = 5;
   private static final KeyPair keyPair = SignatureAlgorithmFactory.getInstance().generateKeyPair();
   private final PendingTransaction pendingTransaction =
-      new PendingTransaction.Local(createTransaction(1));
+      PendingTransaction.builder(createTransaction(1)).build();
   private FilterManager filterManager;
   private EthGetFilterChanges method;
 

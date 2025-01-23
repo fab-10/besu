@@ -1023,23 +1023,24 @@ public class MergeCoordinatorTest implements MergeGenesisConfigHelper {
   }
 
   private PendingTransaction createLocalTransaction(final long transactionNumber) {
-    return PendingTransaction.newPendingTransaction(
-        new TransactionTestFixture()
-            .value(Wei.of(transactionNumber + 1))
-            .to(Optional.of(Address.ZERO))
-            .gasLimit(53000L)
-            .gasPrice(
-                Wei.fromHexString(
-                    "0x00000000000000000000000000000000000000000000000000000013b9aca00"))
-            .maxFeePerGas(
-                Optional.of(
+    return PendingTransaction.builder(
+            new TransactionTestFixture()
+                .value(Wei.of(transactionNumber + 1))
+                .to(Optional.of(Address.ZERO))
+                .gasLimit(53000L)
+                .gasPrice(
                     Wei.fromHexString(
-                        "0x00000000000000000000000000000000000000000000000000000013b9aca00")))
-            .maxPriorityFeePerGas(Optional.of(Wei.of(100_000)))
-            .nonce(transactionNumber)
-            .createTransaction(KEYS1),
-        true,
-        true);
+                        "0x00000000000000000000000000000000000000000000000000000013b9aca00"))
+                .maxFeePerGas(
+                    Optional.of(
+                        Wei.fromHexString(
+                            "0x00000000000000000000000000000000000000000000000000000013b9aca00")))
+                .maxPriorityFeePerGas(Optional.of(Wei.of(100_000)))
+                .nonce(transactionNumber)
+                .createTransaction(KEYS1))
+        .isLocal(true)
+        .hasPriority(true)
+        .build();
   }
 
   private static BlockHeader mockBlockHeader() {

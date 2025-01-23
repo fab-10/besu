@@ -210,7 +210,7 @@ class EthGetTransactionByHashTest {
     Transaction pendingTransaction = gen.transaction();
     System.out.println(pendingTransaction.getHash());
     return gen.transactionsWithAllTypes(4).stream()
-        .map(PendingTransaction.Local::new)
+        .map(tx -> PendingTransaction.builder(tx).isLocal(true).build())
         .collect(Collectors.toUnmodifiableSet());
   }
 }

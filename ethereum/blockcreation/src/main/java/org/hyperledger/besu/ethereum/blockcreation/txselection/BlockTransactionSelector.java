@@ -72,6 +72,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import com.google.common.base.Stopwatch;
+import com.google.common.collect.Iterators;
 import org.apache.commons.lang3.mutable.MutableObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -285,11 +286,9 @@ public class BlockTransactionSelector {
     checkCancellation();
 
     final List<TransactionEvaluationContext> evaluationContexts =
-        pendingTransaction.isBundle()
-            ? createBundleEvaluationContexts(pendingTransaction)
-            : List.of(createEvaluationContext(pendingTransaction));
+        createEvaluationContexts(pendingTransaction);
 
-    final var evaluationResults = new BundleEvaluationResults(pendingTransaction);
+    final var evaluationResults = EvaluationResults.create(pendingTransaction);
 
     final var currStateUpdaterSupplier = new MutableObject<>(blockWorldStateUpdater.updater());
 
@@ -330,14 +329,16 @@ public class BlockTransactionSelector {
       }
     }
 
-    return handleBundleEvaluationResults(pendingTransaction, evaluationResults);
+    return handleEvaluationResults(pendingTransaction, evaluationResults);
   }
 
-  private List<TransactionEvaluationContext> createBundleEvaluationContexts(
+  private List<TransactionEvaluationContext> createEvaluationContexts(
       final PendingTransaction pendingTransaction) {
-    return pendingTransaction.getBundledTransactions().stream()
-        .map(this::createEvaluationContext)
-        .toList();
+    return pendingTransaction.isBundle()
+        ? pendingTransaction.getBundledTransactions().stream()
+            .map(this::createEvaluationContext)
+            .toList()
+        : List.of(createEvaluationContext(pendingTransaction));
   }
 
   private TransactionEvaluationContext createEvaluationContext(
@@ -458,14 +459,14 @@ public class BlockTransactionSelector {
    *
    * @param evaluationContext The current selection session data.
    * @param processingResult The result of the transaction processing.
-   * @param bundleEvaluationResults The group evaluation results
+   * @param evaluationResults The group evaluation results
    * @param currStateUpdaterSupplier The current world state update container
    * @return The false if there was a timeout
    */
   private boolean handleTransactionSelected(
       final TransactionEvaluationContext evaluationContext,
       final TransactionProcessingResult processingResult,
-      final BundleEvaluationResults bundleEvaluationResults,
+      final EvaluationResults evaluationResults,
       final MutableObject<WorldUpdater> currStateUpdaterSupplier) {
     final Transaction transaction = evaluationContext.getTransaction();
 
@@ -484,9 +485,9 @@ public class BlockTransactionSelector {
     final var evaluationResult =
         new EvaluationResult(evaluationContext, processingResult, receipt, gasUsedByTransaction);
 
-    bundleEvaluationResults.add(evaluationResult);
+    evaluationResults.add(evaluationResult);
 
-    final boolean savePendingResults = bundleEvaluationResults.canSavePendingResults();
+    final boolean savePendingResults = evaluationResults.canSavePendingResults();
 
     final boolean tooLate;
 
@@ -496,7 +497,7 @@ public class BlockTransactionSelector {
     synchronized (isTimeout) {
       tooLate = isTimeout.get();
       if (!tooLate && savePendingResults) {
-        savePendingResults(bundleEvaluationResults, currStateUpdaterSupplier);
+        savePendingResults(evaluationResults, currStateUpdaterSupplier);
       }
     }
 
@@ -504,7 +505,7 @@ public class BlockTransactionSelector {
     // the plugins can take
     if (!tooLate) {
       if (savePendingResults) {
-        bundleEvaluationResults
+        evaluationResults
             .streamNotNotified()
             .forEach(
                 evalRes -> {
@@ -527,13 +528,13 @@ public class BlockTransactionSelector {
   }
 
   private void savePendingResults(
-      final BundleEvaluationResults bundleEvaluationResults,
+      final EvaluationResults evaluationResults,
       final MutableObject<WorldUpdater> currStateUpdaterSupplier) {
     // save consists in updating then state now and saving the selected txs and their results,
     // and recreate the world state updater and intermediate data structures
     currStateUpdaterSupplier.getValue().commit();
     blockWorldStateUpdater.commit();
-    bundleEvaluationResults
+    evaluationResults
         .streamNotSaved()
         .forEach(
             evalRes -> {
@@ -552,11 +553,10 @@ public class BlockTransactionSelector {
     currStateUpdaterSupplier.setValue(blockWorldStateUpdater.updater());
   }
 
-  private TransactionSelectionResult handleBundleEvaluationResults(
-      final PendingTransaction pendingTransaction,
-      final BundleEvaluationResults bundleEvaluationResults) {
+  private TransactionSelectionResult handleEvaluationResults(
+      final PendingTransaction pendingTransaction, final EvaluationResults evaluationResults) {
 
-    final var maybeNotSelectedResult = bundleEvaluationResults.maybeNotSelectedTx();
+    final var maybeNotSelectedResult = evaluationResults.maybeNotSelectedTx();
 
     maybeNotSelectedResult.ifPresent(
         selRes ->
@@ -568,7 +568,7 @@ public class BlockTransactionSelector {
 
     final List<PendingTransaction> bundlePendingTxs = pendingTransaction.getBundledTransactions();
     final Iterator<PendingTransaction> bundleIterator = bundlePendingTxs.iterator();
-    final Iterator<EvaluationResult> resultIterator = bundleEvaluationResults.iterator();
+    final Iterator<EvaluationResult> resultIterator = evaluationResults.iterator();
     final List<TransactionSelectionResult> bundleSelectionResults =
         new ArrayList<>(bundlePendingTxs.size());
 
@@ -712,7 +712,61 @@ public class BlockTransactionSelector {
     }
   }
 
-  private static class BundleEvaluationResults implements Iterable<EvaluationResult> {
+  private interface EvaluationResults extends Iterable<EvaluationResult> {
+    static EvaluationResults create(final PendingTransaction pendingTransaction) {
+      return pendingTransaction.isBundle()
+          ? new BundleEvaluationResults(pendingTransaction)
+          : new SingletonEvaluationResults();
+    }
+
+    boolean canSavePendingResults();
+
+    void add(EvaluationResult evaluationResult);
+
+    Stream<EvaluationResult> streamNotSaved();
+
+    Stream<EvaluationResult> streamNotNotified();
+
+    Optional<EvaluationResult> maybeNotSelectedTx();
+  }
+
+  private static class SingletonEvaluationResults implements EvaluationResults {
+    EvaluationResult evaluationResult;
+
+    @Override
+    public boolean canSavePendingResults() {
+      return true;
+    }
+
+    @Override
+    public void add(final EvaluationResult evaluationResult) {
+      this.evaluationResult = evaluationResult;
+    }
+
+    @Override
+    public Stream<EvaluationResult> streamNotSaved() {
+      return evaluationResult.isSaved() ? Stream.empty() : Stream.of(evaluationResult);
+    }
+
+    @Override
+    public Stream<EvaluationResult> streamNotNotified() {
+      return evaluationResult.isNotified() ? Stream.empty() : Stream.of(evaluationResult);
+    }
+
+    @Override
+    public final Optional<EvaluationResult> maybeNotSelectedTx() {
+      return evaluationResult.selectionResult.selected()
+          ? Optional.empty()
+          : Optional.of(evaluationResult);
+    }
+
+    @Override
+    public Iterator<EvaluationResult> iterator() {
+      return Iterators.singletonIterator(evaluationResult);
+    }
+  }
+
+  private static class BundleEvaluationResults implements EvaluationResults {
     final List<PendingTransaction> bundledTransactions;
     final List<EvaluationResult> evaluationResults;
 
@@ -721,23 +775,28 @@ public class BlockTransactionSelector {
       this.evaluationResults = new ArrayList<>(bundledTransactions.size());
     }
 
-    boolean canSavePendingResults() {
+    @Override
+    public boolean canSavePendingResults() {
       return evaluationResults.size() == bundledTransactions.size();
     }
 
-    void add(final EvaluationResult evaluationResult) {
+    @Override
+    public void add(final EvaluationResult evaluationResult) {
       evaluationResults.add(evaluationResult);
     }
 
-    Stream<EvaluationResult> streamNotSaved() {
+    @Override
+    public Stream<EvaluationResult> streamNotSaved() {
       return evaluationResults.stream().filter(res -> !res.isSaved());
     }
 
-    Stream<EvaluationResult> streamNotNotified() {
+    @Override
+    public Stream<EvaluationResult> streamNotNotified() {
       return evaluationResults.stream().filter(res -> !res.isNotified());
     }
 
-    final Optional<EvaluationResult> maybeNotSelectedTx() {
+    @Override
+    public final Optional<EvaluationResult> maybeNotSelectedTx() {
       return evaluationResults.stream().filter(res -> !res.selectionResult.selected()).findFirst();
     }
 

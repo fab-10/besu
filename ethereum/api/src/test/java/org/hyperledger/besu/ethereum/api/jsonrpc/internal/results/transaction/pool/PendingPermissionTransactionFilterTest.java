@@ -123,7 +123,7 @@ public class PendingPermissionTransactionFilterTest {
       if (i == numberTrx - 1) {
         when(transaction.isContractCreation()).thenReturn(true);
       }
-      pendingTransactionList.add(new PendingTransaction.Local(transaction));
+      pendingTransactionList.add(PendingTransaction.builder(transaction).isLocal(true).build());
     }
     return new LinkedHashSet<>(pendingTransactionList);
   }

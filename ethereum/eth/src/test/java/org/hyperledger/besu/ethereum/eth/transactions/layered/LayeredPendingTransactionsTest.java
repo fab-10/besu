@@ -33,7 +33,6 @@ import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_OCCUPANCY_ABOVE_THRESHOLD;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_SELECTION_TIMEOUT;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.SELECTED;
-import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.SENDER_WITH_PREVIOUS_TX_NOT_SELECTED;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -67,8 +66,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.SequencedMap;
 import java.util.function.BiFunction;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -408,21 +405,17 @@ public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
     final var pendingTx0a = createRemotePendingTransaction(transaction0);
     final var pendingTx0b = createRemotePendingTransaction(transaction0b);
 
-    // adding txs from 2 senders will create to groups
     pendingTransactions.addTransaction(pendingTx0a, Optional.empty());
     pendingTransactions.addTransaction(pendingTx0b, Optional.empty());
 
     pendingTransactions.selectTransactions(
-        group -> {
-          if (group.stream().anyMatch(pendingTx0a::equals)) {
-            // the evaluation of the first group tells to the selector to stop
-            final var selectionResults =
-                LinkedHashMap.<PendingTransaction, TransactionSelectionResult>newLinkedHashMap(1);
-            selectionResults.put(pendingTx0a, selectionResult);
-            return selectionResults;
+        pendingTransaction -> {
+          if (pendingTransaction.equals(pendingTx0a)) {
+            // the evaluation of the first pending tx tells to the selector to stop
+            return selectionResult;
           }
-          // so the second group must not be evaluated
-          // this also ensure the order in which the groups are evaluated
+          // so the second pending tx must not be evaluated
+          // this also ensure the order in which the pending txs are evaluated
           fail("Not expected group");
           return null;
         });
@@ -439,18 +432,14 @@ public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
     pendingTransactions.addTransaction(
         createRemotePendingTransaction(transaction1), Optional.empty());
 
-    final List<Transaction> parsedTransactions = new ArrayList<>();
+    final List<Transaction> parsedTransactions = new ArrayList<>(2);
     pendingTransactions.selectTransactions(
-        group -> {
-          final var selectionResults = selector(group, SELECTED);
-          parsedTransactions.addAll(
-              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
-          return selectionResults;
+        pendingTransaction -> {
+          parsedTransactions.add(pendingTransaction.getTransaction());
+          return SELECTED;
         });
 
-    assertThat(parsedTransactions.size()).isEqualTo(2);
-    assertThat(parsedTransactions.get(0)).isEqualTo(transaction0);
-    assertThat(parsedTransactions.get(1)).isEqualTo(transaction1);
+    assertThat(parsedTransactions).containsExactly(transaction0, transaction1);
   }
 
   @Test
@@ -463,13 +452,11 @@ public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
     pendingTransactions.addTransaction(
         createRemotePendingTransaction(transaction1b), Optional.empty());
 
-    final List<Transaction> parsedTransactions = new ArrayList<>();
+    final List<Transaction> parsedTransactions = new ArrayList<>(1);
     pendingTransactions.selectTransactions(
-        group -> {
-          final var selectionResults = selector(group, SELECTED);
-          parsedTransactions.addAll(
-              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
-          return selectionResults;
+        pendingTransaction -> {
+          parsedTransactions.add(pendingTransaction.getTransaction());
+          return SELECTED;
         });
 
     assertThat(parsedTransactions).containsExactly(transaction1b);
@@ -491,11 +478,9 @@ public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
 
     final List<Transaction> iterationOrder = new ArrayList<>(3);
     pendingTransactions.selectTransactions(
-        group -> {
-          final var selectionResults = selector(group, SELECTED);
-          iterationOrder.addAll(
-              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
-          return selectionResults;
+        pendingTransaction -> {
+          iterationOrder.add(pendingTransaction.getTransaction());
+          return SELECTED;
         });
 
     assertThat(iterationOrder).containsExactly(transaction0, transaction1, transaction2);
@@ -518,11 +503,9 @@ public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
 
     final List<Transaction> iterationOrder = new ArrayList<>(2);
     pendingTransactions.selectTransactions(
-        group -> {
-          final var selectionResults = selector(group, SELECTED);
-          iterationOrder.addAll(
-              selectionResults.keySet().stream().map(PendingTransaction::getTransaction).toList());
-          return selectionResults;
+        pendingTransaction -> {
+          iterationOrder.add(pendingTransaction.getTransaction());
+          return SELECTED;
         });
 
     assertThat(iterationOrder).containsExactly(transactionSender2, transactionSender1);
@@ -531,30 +514,22 @@ public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
   @Test
   public void invalidTransactionIsDeletedFromPendingTransactions() {
     final var pendingTx0 = createRemotePendingTransaction(transaction0);
-    final var pendingTx1 = createRemotePendingTransaction(transaction1);
     pendingTransactions.addTransaction(pendingTx0, Optional.empty());
-    pendingTransactions.addTransaction(pendingTx1, Optional.empty());
 
     final var droppedTxCollector = new DroppedTransactionCollector();
     pendingTransactions.subscribeDroppedTransactions(droppedTxCollector);
+    final List<PendingTransaction> parsedTransactions = new ArrayList<>(1);
     pendingTransactions.selectTransactions(
-        group -> {
-          final var selectionResults =
-              LinkedHashMap.<PendingTransaction, TransactionSelectionResult>newLinkedHashMap(2);
-          selectionResults.put(
-              pendingTx0, TransactionSelectionResult.invalid(NONCE_TOO_LOW.name()));
-          selectionResults.put(pendingTx1, SENDER_WITH_PREVIOUS_TX_NOT_SELECTED);
-          return selectionResults;
+        pendingTransaction -> {
+          parsedTransactions.add(pendingTransaction);
+          return TransactionSelectionResult.invalid(NONCE_TOO_LOW.name());
         });
 
-    // assert that first tx is removed from the pool and the score of the following one is not
-    // affected
+    // assert that first tx is removed from the pool
     assertThat(droppedTxCollector.droppedTransactions)
         .containsExactly(entry(transaction0, INVALIDATED));
-    assertThat(pendingTransactions.getPendingTransactions())
-        .containsExactly(pendingTx1)
-        .map(PendingTransaction::getScore)
-        .allMatch(score -> score == Byte.MAX_VALUE);
+    assertThat(parsedTransactions).containsExactly(pendingTx0);
+    assertThat(pendingTransactions.getPendingTransactions()).isEmpty();
   }
 
   @Test
@@ -564,14 +539,10 @@ public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
 
     final List<PendingTransaction> parsedTransactions = new ArrayList<>(1);
     pendingTransactions.selectTransactions(
-        group -> {
-          final var selectionResults =
-              selector(
-                  group,
-                  TransactionSelectionResult.invalidTransient(
-                      GAS_PRICE_BELOW_CURRENT_BASE_FEE.name(), true));
-          parsedTransactions.addAll(selectionResults.keySet().stream().toList());
-          return selectionResults;
+        pendingTransaction -> {
+          parsedTransactions.add(pendingTransaction);
+          return TransactionSelectionResult.invalidTransient(
+              GAS_PRICE_BELOW_CURRENT_BASE_FEE.name(), true);
         });
 
     assertThat(parsedTransactions).containsExactly(pendingTx0);
@@ -934,14 +905,6 @@ public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
       }
     }
     return addedTransactions.toArray(TransactionAndAccount[]::new);
-  }
-
-  private static SequencedMap<PendingTransaction, TransactionSelectionResult> selector(
-      final PendingTransactionGroup group, final TransactionSelectionResult selectionResult) {
-    return group.stream()
-        .collect(
-            Collectors.toMap(
-                Function.identity(), unused -> selectionResult, (a, b) -> a, LinkedHashMap::new));
   }
 
   record TransactionAndAccount(Transaction transaction, Account account) {}
