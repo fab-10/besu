@@ -339,7 +339,8 @@ public abstract class AbstractTransactionPoolTest extends AbstractTransactionPoo
 
     assertTransactionPending(transaction0);
     assertTransactionNotPending(transaction1);
-    verify(transactionBroadcaster).onTransactionsAdded(singletonList(transaction0));
+    verify(transactionBroadcaster)
+        .onPendingTransactionsAdded(eq(findByHash(transactions, transaction0.getHash())));
     verify(transactionValidatorFactory.get())
         .validate(eq(transaction0), any(Optional.class), any(Optional.class), any());
     verify(transactionValidatorFactory.get())

@@ -76,13 +76,7 @@ public interface PendingTransactions {
 
   @FunctionalInterface
   interface TransactionSelector {
-    //    SequencedMap<PendingTransaction, TransactionSelectionResult> evaluateGroup(
-    //        PendingTransactionGroup group);
 
     TransactionSelectionResult evaluateTransaction(final PendingTransaction pendingTransaction);
-    //
-    //      return evaluateGroup(new AbstractPendingTransactionGroup(List.of(pendingTransaction)))
-    //          .get(pendingTransaction);
-    //    }
   }
 }

@@ -41,7 +41,7 @@ import org.hyperledger.besu.ethereum.difficulty.fixed.FixedDifficultyCalculators
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
@@ -372,7 +372,7 @@ class PoWBlockCreatorTest extends AbstractBlockCreatorTest {
             () -> pendingTransactions,
             executionContextTestFixture.getProtocolSchedule(),
             executionContextTestFixture.getProtocolContext(),
-            mock(TransactionBroadcaster.class),
+            mock(PendingTransactionBroadcaster.class),
             ethContext,
             new TransactionPoolMetrics(metricsSystem),
             poolConf,

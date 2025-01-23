@@ -203,9 +203,9 @@ public abstract class AbstractPrioritizedTransactions extends AbstractSequential
   }
 
   /**
-   * Returns pending tx groups ordered by score desc.
+   * Returns pending txs ordered for block selection.
    *
-   * @return pending tx groups ordered by score desc
+   * @return pending txs ordered for block selection
    */
   public List<PendingTransaction> getForBlockSelection() {
     final var sendersToAdd = new HashSet<>(txsBySender.keySet());

@@ -27,8 +27,8 @@ import org.hyperledger.besu.ethereum.core.PrivacyParameters;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
@@ -93,7 +93,7 @@ public class LegacyFeeMarketBlockTransactionSelectorTest
             () -> pendingTransactions,
             protocolSchedule,
             protocolContext,
-            mock(TransactionBroadcaster.class),
+            mock(PendingTransactionBroadcaster.class),
             ethContext,
             new TransactionPoolMetrics(metricsSystem),
             poolConf,
