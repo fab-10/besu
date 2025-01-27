@@ -50,13 +50,12 @@ import java.time.Clock;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.Set;
+import java.util.SequencedMap;
 import java.util.Spliterator;
 import java.util.Spliterators;
 import java.util.concurrent.ConcurrentHashMap;
@@ -238,34 +237,40 @@ public abstract class AbstractPendingTransactionsSorter implements PendingTransa
   // This seems like it would be very rare but worth it to document that we don't handle that case
   // right now.
   @Override
-  public void selectTransactions(final TransactionSelector selector) {
+  public List<PendingTransaction> getForBlockSelection() {
     synchronized (lock) {
-      final Set<Transaction> transactionsToRemove = new HashSet<>();
       final Map<Address, AccountTransactionOrder> accountTransactions = new HashMap<>();
       final Iterator<PendingTransaction> prioritizedTransactions = prioritizedTransactions();
+      final List<PendingTransaction> nonceSortedPrioritizedTransactions = new ArrayList<>(size());
+
       while (prioritizedTransactions.hasNext()) {
         final PendingTransaction highestPriorityPendingTransaction = prioritizedTransactions.next();
         final AccountTransactionOrder accountTransactionOrder =
             accountTransactions.computeIfAbsent(
                 highestPriorityPendingTransaction.getSender(), this::createSenderTransactionOrder);
 
-        for (final PendingTransaction transactionToProcess :
-            accountTransactionOrder.transactionsToProcess(highestPriorityPendingTransaction)) {
-          final TransactionSelectionResult result =
-              selector.evaluateTransaction(transactionToProcess);
-
-          if (result.discard()) {
-            transactionsToRemove.add(transactionToProcess.getTransaction());
-            logDiscardedTransaction(transactionToProcess, result);
-          }
-
-          if (result.stop()) {
-            transactionsToRemove.forEach(tx -> removeTransaction(tx, INVALID));
-            return;
-          }
-        }
+        nonceSortedPrioritizedTransactions.addAll(
+            accountTransactionOrder.transactionsToProcess(highestPriorityPendingTransaction));
       }
-      transactionsToRemove.forEach(tx -> removeTransaction(tx, INVALID));
+      return nonceSortedPrioritizedTransactions;
+    }
+  }
+
+  @Override
+  public void updateWithBlockSelectionResults(
+      final SequencedMap<PendingTransaction, TransactionSelectionResult> selectionResults) {
+    for (final var resultEntry : selectionResults.entrySet()) {
+      final var pendingTransaction = resultEntry.getKey();
+      final var result = resultEntry.getValue();
+
+      if (result.discard()) {
+        removeTransaction(pendingTransaction.getTransaction(), INVALID);
+        logDiscardedTransaction(pendingTransaction, result);
+      }
+
+      if (result.stop()) {
+        return;
+      }
     }
   }
 

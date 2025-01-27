@@ -26,6 +26,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.SequencedMap;
 
 public interface PendingTransactions {
 
@@ -40,7 +41,8 @@ public interface PendingTransactions {
   TransactionAddedResult addTransaction(
       PendingTransaction transaction, Optional<Account> maybeSenderAccount);
 
-  void selectTransactions(TransactionSelector selector);
+  void updateWithBlockSelectionResults(
+      SequencedMap<PendingTransaction, TransactionSelectionResult> selectionResults);
 
   long maxSize();
 
@@ -51,6 +53,8 @@ public interface PendingTransactions {
   Optional<Transaction> getTransactionByHash(Hash transactionHash);
 
   Collection<PendingTransaction> getPendingTransactions();
+
+  List<PendingTransaction> getForBlockSelection();
 
   long subscribePendingTransactions(PendingTransactionAddedListener listener);
 
@@ -76,7 +80,7 @@ public interface PendingTransactions {
 
   @FunctionalInterface
   interface TransactionSelector {
-
-    TransactionSelectionResult evaluateTransaction(final PendingTransaction pendingTransaction);
+    SequencedMap<PendingTransaction, TransactionSelectionResult> evaluateTransaction(
+        final List<PendingTransaction> pendingTransactions);
   }
 }

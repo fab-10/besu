@@ -44,6 +44,7 @@ import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.ethereum.trie.MerkleTrieException;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.evm.fluent.SimpleAccount;
+import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 import org.hyperledger.besu.util.Subscribers;
 
 import java.io.BufferedReader;
@@ -64,6 +65,7 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.SequencedMap;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -649,9 +651,13 @@ public class TransactionPool implements BlockAddedObserver {
     pendingTransactions.evictOldTransactions();
   }
 
-  public void selectTransactions(
-      final PendingTransactions.TransactionSelector transactionSelector) {
-    pendingTransactions.selectTransactions(transactionSelector);
+  public List<PendingTransaction> getPendingTransactionsForBlockSelection() {
+    return pendingTransactions.getForBlockSelection();
+  }
+
+  public void updateWithBlockSelectionResults(
+      final SequencedMap<PendingTransaction, TransactionSelectionResult> selectionResults) {
+    pendingTransactions.updateWithBlockSelectionResults(selectionResults);
   }
 
   public String logStats() {

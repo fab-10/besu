@@ -215,7 +215,6 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
 
       throwIfStopped();
 
-      final var selectorsStateManager = new SelectorsStateManager();
       final BlockAwareOperationTracer operationTracer =
           miningConfiguration
               .getTransactionSelectionService()
@@ -231,8 +230,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
               miningBeneficiary,
               newProtocolSpec,
               operationTracer,
-              parentHeader,
-              selectorsStateManager);
+              parentHeader);
       transactionResults.logSelectionStats();
       timings.register("txsSelection");
       throwIfStopped();
@@ -363,8 +361,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
       final Address miningBeneficiary,
       final ProtocolSpec protocolSpec,
       final BlockAwareOperationTracer operationTracer,
-      final BlockHeader parentHeader,
-      final SelectorsStateManager selectorsStateManager)
+      final BlockHeader parentHeader)
       throws RuntimeException {
     final MainnetTransactionProcessor transactionProcessor = protocolSpec.getTransactionProcessor();
 
@@ -394,7 +391,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
             protocolSpec.getBlockHashProcessor(),
             operationTracer,
             ethScheduler,
-            selectorsStateManager);
+            new SelectorsStateManager());
 
     if (transactions.isPresent()) {
       return selector.evaluateTransactions(transactions.get());

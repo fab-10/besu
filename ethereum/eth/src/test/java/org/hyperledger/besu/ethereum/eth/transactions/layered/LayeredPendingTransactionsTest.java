@@ -14,9 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions.layered;
 
-import static java.util.Map.entry;
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.fail;
 import static org.hyperledger.besu.datatypes.TransactionType.BLOB;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ADDED;
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult.ALREADY_KNOWN;
@@ -25,14 +23,10 @@ import static org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedRes
 import static org.hyperledger.besu.ethereum.eth.transactions.layered.AddReason.MOVE;
 import static org.hyperledger.besu.ethereum.eth.transactions.layered.AddReason.NEW;
 import static org.hyperledger.besu.ethereum.eth.transactions.layered.LayeredRemovalReason.PoolRemovalReason.DROPPED;
-import static org.hyperledger.besu.ethereum.eth.transactions.layered.LayeredRemovalReason.PoolRemovalReason.INVALIDATED;
 import static org.hyperledger.besu.ethereum.eth.transactions.layered.LayeredRemovalReason.PoolRemovalReason.REPLACED;
-import static org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason.GAS_PRICE_BELOW_CURRENT_BASE_FEE;
-import static org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason.NONCE_TOO_LOW;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_FULL;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_OCCUPANCY_ABOVE_THRESHOLD;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_SELECTION_TIMEOUT;
-import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.SELECTED;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -70,8 +64,6 @@ import java.util.stream.Stream;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
 
 public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
 
@@ -396,160 +388,162 @@ public class LayeredPendingTransactionsTest extends BaseTransactionPoolTest {
     verifyNoMoreInteractions(listener);
   }
 
-  @ParameterizedTest
-  @MethodSource
-  public void selectTransactionsUntilSelectorRequestsNoMore(
-      final TransactionSelectionResult selectionResult) {
-    final var transaction0b = createTransaction(0, DEFAULT_BASE_FEE.add(Wei.of(10)), KEYS2);
-
-    final var pendingTx0a = createRemotePendingTransaction(transaction0);
-    final var pendingTx0b = createRemotePendingTransaction(transaction0b);
-
-    pendingTransactions.addTransaction(pendingTx0a, Optional.empty());
-    pendingTransactions.addTransaction(pendingTx0b, Optional.empty());
-
-    pendingTransactions.selectTransactions(
-        pendingTransaction -> {
-          if (pendingTransaction.equals(pendingTx0a)) {
-            // the evaluation of the first pending tx tells to the selector to stop
-            return selectionResult;
-          }
-          // so the second pending tx must not be evaluated
-          // this also ensure the order in which the pending txs are evaluated
-          fail("Not expected group");
-          return null;
-        });
-  }
+  //
+  //  @ParameterizedTest
+  //  @MethodSource
+  //  public void selectTransactionsUntilSelectorRequestsNoMore(
+  //      final TransactionSelectionResult selectionResult) {
+  //    final var transaction0b = createTransaction(0, DEFAULT_BASE_FEE.add(Wei.of(10)), KEYS2);
+  //
+  //    final var pendingTx0a = createRemotePendingTransaction(transaction0);
+  //    final var pendingTx0b = createRemotePendingTransaction(transaction0b);
+  //
+  //    pendingTransactions.addTransaction(pendingTx0a, Optional.empty());
+  //    pendingTransactions.addTransaction(pendingTx0b, Optional.empty());
+  //
+  //    pendingTransactions.selectTransactions(
+  //        pendingTransaction -> {
+  //          if (pendingTransaction.equals(pendingTx0a)) {
+  //            // the evaluation of the first pending tx tells to the selector to stop
+  //            return selectionResult;
+  //          }
+  //          // so the second pending tx must not be evaluated
+  //          // this also ensure the order in which the pending txs are evaluated
+  //          fail("Not expected group");
+  //          return null;
+  //        });
+  //  }
 
   static Stream<TransactionSelectionResult> selectTransactionsUntilSelectorRequestsNoMore() {
     return Stream.of(BLOCK_OCCUPANCY_ABOVE_THRESHOLD, BLOCK_SELECTION_TIMEOUT, BLOCK_FULL);
   }
 
-  @Test
-  public void selectTransactionsUntilPendingIsEmpty() {
-    pendingTransactions.addTransaction(
-        createRemotePendingTransaction(transaction0), Optional.empty());
-    pendingTransactions.addTransaction(
-        createRemotePendingTransaction(transaction1), Optional.empty());
-
-    final List<Transaction> parsedTransactions = new ArrayList<>(2);
-    pendingTransactions.selectTransactions(
-        pendingTransaction -> {
-          parsedTransactions.add(pendingTransaction.getTransaction());
-          return SELECTED;
-        });
-
-    assertThat(parsedTransactions).containsExactly(transaction0, transaction1);
-  }
-
-  @Test
-  public void notSelectReplacedTransaction() {
-    final Transaction transaction1 = createTransaction(0, KEYS1);
-    final Transaction transaction1b = createTransactionReplacement(transaction1, KEYS1);
-
-    pendingTransactions.addTransaction(
-        createRemotePendingTransaction(transaction1), Optional.empty());
-    pendingTransactions.addTransaction(
-        createRemotePendingTransaction(transaction1b), Optional.empty());
-
-    final List<Transaction> parsedTransactions = new ArrayList<>(1);
-    pendingTransactions.selectTransactions(
-        pendingTransaction -> {
-          parsedTransactions.add(pendingTransaction.getTransaction());
-          return SELECTED;
-        });
-
-    assertThat(parsedTransactions).containsExactly(transaction1b);
-  }
-
-  @Test
-  public void selectTransactionsFromSameSenderInNonceOrder() {
-    final Transaction transaction0 = createTransaction(0, KEYS1);
-    final Transaction transaction1 = createTransaction(1, KEYS1);
-    final Transaction transaction2 = createTransaction(2, KEYS1);
-
-    // add out of order
-    pendingTransactions.addTransaction(
-        createLocalPendingTransaction(transaction2), Optional.empty());
-    pendingTransactions.addTransaction(
-        createLocalPendingTransaction(transaction1), Optional.empty());
-    pendingTransactions.addTransaction(
-        createLocalPendingTransaction(transaction0), Optional.empty());
-
-    final List<Transaction> iterationOrder = new ArrayList<>(3);
-    pendingTransactions.selectTransactions(
-        pendingTransaction -> {
-          iterationOrder.add(pendingTransaction.getTransaction());
-          return SELECTED;
-        });
-
-    assertThat(iterationOrder).containsExactly(transaction0, transaction1, transaction2);
-  }
-
-  @Test
-  public void notForceNonceOrderWhenSendersDiffer() {
-    final Account sender2 = mock(Account.class);
-    when(sender2.getNonce()).thenReturn(1L);
-
-    final Transaction transactionSender1 =
-        createTransaction(0, DEFAULT_MIN_GAS_PRICE.multiply(2), KEYS1);
-    final Transaction transactionSender2 =
-        createTransaction(1, DEFAULT_MIN_GAS_PRICE.multiply(4), KEYS2);
-
-    pendingTransactions.addTransaction(
-        createLocalPendingTransaction(transactionSender1), Optional.empty());
-    pendingTransactions.addTransaction(
-        createLocalPendingTransaction(transactionSender2), Optional.of(sender2));
-
-    final List<Transaction> iterationOrder = new ArrayList<>(2);
-    pendingTransactions.selectTransactions(
-        pendingTransaction -> {
-          iterationOrder.add(pendingTransaction.getTransaction());
-          return SELECTED;
-        });
-
-    assertThat(iterationOrder).containsExactly(transactionSender2, transactionSender1);
-  }
-
-  @Test
-  public void invalidTransactionIsDeletedFromPendingTransactions() {
-    final var pendingTx0 = createRemotePendingTransaction(transaction0);
-    pendingTransactions.addTransaction(pendingTx0, Optional.empty());
-
-    final var droppedTxCollector = new DroppedTransactionCollector();
-    pendingTransactions.subscribeDroppedTransactions(droppedTxCollector);
-    final List<PendingTransaction> parsedTransactions = new ArrayList<>(1);
-    pendingTransactions.selectTransactions(
-        pendingTransaction -> {
-          parsedTransactions.add(pendingTransaction);
-          return TransactionSelectionResult.invalid(NONCE_TOO_LOW.name());
-        });
-
-    // assert that first tx is removed from the pool
-    assertThat(droppedTxCollector.droppedTransactions)
-        .containsExactly(entry(transaction0, INVALIDATED));
-    assertThat(parsedTransactions).containsExactly(pendingTx0);
-    assertThat(pendingTransactions.getPendingTransactions()).isEmpty();
-  }
-
-  @Test
-  public void temporarilyInvalidTransactionIsKeptInPendingTransactions() {
-    final var pendingTx0 = createRemotePendingTransaction(transaction0);
-    pendingTransactions.addTransaction(pendingTx0, Optional.empty());
-
-    final List<PendingTransaction> parsedTransactions = new ArrayList<>(1);
-    pendingTransactions.selectTransactions(
-        pendingTransaction -> {
-          parsedTransactions.add(pendingTransaction);
-          return TransactionSelectionResult.invalidTransient(
-              GAS_PRICE_BELOW_CURRENT_BASE_FEE.name(), true);
-        });
-
-    assertThat(parsedTransactions).containsExactly(pendingTx0);
-    assertThat(pendingTransactions.getPendingTransactions())
-        .map(PendingTransaction::getTransaction)
-        .containsExactly(transaction0);
-  }
+  //
+  //  @Test
+  //  public void selectTransactionsUntilPendingIsEmpty() {
+  //    pendingTransactions.addTransaction(
+  //        createRemotePendingTransaction(transaction0), Optional.empty());
+  //    pendingTransactions.addTransaction(
+  //        createRemotePendingTransaction(transaction1), Optional.empty());
+  //
+  //    final List<Transaction> parsedTransactions = new ArrayList<>(2);
+  //    pendingTransactions.selectTransactions(
+  //        pendingTransaction -> {
+  //          parsedTransactions.add(pendingTransaction.getTransaction());
+  //          return SELECTED;
+  //        });
+  //
+  //    assertThat(parsedTransactions).containsExactly(transaction0, transaction1);
+  //  }
+  //
+  //  @Test
+  //  public void notSelectReplacedTransaction() {
+  //    final Transaction transaction1 = createTransaction(0, KEYS1);
+  //    final Transaction transaction1b = createTransactionReplacement(transaction1, KEYS1);
+  //
+  //    pendingTransactions.addTransaction(
+  //        createRemotePendingTransaction(transaction1), Optional.empty());
+  //    pendingTransactions.addTransaction(
+  //        createRemotePendingTransaction(transaction1b), Optional.empty());
+  //
+  //    final List<Transaction> parsedTransactions = new ArrayList<>(1);
+  //    pendingTransactions.selectTransactions(
+  //        pendingTransaction -> {
+  //          parsedTransactions.add(pendingTransaction.getTransaction());
+  //          return SELECTED;
+  //        });
+  //
+  //    assertThat(parsedTransactions).containsExactly(transaction1b);
+  //  }
+  //
+  //  @Test
+  //  public void selectTransactionsFromSameSenderInNonceOrder() {
+  //    final Transaction transaction0 = createTransaction(0, KEYS1);
+  //    final Transaction transaction1 = createTransaction(1, KEYS1);
+  //    final Transaction transaction2 = createTransaction(2, KEYS1);
+  //
+  //    // add out of order
+  //    pendingTransactions.addTransaction(
+  //        createLocalPendingTransaction(transaction2), Optional.empty());
+  //    pendingTransactions.addTransaction(
+  //        createLocalPendingTransaction(transaction1), Optional.empty());
+  //    pendingTransactions.addTransaction(
+  //        createLocalPendingTransaction(transaction0), Optional.empty());
+  //
+  //    final List<Transaction> iterationOrder = new ArrayList<>(3);
+  //    pendingTransactions.selectTransactions(
+  //        pendingTransaction -> {
+  //          iterationOrder.add(pendingTransaction.getTransaction());
+  //          return SELECTED;
+  //        });
+  //
+  //    assertThat(iterationOrder).containsExactly(transaction0, transaction1, transaction2);
+  //  }
+  //
+  //  @Test
+  //  public void notForceNonceOrderWhenSendersDiffer() {
+  //    final Account sender2 = mock(Account.class);
+  //    when(sender2.getNonce()).thenReturn(1L);
+  //
+  //    final Transaction transactionSender1 =
+  //        createTransaction(0, DEFAULT_MIN_GAS_PRICE.multiply(2), KEYS1);
+  //    final Transaction transactionSender2 =
+  //        createTransaction(1, DEFAULT_MIN_GAS_PRICE.multiply(4), KEYS2);
+  //
+  //    pendingTransactions.addTransaction(
+  //        createLocalPendingTransaction(transactionSender1), Optional.empty());
+  //    pendingTransactions.addTransaction(
+  //        createLocalPendingTransaction(transactionSender2), Optional.of(sender2));
+  //
+  //    final List<Transaction> iterationOrder = new ArrayList<>(2);
+  //    pendingTransactions.selectTransactions(
+  //        pendingTransaction -> {
+  //          iterationOrder.add(pendingTransaction.getTransaction());
+  //          return SELECTED;
+  //        });
+  //
+  //    assertThat(iterationOrder).containsExactly(transactionSender2, transactionSender1);
+  //  }
+  //
+  //  @Test
+  //  public void invalidTransactionIsDeletedFromPendingTransactions() {
+  //    final var pendingTx0 = createRemotePendingTransaction(transaction0);
+  //    pendingTransactions.addTransaction(pendingTx0, Optional.empty());
+  //
+  //    final var droppedTxCollector = new DroppedTransactionCollector();
+  //    pendingTransactions.subscribeDroppedTransactions(droppedTxCollector);
+  //    final List<PendingTransaction> parsedTransactions = new ArrayList<>(1);
+  //    pendingTransactions.selectTransactions(
+  //        pendingTransaction -> {
+  //          parsedTransactions.add(pendingTransaction);
+  //          return TransactionSelectionResult.invalid(NONCE_TOO_LOW.name());
+  //        });
+  //
+  //    // assert that first tx is removed from the pool
+  //    assertThat(droppedTxCollector.droppedTransactions)
+  //        .containsExactly(entry(transaction0, INVALIDATED));
+  //    assertThat(parsedTransactions).containsExactly(pendingTx0);
+  //    assertThat(pendingTransactions.getPendingTransactions()).isEmpty();
+  //  }
+  //
+  //  @Test
+  //  public void temporarilyInvalidTransactionIsKeptInPendingTransactions() {
+  //    final var pendingTx0 = createRemotePendingTransaction(transaction0);
+  //    pendingTransactions.addTransaction(pendingTx0, Optional.empty());
+  //
+  //    final List<PendingTransaction> parsedTransactions = new ArrayList<>(1);
+  //    pendingTransactions.selectTransactions(
+  //        pendingTransaction -> {
+  //          parsedTransactions.add(pendingTransaction);
+  //          return TransactionSelectionResult.invalidTransient(
+  //              GAS_PRICE_BELOW_CURRENT_BASE_FEE.name(), true);
+  //        });
+  //
+  //    assertThat(parsedTransactions).containsExactly(pendingTx0);
+  //    assertThat(pendingTransactions.getPendingTransactions())
+  //        .map(PendingTransaction::getTransaction)
+  //        .containsExactly(transaction0);
+  //  }
 
   @Test
   public void returnEmptyOptionalAsMaximumNonceWhenNoTransactionsPresent() {

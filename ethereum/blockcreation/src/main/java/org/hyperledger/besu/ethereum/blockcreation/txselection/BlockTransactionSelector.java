@@ -14,10 +14,8 @@
  */
 package org.hyperledger.besu.ethereum.blockcreation.txselection;
 
-import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.AFTER_NOT_SELECTED_IN_BUNDLE;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_SELECTION_TIMEOUT;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BLOCK_SELECTION_TIMEOUT_INVALID_TX;
-import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.BUNDLE_FAILURE;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.INVALID_TX_EVALUATION_TOO_LONG;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.SELECTED;
 import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.TX_EVALUATION_TOO_LONG;
@@ -53,14 +51,15 @@ import org.hyperledger.besu.evm.gascalculator.GasCalculator;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
+import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Optional;
+import java.util.SequencedMap;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.FutureTask;
@@ -68,12 +67,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import com.google.common.base.Stopwatch;
-import com.google.common.collect.Iterators;
-import org.apache.commons.lang3.mutable.MutableObject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -98,7 +93,7 @@ import org.slf4j.LoggerFactory;
  * Once "used" this class must be discarded and another created. This class contains state which is
  * not cleared between executions of buildTransactionListForBlock().
  */
-public class BlockTransactionSelector {
+public class BlockTransactionSelector implements BlockTransactionSelectionService {
   private static final Logger LOG = LoggerFactory.getLogger(BlockTransactionSelector.class);
   private final Supplier<Boolean> isCancelled;
   private final MainnetTransactionProcessor transactionProcessor;
@@ -116,7 +111,9 @@ public class BlockTransactionSelector {
   private final AtomicBoolean isTimeout = new AtomicBoolean(false);
   private final long blockTxsSelectionMaxTime;
   private WorldUpdater blockWorldStateUpdater;
+  private WorldUpdater txWorldStateUpdater;
   private volatile TransactionEvaluationContext currTxEvaluationContext;
+  private final List<Runnable> selectedTxPendingActions = new ArrayList<>(1);
 
   public BlockTransactionSelector(
       final MiningConfiguration miningConfiguration,
@@ -154,13 +151,15 @@ public class BlockTransactionSelector {
             miningBeneficiary,
             transactionPool);
     this.selectorsStateManager = selectorsStateManager;
-    transactionSelectors = createTransactionSelectors(blockSelectionContext, selectorsStateManager);
+    this.transactionSelectors =
+        createTransactionSelectors(blockSelectionContext, selectorsStateManager);
+    this.operationTracer = new InterruptibleOperationTracer(operationTracer);
     this.pluginTransactionSelector =
         miningConfiguration
             .getTransactionSelectionService()
             .createPluginTransactionSelector(selectorsStateManager);
-    this.operationTracer = new InterruptibleOperationTracer(operationTracer);
     blockWorldStateUpdater = worldState.updater();
+    txWorldStateUpdater = blockWorldStateUpdater.updater();
     blockTxsSelectionMaxTime = miningConfiguration.getBlockTxsSelectionMaxTime();
   }
 
@@ -201,10 +200,16 @@ public class BlockTransactionSelector {
   private void timeLimitedSelection() {
     final var txSelectionTask =
         new FutureTask<Void>(
-            () ->
-                blockSelectionContext
-                    .transactionPool()
-                    .selectTransactions(this::evaluateTransaction),
+            () -> {
+              final var pendingTxs =
+                  blockSelectionContext.transactionPool().getPendingTransactionsForBlockSelection();
+
+              final var selectionResults = evaluatePendingTransactions(pendingTxs);
+
+              blockSelectionContext
+                  .transactionPool()
+                  .updateWithBlockSelectionResults(selectionResults);
+            },
             null);
     ethScheduler.scheduleBlockCreationTask(txSelectionTask);
 
@@ -275,80 +280,110 @@ public class BlockTransactionSelector {
    *     evaluations.
    */
   public TransactionSelectionResults evaluateTransactions(final List<Transaction> transactions) {
-    transactions.stream()
-        .map(tx -> PendingTransaction.builder(tx).isLocal(true).hasPriority(true).build())
-        .forEach(this::evaluateTransaction);
+    evaluatePendingTransactions(
+        transactions.stream()
+            .map(
+                transaction ->
+                    PendingTransaction.builder(transaction).isLocal(true).hasPriority(true).build())
+            .toList());
     return transactionSelectionResults;
   }
 
-  private TransactionSelectionResult evaluateTransaction(
-      final PendingTransaction pendingTransaction) {
+  private SequencedMap<PendingTransaction, TransactionSelectionResult> evaluatePendingTransactions(
+      final List<PendingTransaction> pendingTxs) {
+    final var selectionResults =
+        LinkedHashMap.<PendingTransaction, TransactionSelectionResult>newLinkedHashMap(
+            pendingTxs.size());
+
+    pendingTxs.forEach(
+        pendingTransaction -> {
+          selectorsStateManager.startNewEvaluation();
+          final var evaluationResult = evaluatePendingTransaction(pendingTransaction);
+
+          TransactionSelectionResult actualResult;
+          if (evaluationResult.selected()) {
+            actualResult = commit() ? evaluationResult : BLOCK_SELECTION_TIMEOUT;
+          } else {
+            rollback();
+            actualResult = evaluationResult;
+          }
+          selectionResults.put(pendingTransaction, actualResult);
+        });
+    return selectionResults;
+  }
+
+  /**
+   * Passed into the PendingTransactions, and is called on each transaction until sufficient
+   * transactions are found which fill a block worth of gas. This function will continue to be
+   * called until the block under construction is suitably full (in terms of gasLimit) and the
+   * provided transaction's gasLimit does not fit within the space remaining in the block.
+   *
+   * @param pendingTransaction The transaction to be evaluated.
+   * @return The result of the transaction evaluation process.
+   * @throws CancellationException if the transaction selection process is cancelled.
+   */
+  @Override
+  public TransactionSelectionResult evaluatePendingTransaction(
+      final org.hyperledger.besu.datatypes.PendingTransaction pendingTransaction) {
+
     checkCancellation();
 
-    final List<TransactionEvaluationContext> evaluationContexts =
-        createEvaluationContexts(pendingTransaction);
+    final TransactionEvaluationContext evaluationContext =
+        createTransactionEvaluationContext(pendingTransaction);
+    currTxEvaluationContext = evaluationContext;
 
-    final var evaluationResults = EvaluationResults.create(pendingTransaction);
-
-    final var currStateUpdaterSupplier = new MutableObject<>(blockWorldStateUpdater.updater());
-
-    for (final var evaluationContext : evaluationContexts) {
-      currTxEvaluationContext = evaluationContext;
-
-      selectorsStateManager.startNewEvaluation(currTxEvaluationContext);
-
-      final var preProcessingResult = evaluatePreProcessing(evaluationContext);
-      if (!preProcessingResult.selected()) {
-        // stop processing the group when a single tx is not selected
-        evaluationResults.add(new EvaluationResult(evaluationContext, preProcessingResult));
-        break;
-      }
-
-      final var processingResult =
-          processTransaction(
-              evaluationContext.getPendingTransaction(), currStateUpdaterSupplier.getValue());
-
-      final var postProcessingSelectionResult =
-          evaluatePostProcessing(evaluationContext, processingResult);
-
-      if (postProcessingSelectionResult.selected()) {
-        final boolean processedInTime =
-            handleTransactionSelected(
-                evaluationContext, processingResult, evaluationResults, currStateUpdaterSupplier);
-
-        if (!processedInTime) {
-          // there is a timeout stop processing the group
-          break;
-        }
-      } else {
-        // stop processing the group when a single tx is not selected
-        evaluationResults.add(
-            new EvaluationResult(
-                evaluationContext, processingResult, postProcessingSelectionResult));
-        break;
-      }
+    TransactionSelectionResult selectionResult = evaluatePreProcessing(evaluationContext);
+    if (!selectionResult.selected()) {
+      return handleTransactionNotSelected(evaluationContext, selectionResult);
     }
 
-    return handleEvaluationResults(pendingTransaction, evaluationResults);
+    final TransactionProcessingResult processingResult =
+        processTransaction(evaluationContext.getPendingTransaction());
+
+    var postProcessingSelectionResult = evaluatePostProcessing(evaluationContext, processingResult);
+
+    if (postProcessingSelectionResult.selected()) {
+      return handleTransactionSelected(evaluationContext, processingResult);
+    }
+    return handleTransactionNotSelected(evaluationContext, postProcessingSelectionResult);
   }
 
-  private List<TransactionEvaluationContext> createEvaluationContexts(
-      final PendingTransaction pendingTransaction) {
-    return pendingTransaction.isBundle()
-        ? pendingTransaction.getBundledTransactions().stream()
-            .map(this::createEvaluationContext)
-            .toList()
-        : List.of(createEvaluationContext(pendingTransaction));
+  @Override
+  public boolean commit() {
+    // only add this tx to the selected set if it is not too late,
+    // this need to be done synchronously to avoid that a concurrent timeout
+    // could start packing a block while we are updating the state here
+    synchronized (isTimeout) {
+      if (!isTimeout.get()) {
+        selectorsStateManager.commit();
+        txWorldStateUpdater.commit();
+        blockWorldStateUpdater.commit();
+        for (final var pendingAction : selectedTxPendingActions) {
+          pendingAction.run();
+        }
+        return true;
+      }
+    }
+    selectedTxPendingActions.clear();
+    blockWorldStateUpdater = worldState.updater();
+    txWorldStateUpdater = blockWorldStateUpdater.updater();
+    return false;
   }
 
-  private TransactionEvaluationContext createEvaluationContext(
-      final PendingTransaction pendingTransaction) {
+  @Override
+  public void rollback() {
+    selectorsStateManager.rollback();
+    txWorldStateUpdater = blockWorldStateUpdater.updater();
+  }
+
+  private TransactionEvaluationContext createTransactionEvaluationContext(
+      final org.hyperledger.besu.datatypes.PendingTransaction pendingTransaction) {
     final Wei transactionGasPriceInBlock =
         blockSelectionContext
             .feeMarket()
             .getTransactionPriceCalculator()
             .price(
-                pendingTransaction.getTransaction(),
+                (Transaction) pendingTransaction.getTransaction(),
                 blockSelectionContext.pendingBlockHeader().getBaseFee());
 
     return new TransactionEvaluationContext(
@@ -407,41 +442,20 @@ public class BlockTransactionSelector {
         evaluationContext, processingResult);
   }
 
-  private void notifySelected(
-      final TransactionEvaluationContext evaluationContext,
-      final TransactionProcessingResult processingResult) {
-
-    for (var selector : transactionSelectors) {
-      selector.onTransactionSelected(evaluationContext, processingResult);
-    }
-    pluginTransactionSelector.onTransactionSelected(evaluationContext, processingResult);
-  }
-
-  private void notifyNotSelected(
-      final TransactionEvaluationContext evaluationContext,
-      final TransactionSelectionResult selectionResult) {
-
-    for (var selector : transactionSelectors) {
-      selector.onTransactionNotSelected(evaluationContext, selectionResult);
-    }
-    pluginTransactionSelector.onTransactionNotSelected(evaluationContext, selectionResult);
-  }
-
   /**
    * Processes a transaction
    *
    * @param pendingTransaction The transaction to be processed.
-   * @param worldStateUpdater The world state updater.
    * @return The result of the transaction processing.
    */
   private TransactionProcessingResult processTransaction(
-      final PendingTransaction pendingTransaction, final WorldUpdater worldStateUpdater) {
+      final PendingTransaction pendingTransaction) {
     final BlockHashLookup blockHashLookup =
         blockSelectionContext
             .blockHashProcessor()
             .createBlockHashLookup(blockchain, blockSelectionContext.pendingBlockHeader());
     return transactionProcessor.processTransaction(
-        worldStateUpdater,
+        txWorldStateUpdater,
         blockSelectionContext.pendingBlockHeader(),
         pendingTransaction.getTransaction(),
         blockSelectionContext.miningBeneficiary(),
@@ -459,15 +473,11 @@ public class BlockTransactionSelector {
    *
    * @param evaluationContext The current selection session data.
    * @param processingResult The result of the transaction processing.
-   * @param evaluationResults The group evaluation results
-   * @param currStateUpdaterSupplier The current world state update container
-   * @return The false if there was a timeout
+   * @return The result of the transaction selection process.
    */
-  private boolean handleTransactionSelected(
+  private TransactionSelectionResult handleTransactionSelected(
       final TransactionEvaluationContext evaluationContext,
-      final TransactionProcessingResult processingResult,
-      final EvaluationResults evaluationResults,
-      final MutableObject<WorldUpdater> currStateUpdaterSupplier) {
+      final TransactionProcessingResult processingResult) {
     final Transaction transaction = evaluationContext.getTransaction();
 
     final long gasUsedByTransaction =
@@ -475,140 +485,31 @@ public class BlockTransactionSelector {
     final long cumulativeGasUsed =
         transactionSelectionResults.getCumulativeGasUsed() + gasUsedByTransaction;
 
-    final TransactionReceipt receipt =
-        transactionReceiptFactory.create(
-            transaction.getType(), processingResult, null, cumulativeGasUsed);
+    selectedTxPendingActions.add(
+        () -> {
+          final TransactionReceipt receipt =
+              transactionReceiptFactory.create(
+                  transaction.getType(), processingResult, null, cumulativeGasUsed);
 
-    // stop the timer since the evaluation is done
-    evaluationContext.getEvaluationTimer().stop();
+          transactionSelectionResults.updateSelected(transaction, receipt, gasUsedByTransaction);
 
-    final var evaluationResult =
-        new EvaluationResult(evaluationContext, processingResult, receipt, gasUsedByTransaction);
+          notifySelected(evaluationContext, processingResult);
+        });
+    //
+    //    if (isTimeout.get()) {
+    //      // even if this tx passed all the checks, it is too late to include it in this block,
+    //      // so we need to treat it as not selected
+    //
+    //      // do not rely on the presence of this result, since by the time it is added, the code
+    //      // reading it could have been already executed by another thread
+    //      return handleTransactionNotSelected(evaluationContext, BLOCK_SELECTION_TIMEOUT);
+    //    }
 
-    evaluationResults.add(evaluationResult);
-
-    final boolean savePendingResults = evaluationResults.canSavePendingResults();
-
-    final boolean tooLate;
-
-    // only add this tx to the selected set if it is not too late,
-    // this need to be done synchronously to avoid that a concurrent timeout
-    // could start packing a block while we are updating the state here
-    synchronized (isTimeout) {
-      tooLate = isTimeout.get();
-      if (!tooLate && savePendingResults) {
-        savePendingResults(evaluationResults, currStateUpdaterSupplier);
-      }
-    }
-
-    // do the notification part outside the synchronized block since we have not control on how log
-    // the plugins can take
-    if (!tooLate) {
-      if (savePendingResults) {
-        evaluationResults
-            .streamNotNotified()
-            .forEach(
-                evalRes -> {
-                  notifySelected(evalRes.evaluationContext, evalRes.processingResult);
-                  evalRes.markAsNotified();
-                });
-      }
-
-      evaluationResult.setSelectionResult(SELECTED);
-      return true;
-    }
-
-    // even if this tx passed all the checks, it is too late to include it in this block,
-    // so we need to treat it as not selected
-
-    // do not rely on the presence of this result, since by the time it is added, the code
-    // reading it could have been already executed by another thread
-    evaluationResult.setSelectionResult(BLOCK_SELECTION_TIMEOUT);
-    return false;
-  }
-
-  private void savePendingResults(
-      final EvaluationResults evaluationResults,
-      final MutableObject<WorldUpdater> currStateUpdaterSupplier) {
-    // save consists in updating then state now and saving the selected txs and their results,
-    // and recreate the world state updater and intermediate data structures
-    currStateUpdaterSupplier.getValue().commit();
-    blockWorldStateUpdater.commit();
-    evaluationResults
-        .streamNotSaved()
-        .forEach(
-            evalRes -> {
-              final var tx = evalRes.evaluationContext.getTransaction();
-              selectorsStateManager.confirm(tx.getHash());
-              transactionSelectionResults.updateSelected(tx, evalRes.receipt, evalRes.gasUsed);
-              evalRes.markAsSaved();
-              LOG.atTrace()
-                  .setMessage("Selected {} for block creation, evaluated in {}")
-                  .addArgument(tx::toTraceLog)
-                  .addArgument(evalRes.evaluationContext.getEvaluationTimer())
-                  .log();
-            });
-
-    blockWorldStateUpdater = worldState.updater();
-    currStateUpdaterSupplier.setValue(blockWorldStateUpdater.updater());
-  }
-
-  private TransactionSelectionResult handleEvaluationResults(
-      final PendingTransaction pendingTransaction, final EvaluationResults evaluationResults) {
-
-    final var maybeNotSelectedResult = evaluationResults.maybeNotSelectedTx();
-
-    maybeNotSelectedResult.ifPresent(
-        selRes ->
-            // we need to update the selection result because it could be rewritten
-            selRes.setSelectionResult(
-                handleTransactionNotSelected(selRes.evaluationContext, selRes.selectionResult)));
-
-    boolean afterFailed = false;
-
-    final List<PendingTransaction> bundlePendingTxs = pendingTransaction.getBundledTransactions();
-    final Iterator<PendingTransaction> bundleIterator = bundlePendingTxs.iterator();
-    final Iterator<EvaluationResult> resultIterator = evaluationResults.iterator();
-    final List<TransactionSelectionResult> bundleSelectionResults =
-        new ArrayList<>(bundlePendingTxs.size());
-
-    while (bundleIterator.hasNext()) {
-      final var bundlePendingTx = bundleIterator.next();
-      if (afterFailed) {
-        // we do not have results for tx after the failed one, since we skipped evaluating them
-        bundleSelectionResults.add(AFTER_NOT_SELECTED_IN_BUNDLE);
-      } else {
-        final var selectionResult = resultIterator.next();
-
-        if (maybeNotSelectedResult.isPresent()) {
-          // in case a tx in the was not selected, then in case the group is atomic the entire group
-          // is not selected and in any case when we identify the not selected one we need to switch
-          // to the afterFailed branch
-          if (maybeNotSelectedResult
-              .get()
-              .evaluationContext
-              .getPendingTransaction()
-              .equals(bundlePendingTx)) {
-            bundleSelectionResults.add(selectionResult.selectionResult);
-            afterFailed = true;
-          } else {
-            bundleSelectionResults.add(BUNDLE_FAILURE);
-          }
-        } else {
-          // we reach this point when the tx is selected
-          bundleSelectionResults.add(selectionResult.selectionResult);
-        }
-      }
-    }
-
-    if (afterFailed) {
-      final var notSelectedResult = maybeNotSelectedResult.get();
-      final var reason =
-          bundleSelectionResults.stream()
-              .map(TransactionSelectionResult::toString)
-              .collect(Collectors.joining(",", "{", "}"));
-      return TransactionSelectionResult.copyWithReason(notSelectedResult.selectionResult, reason);
-    }
+    LOG.atTrace()
+        .setMessage("Selected {} for block creation, evaluated in {}")
+        .addArgument(transaction::toTraceLog)
+        .addArgument(evaluationContext.getEvaluationTimer())
+        .log();
     return SELECTED;
   }
 
@@ -634,18 +535,15 @@ public class BlockTransactionSelector {
             ? rewriteSelectionResultForTimeout(evaluationContext, selectionResult)
             : selectionResult;
 
-    selectorsStateManager.discard(pendingTransaction.getHash());
-    transactionSelectionResults.updateNotSelected(
-        pendingTransaction.getTransaction(), actualResult);
-
+    transactionSelectionResults.updateNotSelected(evaluationContext.getTransaction(), actualResult);
     notifyNotSelected(evaluationContext, actualResult);
 
     LOG.atTrace()
-        .setMessage("Not selected {} for block creation with result {}{}, evaluated in {}")
+        .setMessage(
+            "Not selected {} for block creation with result {} (original result {}), evaluated in {}")
         .addArgument(pendingTransaction::toTraceLog)
         .addArgument(actualResult)
-        .addArgument(
-            () -> selectionResult.equals(actualResult) ? "" : "(original result " + selectionResult)
+        .addArgument(selectionResult)
         .addArgument(evaluationContext.getEvaluationTimer())
         .log();
 
@@ -706,159 +604,29 @@ public class BlockTransactionSelector {
     return false;
   }
 
+  private void notifySelected(
+      final TransactionEvaluationContext evaluationContext,
+      final TransactionProcessingResult processingResult) {
+
+    for (var selector : transactionSelectors) {
+      selector.onTransactionSelected(evaluationContext, processingResult);
+    }
+    pluginTransactionSelector.onTransactionSelected(evaluationContext, processingResult);
+  }
+
+  private void notifyNotSelected(
+      final TransactionEvaluationContext evaluationContext,
+      final TransactionSelectionResult selectionResult) {
+
+    for (var selector : transactionSelectors) {
+      selector.onTransactionNotSelected(evaluationContext, selectionResult);
+    }
+    pluginTransactionSelector.onTransactionNotSelected(evaluationContext, selectionResult);
+  }
+
   private void checkCancellation() {
     if (isCancelled.get()) {
       throw new CancellationException("Cancelled during transaction selection.");
-    }
-  }
-
-  private interface EvaluationResults extends Iterable<EvaluationResult> {
-    static EvaluationResults create(final PendingTransaction pendingTransaction) {
-      return pendingTransaction.isBundle()
-          ? new BundleEvaluationResults(pendingTransaction)
-          : new SingletonEvaluationResults();
-    }
-
-    boolean canSavePendingResults();
-
-    void add(EvaluationResult evaluationResult);
-
-    Stream<EvaluationResult> streamNotSaved();
-
-    Stream<EvaluationResult> streamNotNotified();
-
-    Optional<EvaluationResult> maybeNotSelectedTx();
-  }
-
-  private static class SingletonEvaluationResults implements EvaluationResults {
-    EvaluationResult evaluationResult;
-
-    @Override
-    public boolean canSavePendingResults() {
-      return true;
-    }
-
-    @Override
-    public void add(final EvaluationResult evaluationResult) {
-      this.evaluationResult = evaluationResult;
-    }
-
-    @Override
-    public Stream<EvaluationResult> streamNotSaved() {
-      return evaluationResult.isSaved() ? Stream.empty() : Stream.of(evaluationResult);
-    }
-
-    @Override
-    public Stream<EvaluationResult> streamNotNotified() {
-      return evaluationResult.isNotified() ? Stream.empty() : Stream.of(evaluationResult);
-    }
-
-    @Override
-    public final Optional<EvaluationResult> maybeNotSelectedTx() {
-      return evaluationResult.selectionResult.selected()
-          ? Optional.empty()
-          : Optional.of(evaluationResult);
-    }
-
-    @Override
-    public Iterator<EvaluationResult> iterator() {
-      return Iterators.singletonIterator(evaluationResult);
-    }
-  }
-
-  private static class BundleEvaluationResults implements EvaluationResults {
-    final List<PendingTransaction> bundledTransactions;
-    final List<EvaluationResult> evaluationResults;
-
-    BundleEvaluationResults(final PendingTransaction pendingTransaction) {
-      this.bundledTransactions = pendingTransaction.getBundledTransactions();
-      this.evaluationResults = new ArrayList<>(bundledTransactions.size());
-    }
-
-    @Override
-    public boolean canSavePendingResults() {
-      return evaluationResults.size() == bundledTransactions.size();
-    }
-
-    @Override
-    public void add(final EvaluationResult evaluationResult) {
-      evaluationResults.add(evaluationResult);
-    }
-
-    @Override
-    public Stream<EvaluationResult> streamNotSaved() {
-      return evaluationResults.stream().filter(res -> !res.isSaved());
-    }
-
-    @Override
-    public Stream<EvaluationResult> streamNotNotified() {
-      return evaluationResults.stream().filter(res -> !res.isNotified());
-    }
-
-    @Override
-    public final Optional<EvaluationResult> maybeNotSelectedTx() {
-      return evaluationResults.stream().filter(res -> !res.selectionResult.selected()).findFirst();
-    }
-
-    @Override
-    public Iterator<EvaluationResult> iterator() {
-      return evaluationResults.iterator();
-    }
-  }
-
-  private static class EvaluationResult {
-    private final TransactionEvaluationContext evaluationContext;
-    private final TransactionProcessingResult processingResult;
-    private final TransactionReceipt receipt;
-    private final long gasUsed;
-    private boolean saved = false;
-    private boolean notified = false;
-    private TransactionSelectionResult selectionResult;
-
-    public EvaluationResult(
-        final TransactionEvaluationContext evaluationContext,
-        final TransactionSelectionResult selectionResult) {
-      this(evaluationContext, null, null, -1);
-      this.setSelectionResult(selectionResult);
-    }
-
-    public EvaluationResult(
-        final TransactionEvaluationContext evaluationContext,
-        final TransactionProcessingResult processingResult,
-        final TransactionSelectionResult selectionResult) {
-      this(evaluationContext, processingResult, null, -1);
-      this.setSelectionResult(selectionResult);
-    }
-
-    public EvaluationResult(
-        final TransactionEvaluationContext evaluationContext,
-        final TransactionProcessingResult processingResult,
-        final TransactionReceipt receipt,
-        final long gasUsed) {
-      this.evaluationContext = evaluationContext;
-      this.processingResult = processingResult;
-      this.receipt = receipt;
-      this.gasUsed = gasUsed;
-    }
-
-    void markAsSaved() {
-      saved = true;
-    }
-
-    boolean isSaved() {
-      return saved;
-    }
-
-    void markAsNotified() {
-      notified = true;
-    }
-
-    boolean isNotified() {
-      return notified;
-    }
-
-    void setSelectionResult(final TransactionSelectionResult selectionResult) {
-      this.selectionResult = selectionResult;
     }
   }
 }

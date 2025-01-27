@@ -85,11 +85,11 @@ public class PendingTransactionBroadcaster
       final var publicPendingTxs =
           pendingTransactions.stream().filter(ptx -> !ptx.isPrivate()).toList();
       if (peer.hasSupportForMessage(EthPV65.NEW_POOLED_TRANSACTION_HASHES)) {
-        sendTransactionHashes(toTransactionList(pendingTransactions), List.of(peer));
+        sendTransactionHashes(toTransactionList(publicPendingTxs), List.of(peer));
       } else {
         // we need to exclude txs that support hash only broadcasting
         final var fullBroadcastTxs =
-            pendingTransactions.stream()
+            publicPendingTxs.stream()
                 .map(PendingTransaction::getTransaction)
                 .filter(tx -> !ANNOUNCE_HASH_ONLY_TX_TYPES.contains(tx.getType()))
                 .toList();

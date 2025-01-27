@@ -48,7 +48,7 @@ public class AccountTransactionOrder {
    *     order. Must be from the sender this instance is ordering.
    * @return the transactions from this sender that are now due to be processed, in order.
    */
-  public Iterable<PendingTransaction> transactionsToProcess(
+  public List<PendingTransaction> transactionsToProcess(
       final PendingTransaction nextTransactionInPriorityOrder) {
     deferredTransactions.add(nextTransactionInPriorityOrder);
     final List<PendingTransaction> transactionsToApply = new ArrayList<>();

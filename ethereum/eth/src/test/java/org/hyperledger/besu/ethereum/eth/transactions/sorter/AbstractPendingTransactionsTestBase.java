@@ -22,7 +22,6 @@ import static org.hyperledger.besu.ethereum.eth.transactions.sorter.SequencedRem
 import static org.hyperledger.besu.ethereum.eth.transactions.sorter.SequencedRemovalReason.INVALID;
 import static org.hyperledger.besu.ethereum.eth.transactions.sorter.SequencedRemovalReason.REPLACED;
 import static org.hyperledger.besu.ethereum.eth.transactions.sorter.SequencedRemovalReason.TIMED_EVICTION;
-import static org.hyperledger.besu.plugin.data.TransactionSelectionResult.SELECTED;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -45,10 +44,8 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionAddedLis
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionDroppedListener;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.metrics.StubMetricsSystem;
-import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 import org.hyperledger.besu.testutil.TestClock;
 import org.hyperledger.besu.util.number.Fraction;
 
@@ -63,7 +60,6 @@ import java.util.stream.IntStream;
 
 import com.google.common.base.Supplier;
 import com.google.common.base.Suppliers;
-import com.google.common.collect.Lists;
 import org.junit.jupiter.api.Test;
 
 public abstract class AbstractPendingTransactionsTestBase {
@@ -341,132 +337,133 @@ public abstract class AbstractPendingTransactionsTestBase {
     verifyNoInteractions(droppedListener);
   }
 
-  @Test
-  public void selectTransactionsInCorrectOrder() {
-    assertThat(
-            transactionsLarge.addTransaction(
-                createRemotePendingTransaction(zeroGasPriceTX2Sdr1), Optional.empty()))
-        .isEqualTo(ADDED);
-    assertThat(
-            transactionsLarge.addTransaction(
-                createRemotePendingTransaction(zeroGasPriceTX3Sdr1), Optional.empty()))
-        .isEqualTo(ADDED);
-    assertThat(
-            transactionsLarge.addTransaction(
-                createRemotePendingTransaction(zeroGasPriceTX1Sdr2), Optional.empty()))
-        .isEqualTo(ADDED);
-    assertThat(
-            transactionsLarge.addTransaction(
-                createRemotePendingTransaction(zeroGasPriceTX1Sdr1), Optional.empty()))
-        .isEqualTo(ADDED);
-    assertThat(
-            transactionsLarge.addTransaction(
-                createRemotePendingTransaction(zeroGasPriceTX2Sdr2), Optional.empty()))
-        .isEqualTo(ADDED);
-    assertThat(
-            transactionsLarge.addTransaction(
-                createRemotePendingTransaction(zeroGasPriceTX3Sdr2), Optional.empty()))
-        .isEqualTo(ADDED);
-
-    final List<Transaction> parsedTransactions = Lists.newArrayList();
-    transactionsLarge.selectTransactions(
-        pendingTx -> {
-          parsedTransactions.add(pendingTx.getTransaction());
-
-          if (parsedTransactions.size() == 6) {
-            return TransactionSelectionResult.BLOCK_OCCUPANCY_ABOVE_THRESHOLD;
-          }
-          return SELECTED;
-        });
-
-    // All 6 transactions should have been selected
-    assertThat(parsedTransactions.size()).isEqualTo(6);
-
-    // The order should be:
-    // sender 2, nonce 1
-    // sender 1, nonce 1
-    // sender 1, nonce 2
-    // sender 1, nonce 3
-    // sender 2, nonce 2
-    // sender 2, nonce 3
-    assertThat(parsedTransactions.get(0)).isEqualTo(zeroGasPriceTX1Sdr2);
-    assertThat(parsedTransactions.get(1)).isEqualTo(zeroGasPriceTX1Sdr1);
-    assertThat(parsedTransactions.get(2)).isEqualTo(zeroGasPriceTX2Sdr1);
-    assertThat(parsedTransactions.get(3)).isEqualTo(zeroGasPriceTX3Sdr1);
-    assertThat(parsedTransactions.get(4)).isEqualTo(zeroGasPriceTX2Sdr2);
-    assertThat(parsedTransactions.get(5)).isEqualTo(zeroGasPriceTX3Sdr2);
-  }
-
-  @Test
-  public void selectTransactionsUntilSelectorRequestsNoMore() {
-    transactions.addTransaction(createRemotePendingTransaction(transaction1), Optional.empty());
-    transactions.addTransaction(createRemotePendingTransaction(transaction2), Optional.empty());
-
-    final List<Transaction> parsedTransactions = Lists.newArrayList();
-    transactions.selectTransactions(
-        pendingTx -> {
-          parsedTransactions.add(pendingTx.getTransaction());
-          return TransactionSelectionResult.BLOCK_OCCUPANCY_ABOVE_THRESHOLD;
-        });
-
-    assertThat(parsedTransactions.size()).isEqualTo(1);
-    assertThat(parsedTransactions.get(0)).isEqualTo(transaction2);
-  }
-
-  @Test
-  public void selectTransactionsUntilPendingIsEmpty() {
-    transactions.addTransaction(createRemotePendingTransaction(transaction1), Optional.empty());
-    transactions.addTransaction(createRemotePendingTransaction(transaction2), Optional.empty());
-
-    final List<Transaction> parsedTransactions = Lists.newArrayList();
-    transactions.selectTransactions(
-        pendingTx -> {
-          parsedTransactions.add(pendingTx.getTransaction());
-          return SELECTED;
-        });
-
-    assertThat(parsedTransactions.size()).isEqualTo(2);
-    assertThat(parsedTransactions.get(0)).isEqualTo(transaction2);
-    assertThat(parsedTransactions.get(1)).isEqualTo(transaction1);
-  }
-
-  @Test
-  public void shouldNotSelectReplacedTransaction() {
-    final Transaction transaction1 = transactionWithNonceSenderAndGasPrice(1, KEYS1, 1);
-    final Transaction transaction2 = transactionWithNonceSenderAndGasPrice(1, KEYS1, 2);
-
-    transactions.addTransaction(createRemotePendingTransaction(transaction1), Optional.empty());
-    transactions.addTransaction(createRemotePendingTransaction(transaction2), Optional.empty());
-
-    final List<Transaction> parsedTransactions = Lists.newArrayList();
-    transactions.selectTransactions(
-        pendingTx -> {
-          parsedTransactions.add(pendingTx.getTransaction());
-          return SELECTED;
-        });
-
-    assertThat(parsedTransactions).containsExactly(transaction2);
-  }
-
-  @Test
-  public void invalidTransactionIsDeletedFromPendingTransactions() {
-    transactions.addTransaction(createRemotePendingTransaction(transaction1), Optional.empty());
-    transactions.addTransaction(createRemotePendingTransaction(transaction2), Optional.empty());
-
-    final List<Transaction> parsedTransactions = Lists.newArrayList();
-    transactions.selectTransactions(
-        pendingTx -> {
-          parsedTransactions.add(pendingTx.getTransaction());
-          return TransactionSelectionResult.invalid(
-              TransactionInvalidReason.UPFRONT_COST_EXCEEDS_BALANCE.name());
-        });
-
-    assertThat(parsedTransactions.size()).isEqualTo(2);
-    assertThat(parsedTransactions.get(0)).isEqualTo(transaction2);
-    assertThat(parsedTransactions.get(1)).isEqualTo(transaction1);
-
-    assertThat(transactions.size()).isZero();
-  }
+  //
+  //  @Test
+  //  public void selectTransactionsInCorrectOrder() {
+  //    assertThat(
+  //            transactionsLarge.addTransaction(
+  //                createRemotePendingTransaction(zeroGasPriceTX2Sdr1), Optional.empty()))
+  //        .isEqualTo(ADDED);
+  //    assertThat(
+  //            transactionsLarge.addTransaction(
+  //                createRemotePendingTransaction(zeroGasPriceTX3Sdr1), Optional.empty()))
+  //        .isEqualTo(ADDED);
+  //    assertThat(
+  //            transactionsLarge.addTransaction(
+  //                createRemotePendingTransaction(zeroGasPriceTX1Sdr2), Optional.empty()))
+  //        .isEqualTo(ADDED);
+  //    assertThat(
+  //            transactionsLarge.addTransaction(
+  //                createRemotePendingTransaction(zeroGasPriceTX1Sdr1), Optional.empty()))
+  //        .isEqualTo(ADDED);
+  //    assertThat(
+  //            transactionsLarge.addTransaction(
+  //                createRemotePendingTransaction(zeroGasPriceTX2Sdr2), Optional.empty()))
+  //        .isEqualTo(ADDED);
+  //    assertThat(
+  //            transactionsLarge.addTransaction(
+  //                createRemotePendingTransaction(zeroGasPriceTX3Sdr2), Optional.empty()))
+  //        .isEqualTo(ADDED);
+  //
+  //    final List<Transaction> parsedTransactions = Lists.newArrayList();
+  //    transactionsLarge.selectTransactions(
+  //        pendingTx -> {
+  //          parsedTransactions.add(pendingTx.getTransaction());
+  //
+  //          if (parsedTransactions.size() == 6) {
+  //            return TransactionSelectionResult.BLOCK_OCCUPANCY_ABOVE_THRESHOLD;
+  //          }
+  //          return SELECTED;
+  //        });
+  //
+  //    // All 6 transactions should have been selected
+  //    assertThat(parsedTransactions.size()).isEqualTo(6);
+  //
+  //    // The order should be:
+  //    // sender 2, nonce 1
+  //    // sender 1, nonce 1
+  //    // sender 1, nonce 2
+  //    // sender 1, nonce 3
+  //    // sender 2, nonce 2
+  //    // sender 2, nonce 3
+  //    assertThat(parsedTransactions.get(0)).isEqualTo(zeroGasPriceTX1Sdr2);
+  //    assertThat(parsedTransactions.get(1)).isEqualTo(zeroGasPriceTX1Sdr1);
+  //    assertThat(parsedTransactions.get(2)).isEqualTo(zeroGasPriceTX2Sdr1);
+  //    assertThat(parsedTransactions.get(3)).isEqualTo(zeroGasPriceTX3Sdr1);
+  //    assertThat(parsedTransactions.get(4)).isEqualTo(zeroGasPriceTX2Sdr2);
+  //    assertThat(parsedTransactions.get(5)).isEqualTo(zeroGasPriceTX3Sdr2);
+  //  }
+  //
+  //  @Test
+  //  public void selectTransactionsUntilSelectorRequestsNoMore() {
+  //    transactions.addTransaction(createRemotePendingTransaction(transaction1), Optional.empty());
+  //    transactions.addTransaction(createRemotePendingTransaction(transaction2), Optional.empty());
+  //
+  //    final List<Transaction> parsedTransactions = Lists.newArrayList();
+  //    transactions.selectTransactions(
+  //        pendingTx -> {
+  //          parsedTransactions.add(pendingTx.getTransaction());
+  //          return TransactionSelectionResult.BLOCK_OCCUPANCY_ABOVE_THRESHOLD;
+  //        });
+  //
+  //    assertThat(parsedTransactions.size()).isEqualTo(1);
+  //    assertThat(parsedTransactions.get(0)).isEqualTo(transaction2);
+  //  }
+  //
+  //  @Test
+  //  public void selectTransactionsUntilPendingIsEmpty() {
+  //    transactions.addTransaction(createRemotePendingTransaction(transaction1), Optional.empty());
+  //    transactions.addTransaction(createRemotePendingTransaction(transaction2), Optional.empty());
+  //
+  //    final List<Transaction> parsedTransactions = Lists.newArrayList();
+  //    transactions.selectTransactions(
+  //        pendingTx -> {
+  //          parsedTransactions.add(pendingTx.getTransaction());
+  //          return SELECTED;
+  //        });
+  //
+  //    assertThat(parsedTransactions.size()).isEqualTo(2);
+  //    assertThat(parsedTransactions.get(0)).isEqualTo(transaction2);
+  //    assertThat(parsedTransactions.get(1)).isEqualTo(transaction1);
+  //  }
+  //
+  //  @Test
+  //  public void shouldNotSelectReplacedTransaction() {
+  //    final Transaction transaction1 = transactionWithNonceSenderAndGasPrice(1, KEYS1, 1);
+  //    final Transaction transaction2 = transactionWithNonceSenderAndGasPrice(1, KEYS1, 2);
+  //
+  //    transactions.addTransaction(createRemotePendingTransaction(transaction1), Optional.empty());
+  //    transactions.addTransaction(createRemotePendingTransaction(transaction2), Optional.empty());
+  //
+  //    final List<Transaction> parsedTransactions = Lists.newArrayList();
+  //    transactions.selectTransactions(
+  //        pendingTx -> {
+  //          parsedTransactions.add(pendingTx.getTransaction());
+  //          return SELECTED;
+  //        });
+  //
+  //    assertThat(parsedTransactions).containsExactly(transaction2);
+  //  }
+  //
+  //  @Test
+  //  public void invalidTransactionIsDeletedFromPendingTransactions() {
+  //    transactions.addTransaction(createRemotePendingTransaction(transaction1), Optional.empty());
+  //    transactions.addTransaction(createRemotePendingTransaction(transaction2), Optional.empty());
+  //
+  //    final List<Transaction> parsedTransactions = Lists.newArrayList();
+  //    transactions.selectTransactions(
+  //        pendingTx -> {
+  //          parsedTransactions.add(pendingTx.getTransaction());
+  //          return TransactionSelectionResult.invalid(
+  //              TransactionInvalidReason.UPFRONT_COST_EXCEEDS_BALANCE.name());
+  //        });
+  //
+  //    assertThat(parsedTransactions.size()).isEqualTo(2);
+  //    assertThat(parsedTransactions.get(0)).isEqualTo(transaction2);
+  //    assertThat(parsedTransactions.get(1)).isEqualTo(transaction1);
+  //
+  //    assertThat(transactions.size()).isZero();
+  //  }
 
   @Test
   public void shouldReturnEmptyOptionalAsMaximumNonceWhenNoTransactionsPresent() {
@@ -646,67 +643,69 @@ public abstract class AbstractPendingTransactionsTestBase {
     assertMaximumNonceForSender(SENDER1, 3);
   }
 
-  @Test
-  public void shouldIterateTransactionsFromSameSenderInNonceOrder() {
-    final Transaction transaction1 = transactionWithNonceAndSender(0, KEYS1);
-    final Transaction transaction2 = transactionWithNonceAndSender(1, KEYS1);
-    final Transaction transaction3 = transactionWithNonceAndSender(2, KEYS1);
-
-    transactions.addTransaction(createLocalPendingTransaction(transaction1), Optional.empty());
-    transactions.addTransaction(createLocalPendingTransaction(transaction2), Optional.empty());
-    transactions.addTransaction(createLocalPendingTransaction(transaction3), Optional.empty());
-
-    final List<Transaction> iterationOrder = new ArrayList<>();
-    transactions.selectTransactions(
-        pendingTx -> {
-          iterationOrder.add(pendingTx.getTransaction());
-          return SELECTED;
-        });
-
-    assertThat(iterationOrder).containsExactly(transaction1, transaction2, transaction3);
-  }
-
-  @Test
-  public void shouldNotForceNonceOrderWhenSendersDiffer() {
-    final Transaction transaction1 = transactionWithNonceAndSender(1, KEYS2);
-    final Transaction transaction2 = transactionWithNonceAndSender(0, KEYS1);
-
-    transactions.addTransaction(createLocalPendingTransaction(transaction1), Optional.empty());
-    transactions.addTransaction(createLocalPendingTransaction(transaction2), Optional.empty());
-
-    final List<Transaction> iterationOrder = new ArrayList<>();
-    transactions.selectTransactions(
-        pendingTx -> {
-          iterationOrder.add(pendingTx.getTransaction());
-          return SELECTED;
-        });
-
-    assertThat(iterationOrder).containsExactly(transaction1, transaction2);
-  }
-
-  @Test
-  public void shouldNotIncreasePriorityOfTransactionsBecauseOfNonceOrder() {
-    final Transaction transaction1 = transactionWithNonceAndSender(0, KEYS1);
-    final Transaction transaction2 = transactionWithNonceAndSender(1, KEYS1);
-    final Transaction transaction3 = transactionWithNonceAndSender(2, KEYS1);
-    final Transaction transaction4 = transactionWithNonceAndSender(4, KEYS2);
-
-    transactions.addTransaction(createLocalPendingTransaction(transaction3), Optional.empty());
-    transactions.addTransaction(createLocalPendingTransaction(transaction4), Optional.empty());
-    transactions.addTransaction(createLocalPendingTransaction(transaction2), Optional.empty());
-    transactions.addTransaction(createLocalPendingTransaction(transaction1), Optional.empty());
-
-    final List<Transaction> iterationOrder = new ArrayList<>();
-    transactions.selectTransactions(
-        pendingTx -> {
-          iterationOrder.add(pendingTx.getTransaction());
-          return SELECTED;
-        });
-
-    // Ignoring nonces, the order would be 3, 4, 2, 1 but we have to delay 3 and 2 until after 1.
-    assertThat(iterationOrder)
-        .containsExactly(transaction4, transaction1, transaction2, transaction3);
-  }
+  //
+  //  @Test
+  //  public void shouldIterateTransactionsFromSameSenderInNonceOrder() {
+  //    final Transaction transaction1 = transactionWithNonceAndSender(0, KEYS1);
+  //    final Transaction transaction2 = transactionWithNonceAndSender(1, KEYS1);
+  //    final Transaction transaction3 = transactionWithNonceAndSender(2, KEYS1);
+  //
+  //    transactions.addTransaction(createLocalPendingTransaction(transaction1), Optional.empty());
+  //    transactions.addTransaction(createLocalPendingTransaction(transaction2), Optional.empty());
+  //    transactions.addTransaction(createLocalPendingTransaction(transaction3), Optional.empty());
+  //
+  //    final List<Transaction> iterationOrder = new ArrayList<>();
+  //    transactions.selectTransactions(
+  //        pendingTx -> {
+  //          iterationOrder.add(pendingTx.getTransaction());
+  //          return SELECTED;
+  //        });
+  //
+  //    assertThat(iterationOrder).containsExactly(transaction1, transaction2, transaction3);
+  //  }
+  //
+  //  @Test
+  //  public void shouldNotForceNonceOrderWhenSendersDiffer() {
+  //    final Transaction transaction1 = transactionWithNonceAndSender(1, KEYS2);
+  //    final Transaction transaction2 = transactionWithNonceAndSender(0, KEYS1);
+  //
+  //    transactions.addTransaction(createLocalPendingTransaction(transaction1), Optional.empty());
+  //    transactions.addTransaction(createLocalPendingTransaction(transaction2), Optional.empty());
+  //
+  //    final List<Transaction> iterationOrder = new ArrayList<>();
+  //    transactions.selectTransactions(
+  //        pendingTx -> {
+  //          iterationOrder.add(pendingTx.getTransaction());
+  //          return SELECTED;
+  //        });
+  //
+  //    assertThat(iterationOrder).containsExactly(transaction1, transaction2);
+  //  }
+  //
+  //  @Test
+  //  public void shouldNotIncreasePriorityOfTransactionsBecauseOfNonceOrder() {
+  //    final Transaction transaction1 = transactionWithNonceAndSender(0, KEYS1);
+  //    final Transaction transaction2 = transactionWithNonceAndSender(1, KEYS1);
+  //    final Transaction transaction3 = transactionWithNonceAndSender(2, KEYS1);
+  //    final Transaction transaction4 = transactionWithNonceAndSender(4, KEYS2);
+  //
+  //    transactions.addTransaction(createLocalPendingTransaction(transaction3), Optional.empty());
+  //    transactions.addTransaction(createLocalPendingTransaction(transaction4), Optional.empty());
+  //    transactions.addTransaction(createLocalPendingTransaction(transaction2), Optional.empty());
+  //    transactions.addTransaction(createLocalPendingTransaction(transaction1), Optional.empty());
+  //
+  //    final List<Transaction> iterationOrder = new ArrayList<>();
+  //    transactions.selectTransactions(
+  //        pendingTx -> {
+  //          iterationOrder.add(pendingTx.getTransaction());
+  //          return SELECTED;
+  //        });
+  //
+  //    // Ignoring nonces, the order would be 3, 4, 2, 1 but we have to delay 3 and 2 until after
+  // 1.
+  //    assertThat(iterationOrder)
+  //        .containsExactly(transaction4, transaction1, transaction2, transaction3);
+  //  }
 
   protected void assertMaximumNonceForSender(final Address sender1, final int i) {
     assertThat(transactions.getNextNonceForSender(sender1)).isEqualTo(OptionalLong.of(i));

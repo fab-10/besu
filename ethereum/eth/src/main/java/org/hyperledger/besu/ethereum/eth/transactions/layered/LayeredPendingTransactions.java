@@ -46,6 +46,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.SequencedMap;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
 
@@ -312,47 +313,42 @@ public class LayeredPendingTransactions implements PendingTransactions {
   }
 
   @Override
-  public void selectTransactions(final PendingTransactions.TransactionSelector selector) {
+  public synchronized List<PendingTransaction> getForBlockSelection() {
+    return prioritizedTransactions.getForBlockSelection();
+  }
 
-    final List<PendingTransaction> candidatePendingTxs;
-    synchronized (this) {
-      // since selecting transactions for block creation is a potential long operation
-      // we want to avoid to keep the lock for all the process, but we just lock to get
-      // the candidate transactions
-      candidatePendingTxs = prioritizedTransactions.getForBlockSelection();
-    }
+  @Override
+  public void updateWithBlockSelectionResults(
+      final SequencedMap<PendingTransaction, TransactionSelectionResult> selectionResults) {
 
-    for (final var candidatePendingTx : candidatePendingTxs) {
-      LOG.atTrace()
-          .setMessage("Evaluating pending tx {}")
-          .addArgument(candidatePendingTx::toTraceLog)
-          .log();
-      final var selectionResult = selector.evaluateTransaction(candidatePendingTx);
+    for (final var resultEntry : selectionResults.entrySet()) {
+      final var pendingTransaction = resultEntry.getKey();
+      final var selectionResult = resultEntry.getValue();
 
       LOG.atTrace()
           .setMessage("Selection result {} for transaction {}")
           .addArgument(selectionResult)
-          .addArgument(candidatePendingTx::toTraceLog)
+          .addArgument(pendingTransaction::toTraceLog)
           .log();
 
       if (selectionResult.discard()) {
         ethScheduler.scheduleTxWorkerTask(
             () -> {
               synchronized (this) {
-                prioritizedTransactions.remove(candidatePendingTx, INVALIDATED);
+                prioritizedTransactions.remove(pendingTransaction, INVALIDATED);
               }
             });
-        logDiscardedTransaction(candidatePendingTx, selectionResult);
+        logDiscardedTransaction(pendingTransaction, selectionResult);
       } else if (selectionResult.penalize()) {
         ethScheduler.scheduleTxWorkerTask(
             () -> {
               synchronized (this) {
-                prioritizedTransactions.penalize(candidatePendingTx);
+                prioritizedTransactions.penalize(pendingTransaction);
               }
             });
         LOG.atTrace()
             .setMessage("Transaction {} penalized")
-            .addArgument(candidatePendingTx::toTraceLog)
+            .addArgument(pendingTransaction::toTraceLog)
             .log();
       }
 

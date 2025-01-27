@@ -27,14 +27,14 @@ public class TransactionEvaluationContext
     implements org.hyperledger.besu.plugin.services.txselection.TransactionEvaluationContext<
         PendingTransaction> {
   private final ProcessableBlockHeader pendingBlockHeader;
-  private final PendingTransaction pendingTransaction;
+  private final org.hyperledger.besu.datatypes.PendingTransaction pendingTransaction;
   private final Stopwatch evaluationTimer;
   private final Wei transactionGasPrice;
   private final Wei minGasPrice;
 
   public TransactionEvaluationContext(
       final ProcessableBlockHeader pendingBlockHeader,
-      final PendingTransaction pendingTransaction,
+      final org.hyperledger.besu.datatypes.PendingTransaction pendingTransaction,
       final Stopwatch evaluationTimer,
       final Wei transactionGasPrice,
       final Wei minGasPrice) {
@@ -46,7 +46,8 @@ public class TransactionEvaluationContext
   }
 
   public Transaction getTransaction() {
-    return pendingTransaction.getTransaction();
+    // ToDo Bundle: force the cast?
+    return (Transaction) pendingTransaction.getTransaction();
   }
 
   @Override
@@ -56,7 +57,8 @@ public class TransactionEvaluationContext
 
   @Override
   public PendingTransaction getPendingTransaction() {
-    return pendingTransaction;
+    // ToDo Bundle: force the cast?
+    return (PendingTransaction) pendingTransaction;
   }
 
   @Override

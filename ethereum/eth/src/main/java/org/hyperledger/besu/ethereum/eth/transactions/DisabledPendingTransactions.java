@@ -20,11 +20,13 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.evm.account.Account;
+import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalLong;
+import java.util.SequencedMap;
 
 /** This is a no-op implementation, that is used when the txpool is disabled */
 public class DisabledPendingTransactions implements PendingTransactions {
@@ -52,7 +54,8 @@ public class DisabledPendingTransactions implements PendingTransactions {
   }
 
   @Override
-  public void selectTransactions(final TransactionSelector selector) {}
+  public void updateWithBlockSelectionResults(
+      final SequencedMap<PendingTransaction, TransactionSelectionResult> selectionResults) {}
 
   @Override
   public long maxSize() {
@@ -76,6 +79,11 @@ public class DisabledPendingTransactions implements PendingTransactions {
 
   @Override
   public Collection<PendingTransaction> getPendingTransactions() {
+    return List.of();
+  }
+
+  @Override
+  public List<PendingTransaction> getForBlockSelection() {
     return List.of();
   }
 
