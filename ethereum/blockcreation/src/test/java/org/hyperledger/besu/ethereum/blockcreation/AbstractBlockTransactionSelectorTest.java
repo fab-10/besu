@@ -1298,6 +1298,7 @@ public abstract class AbstractBlockTransactionSelectorTest {
       final Wei blobGasPrice,
       final TransactionSelectionService transactionSelectionService) {
 
+    final var selectorsStateManager = new SelectorsStateManager();
     final BlockTransactionSelector selector =
         new BlockTransactionSelector(
             miningConfiguration,
@@ -1314,9 +1315,9 @@ public abstract class AbstractBlockTransactionSelectorTest {
             new LondonGasCalculator(),
             GasLimitCalculator.constant(),
             protocolSchedule.getByBlockHeader(blockHeader).getBlockHashProcessor(),
-            transactionSelectionService.createTransactionSelectionOperationTracer(),
+            transactionSelectionService.createPluginTransactionSelector(selectorsStateManager),
             ethScheduler,
-            new SelectorsStateManager());
+            selectorsStateManager);
 
     return selector;
   }

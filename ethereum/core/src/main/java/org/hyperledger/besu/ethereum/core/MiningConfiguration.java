@@ -17,7 +17,6 @@ package org.hyperledger.besu.ethereum.core;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.plugin.services.TransactionSelectionService;
-import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelectorFactory;
@@ -174,11 +173,6 @@ public abstract class MiningConfiguration {
       public PluginTransactionSelector createPluginTransactionSelector(
           final SelectorsStateManager selectorsStateManager) {
         return PluginTransactionSelector.ACCEPT_ALL;
-      }
-
-      @Override
-      public BlockAwareOperationTracer createTransactionSelectionOperationTracer() {
-        return BlockAwareOperationTracer.NO_TRACING;
       }
 
       @Override

@@ -132,7 +132,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
       final GasCalculator gasCalculator,
       final GasLimitCalculator gasLimitCalculator,
       final BlockHashProcessor blockHashProcessor,
-      final BlockAwareOperationTracer operationTracer,
+      final PluginTransactionSelector pluginTransactionSelector,
       final EthScheduler ethScheduler,
       final SelectorsStateManager selectorsStateManager) {
     this.transactionProcessor = transactionProcessor;
@@ -156,11 +156,9 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     this.transactionSelectionService = miningConfiguration.getTransactionSelectionService();
     this.transactionSelectors =
         createTransactionSelectors(blockSelectionContext, selectorsStateManager);
-    this.operationTracer = new InterruptibleOperationTracer(operationTracer);
-    this.pluginTransactionSelector =
-        miningConfiguration
-            .getTransactionSelectionService()
-            .createPluginTransactionSelector(selectorsStateManager);
+    this.operationTracer =
+        new InterruptibleOperationTracer(pluginTransactionSelector.getOperationTracer());
+    this.pluginTransactionSelector = pluginTransactionSelector;
     blockWorldStateUpdater = worldState.updater();
     txWorldStateUpdater = blockWorldStateUpdater.updater();
     blockTxsSelectionMaxTime = miningConfiguration.getBlockTxsSelectionMaxTime();
@@ -204,10 +202,11 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     final var txSelectionTask =
         new FutureTask<Void>(
             () -> {
-              final var pendingTxs =
-                  blockSelectionContext.transactionPool().getPendingTransactionsForBlockSelection();
               // ToDo: evaluate pendingTxs with priority before call the plugin
               transactionSelectionService.selectPendingTransactions(this);
+
+              final var pendingTxs =
+                  blockSelectionContext.transactionPool().getPendingTransactionsForBlockSelection();
 
               final var selectionResults = evaluatePendingTransactions(pendingTxs);
 

@@ -17,7 +17,6 @@ package org.hyperledger.besu.services;
 import static com.google.common.base.Preconditions.checkState;
 
 import org.hyperledger.besu.plugin.services.TransactionSelectionService;
-import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelectorFactory;
@@ -35,11 +34,6 @@ public class TransactionSelectionServiceImpl implements TransactionSelectionServ
   public PluginTransactionSelector createPluginTransactionSelector(
       final SelectorsStateManager selectorsStateManager) {
     return factory.create(selectorsStateManager);
-  }
-
-  @Override
-  public BlockAwareOperationTracer createTransactionSelectionOperationTracer() {
-    return factory.createOperationTracer();
   }
 
   @Override
