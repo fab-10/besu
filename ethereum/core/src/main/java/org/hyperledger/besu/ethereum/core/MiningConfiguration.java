@@ -18,6 +18,7 @@ import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.plugin.services.TransactionSelectionService;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
+import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelectorFactory;
 import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
@@ -179,6 +180,10 @@ public abstract class MiningConfiguration {
       public BlockAwareOperationTracer createTransactionSelectionOperationTracer() {
         return BlockAwareOperationTracer.NO_TRACING;
       }
+
+      @Override
+      public void selectPendingTransactions(
+          final BlockTransactionSelectionService selectionService) {}
 
       @Override
       public void registerPluginTransactionSelectorFactory(

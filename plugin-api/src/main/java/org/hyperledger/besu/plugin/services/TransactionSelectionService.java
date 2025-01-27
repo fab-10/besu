@@ -16,6 +16,7 @@ package org.hyperledger.besu.plugin.services;
 
 import org.hyperledger.besu.plugin.Unstable;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
+import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelectorFactory;
 import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
@@ -33,6 +34,8 @@ public interface TransactionSelectionService extends BesuService {
       SelectorsStateManager selectorsStateManager);
 
   BlockAwareOperationTracer createTransactionSelectionOperationTracer();
+
+  void selectPendingTransactions(BlockTransactionSelectionService selectionService);
 
   /**
    * Registers the transaction selector factory with the service

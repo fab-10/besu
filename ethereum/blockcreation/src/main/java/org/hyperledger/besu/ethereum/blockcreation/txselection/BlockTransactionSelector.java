@@ -50,6 +50,7 @@ import org.hyperledger.besu.evm.blockhash.BlockHashLookup;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
+import org.hyperledger.besu.plugin.services.TransactionSelectionService;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
@@ -105,6 +106,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
       new TransactionSelectionResults();
   private final List<AbstractTransactionSelector> transactionSelectors;
   private final SelectorsStateManager selectorsStateManager;
+  private final TransactionSelectionService transactionSelectionService;
   private final PluginTransactionSelector pluginTransactionSelector;
   private final BlockAwareOperationTracer operationTracer;
   private final EthScheduler ethScheduler;
@@ -151,6 +153,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
             miningBeneficiary,
             transactionPool);
     this.selectorsStateManager = selectorsStateManager;
+    this.transactionSelectionService = miningConfiguration.getTransactionSelectionService();
     this.transactionSelectors =
         createTransactionSelectors(blockSelectionContext, selectorsStateManager);
     this.operationTracer = new InterruptibleOperationTracer(operationTracer);
@@ -203,6 +206,8 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
             () -> {
               final var pendingTxs =
                   blockSelectionContext.transactionPool().getPendingTransactionsForBlockSelection();
+              // ToDo: evaluate pendingTxs with priority before call the plugin
+              transactionSelectionService.selectPendingTransactions(this);
 
               final var selectionResults = evaluatePendingTransactions(pendingTxs);
 

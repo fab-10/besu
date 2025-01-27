@@ -636,7 +636,13 @@ public abstract class AbstractBlockTransactionSelectorTest {
         };
 
     final PluginTransactionSelectorFactory transactionSelectorFactory =
-        selectorsStateManager -> pluginTransactionSelector;
+        new PluginTransactionSelectorFactory() {
+          @Override
+          public PluginTransactionSelector create(
+              final SelectorsStateManager selectorsStateManager) {
+            return pluginTransactionSelector;
+          }
+        };
 
     transactionSelectionService.registerPluginTransactionSelectorFactory(
         transactionSelectorFactory);
@@ -701,7 +707,13 @@ public abstract class AbstractBlockTransactionSelectorTest {
         };
 
     final PluginTransactionSelectorFactory transactionSelectorFactory =
-        selectorsStateManager -> pluginTransactionSelector;
+        new PluginTransactionSelectorFactory() {
+          @Override
+          public PluginTransactionSelector create(
+              final SelectorsStateManager selectorsStateManager) {
+            return pluginTransactionSelector;
+          }
+        };
 
     transactionSelectionService.registerPluginTransactionSelectorFactory(
         transactionSelectorFactory);

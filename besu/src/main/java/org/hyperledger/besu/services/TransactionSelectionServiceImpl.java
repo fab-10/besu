@@ -14,13 +14,14 @@
  */
 package org.hyperledger.besu.services;
 
+import static com.google.common.base.Preconditions.checkState;
+
 import org.hyperledger.besu.plugin.services.TransactionSelectionService;
 import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
+import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelectorFactory;
 import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
-
-import java.util.Optional;
 
 /** The Transaction Selection service implementation. */
 public class TransactionSelectionServiceImpl implements TransactionSelectionService {
@@ -28,28 +29,30 @@ public class TransactionSelectionServiceImpl implements TransactionSelectionServ
   /** Default Constructor. */
   public TransactionSelectionServiceImpl() {}
 
-  private Optional<PluginTransactionSelectorFactory> factory = Optional.empty();
+  private PluginTransactionSelectorFactory factory = PluginTransactionSelectorFactory.NO_OP_FACTORY;
 
   @Override
   public PluginTransactionSelector createPluginTransactionSelector(
       final SelectorsStateManager selectorsStateManager) {
-    return factory
-        .map(
-            pluginTransactionSelectorFactory ->
-                pluginTransactionSelectorFactory.create(selectorsStateManager))
-        .orElse(PluginTransactionSelector.ACCEPT_ALL);
+    return factory.create(selectorsStateManager);
   }
 
   @Override
   public BlockAwareOperationTracer createTransactionSelectionOperationTracer() {
-    return factory
-        .map(PluginTransactionSelectorFactory::createOperationTracer)
-        .orElse(BlockAwareOperationTracer.NO_TRACING);
+    return factory.createOperationTracer();
+  }
+
+  @Override
+  public void selectPendingTransactions(final BlockTransactionSelectionService selectionService) {
+    factory.selectPendingTransactions(selectionService);
   }
 
   @Override
   public void registerPluginTransactionSelectorFactory(
       final PluginTransactionSelectorFactory pluginTransactionSelectorFactory) {
-    factory = Optional.ofNullable(pluginTransactionSelectorFactory);
+    checkState(
+        factory == PluginTransactionSelectorFactory.NO_OP_FACTORY,
+        "PluginTransactionSelectorFactory was already registered");
+    factory = pluginTransactionSelectorFactory;
   }
 }

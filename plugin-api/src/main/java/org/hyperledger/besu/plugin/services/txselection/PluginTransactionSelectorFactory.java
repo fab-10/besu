@@ -20,13 +20,16 @@ import org.hyperledger.besu.plugin.services.tracer.BlockAwareOperationTracer;
 /** Interface for a factory that creates transaction selectors */
 @Unstable
 public interface PluginTransactionSelectorFactory {
+  PluginTransactionSelectorFactory NO_OP_FACTORY = new PluginTransactionSelectorFactory() {};
 
   /**
    * Create a transaction selector
    *
    * @return the transaction selector
    */
-  PluginTransactionSelector create(SelectorsStateManager selectorsStateManager);
+  default PluginTransactionSelector create(final SelectorsStateManager selectorsStateManager) {
+    return PluginTransactionSelector.ACCEPT_ALL;
+  }
 
   /**
    * Method that returns an OperationTracer that will be used when executing transactions that are
@@ -37,4 +40,7 @@ public interface PluginTransactionSelectorFactory {
   default BlockAwareOperationTracer createOperationTracer() {
     return BlockAwareOperationTracer.NO_TRACING;
   }
+
+  default void selectPendingTransactions(
+      final BlockTransactionSelectionService blockTransactionSelectionService) {}
 }
