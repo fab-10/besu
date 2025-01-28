@@ -19,22 +19,42 @@ import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager.Du
 /**
  * This class represents an abstract plugin transaction selector which provides manage the selector
  * state.
+ *
+ * @param <S> The type of the state used by the selector
  */
 public abstract class AbstractPluginTransactionSelector<S extends DuplicableState<?>>
     implements PluginTransactionSelector {
   private final SelectorsStateManager selectorsStateManager;
 
+  /**
+   * Initialize the plugin state to an initial value
+   *
+   * @param selectorsStateManager the selectors state manager
+   * @param initialState the initial value of the state
+   */
   public AbstractPluginTransactionSelector(
       final SelectorsStateManager selectorsStateManager, final S initialState) {
     this.selectorsStateManager = selectorsStateManager;
     selectorsStateManager.createSelectorState(this, initialState);
   }
 
+  /**
+   * Get the working state for this selector. A working state contains changes that have not yet
+   * commited
+   *
+   * @return the working state of this selector
+   */
   protected S getWorkingState() {
     return selectorsStateManager.getSelectorWorkingState(this);
   }
 
-  protected S getConfirmedState() {
-    return selectorsStateManager.getSelectorConfirmedState(this);
+  /**
+   * Get the commited state for this selector. A commited state contains changes that have been
+   * commited
+   *
+   * @return the commited state of this selector
+   */
+  protected S getCommitedState() {
+    return selectorsStateManager.getSelectorCommittedState(this);
   }
 }

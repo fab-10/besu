@@ -15,13 +15,43 @@
 package org.hyperledger.besu.plugin.services.txselection;
 
 import org.hyperledger.besu.datatypes.PendingTransaction;
+import org.hyperledger.besu.plugin.data.ProcessableBlockHeader;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
 
+/**
+ * A service that can be used by plugins to include their pending transactions during block
+ * creation. Proposed pending transactions need to be first evaluated and based on the result of the
+ * evaluation of one or more pending transactions the plugin can apply its logic to commit or not
+ * the inclusion of the evaluated in the block.
+ *
+ * <p>The process of including plugin proposed pending transactions starts when {@link
+ * PluginTransactionSelectorFactory#selectPendingTransactions(BlockTransactionSelectionService,
+ * ProcessableBlockHeader)} is called.
+ */
 public interface BlockTransactionSelectionService {
 
+  /**
+   * Evaluate a plugin proposed pending transaction for block inclusion
+   *
+   * @param pendingTransaction the pending transaction proposed by the plugin
+   * @return the result of the evaluation
+   */
   TransactionSelectionResult evaluatePendingTransaction(PendingTransaction pendingTransaction);
 
+  /**
+   * Commit the changes applied by all the evaluated pending transactions since the previous commit.
+   * As part of this {@link PluginTransactionSelector} state of commited.
+   *
+   * @return false only if a timeout occurred during the selection of the pending transaction,
+   *     meaning that the pending transaction is not included in the current block
+   */
   boolean commit();
 
+  /**
+   * Rollback the changes applied by all the evaluated pending transactions since the previous
+   * commit.
+   *
+   * <p>As part of this {@link PluginTransactionSelector} state of rolled back.
+   */
   void rollback();
 }

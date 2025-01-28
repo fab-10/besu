@@ -14,99 +14,184 @@
  */
 package org.hyperledger.besu.plugin.services.txselection;
 
+import static com.google.common.base.Preconditions.checkState;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 
+/**
+ * Manages the state of transaction selectors (including the plugin transaction selector {@link
+ * PluginTransactionSelector}) during the block creation process. Some selectors have a state, for
+ * example the amount of gas used by selected pending transactions so far, and changes made to the
+ * state must be only commited after the evaluated pending transaction has been definitely selected
+ * for inclusion, until that point it will be always possible to rollback the changes to the state
+ * and return the previous commited state.
+ */
 @SuppressWarnings("rawtypes")
 public class SelectorsStateManager {
-  private final List<Map<TransactionSelector, DuplicableState>> unconfirmedStates =
+  private final List<Map<TransactionSelector, DuplicableState>> uncommitedStates =
       new ArrayList<>();
-  private Map<TransactionSelector, DuplicableState> confirmedState = new HashMap<>();
+  private Map<TransactionSelector, DuplicableState> committedState = new HashMap<>();
+  private volatile boolean blockSelectionStarted = false;
 
+  /**
+   * Create an empty selectors state manager, here to make javadoc linter happy.
+   */
+  public SelectorsStateManager() {
+  }
+
+  /**
+   * Create, initialize and track the state for a selector.
+   *
+   * <p>Call to this method must be performed before the block selection is stated with {@link
+   * #blockSelectionStarted()}, otherwise it fails.
+   *
+   * @param selector the selector
+   * @param initialState the initial value of the state
+   * @param <S> the type of the selector state
+   */
   public <S extends DuplicableState> void createSelectorState(
-      final TransactionSelector selector, final S initialValue) {
-    confirmedState.put(selector, initialValue);
+      final TransactionSelector selector, final S initialState) {
+    checkState(
+        !blockSelectionStarted, "Cannot create selector state after block selection is started");
+    committedState.put(selector, initialState);
   }
 
-  public void startNewEvaluation() {
-    unconfirmedStates.add(duplicateLastState());
+  /**
+   * Called at the start of block selection, when the initialization is done, to prepare a new
+   * working state based on the initial state.
+   *
+   * <p>After this method is called, it is not possible to call anymore {@link
+   * #createSelectorState(TransactionSelector, DuplicableState)}
+   */
+  public void blockSelectionStarted() {
+    blockSelectionStarted = true;
+    uncommitedStates.add(duplicateLastState());
   }
 
-  public Map<TransactionSelector, DuplicableState> duplicateLastState() {
+  private Map<TransactionSelector, DuplicableState> duplicateLastState() {
     return getLast().entrySet().stream()
         .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().deepCopy()));
   }
 
+  /**
+   * Get the working state for the specified selector
+   *
+   * @param selector the selector
+   * @return the working state of the selector
+   * @param <S> the type of the selector state
+   */
   @SuppressWarnings("unchecked")
   public <S extends DuplicableState> S getSelectorWorkingState(final TransactionSelector selector) {
-    return (S) unconfirmedStates.getLast().get(selector);
-  }
-
-  @SuppressWarnings("unchecked")
-  public <S extends DuplicableState> S getSelectorConfirmedState(
-      final TransactionSelector selector) {
-    return (S) confirmedState.get(selector);
+    return (S) uncommitedStates.getLast().get(selector);
   }
 
   /**
-   * Sets the state referred by the specified tx hash has the confirmed one, allowing to forget all
-   * the preceding entries.
+   * Get the commited state for the specified selector
+   *
+   * @param selector the selector
+   * @return the commited state of the selector
+   * @param <S> the type of the selector state
+   */
+  @SuppressWarnings("unchecked")
+  public <S extends DuplicableState> S getSelectorCommittedState(
+      final TransactionSelector selector) {
+    return (S) committedState.get(selector);
+  }
+
+  /**
+   * Commit the current working state and prepare a new working state based on the just commited
+   * state
    */
   public void commit() {
-    confirmedState = getLast();
-    unconfirmedStates.clear();
-    unconfirmedStates.add(duplicateLastState());
-  }
-
-  /** Discards the unconfirmed states starting from the specified tx hash. */
-  public void rollback() {
-    unconfirmedStates.clear();
-    unconfirmedStates.add(duplicateLastState());
+    committedState = getLast();
+    uncommitedStates.clear();
+    uncommitedStates.add(duplicateLastState());
   }
 
   /**
-   * Gets the latest, including unconfirmed, state. Note that the returned values could not yet be
-   * confirmed and could be discarded in the future.
-   *
-   * @return a map with the line count per module
+   * Discards the current working state and prepare a new working state based on the just commited
+   * state
    */
+  public void rollback() {
+    uncommitedStates.clear();
+    uncommitedStates.add(duplicateLastState());
+  }
+
   private Map<TransactionSelector, DuplicableState> getLast() {
-    if (unconfirmedStates.isEmpty()) {
-      return confirmedState;
+    if (uncommitedStates.isEmpty()) {
+      return committedState;
     }
-    return unconfirmedStates.getLast();
+    return uncommitedStates.getLast();
   }
 
-  public abstract static class DuplicableState<V> {
-    private V value;
+  /**
+   * A duplicate state object is one that is able to return, update and duplicate the state it
+   * contains
+   *
+   * @param <S> the type of the state
+   */
+  public abstract static class DuplicableState<S> {
+    private S state;
 
-    public DuplicableState(final V value) {
-      this.value = value;
+    /**
+     * Create a duplicate state with the initial value
+     *
+     * @param state the initial state
+     */
+    public DuplicableState(final S state) {
+      this.state = state;
     }
 
-    protected abstract DuplicableState<V> deepCopy();
+    /**
+     * The method that concrete classes must implement to create a deep copy of the state
+     *
+     * @return a new duplicable state with a deep copy of the state
+     */
+    protected abstract DuplicableState<S> deepCopy();
 
-    public V getValue() {
-      return value;
+    /**
+     * Get the current state
+     *
+     * @return the current state
+     */
+    public S getState() {
+      return state;
     }
 
-    public void setValue(final V value) {
-      this.value = value;
+    /**
+     * Replace the current state with the passed one
+     *
+     * @param state the new state
+     */
+    public void setState(final S state) {
+      this.state = state;
     }
   }
 
+  /** A duplicable state containing a long */
   public static class DuplicableLongState extends DuplicableState<Long> {
 
-    public DuplicableLongState(final Long value) {
-      super(value);
+    /**
+     * Create a duplicate long state with the initial state
+     *
+     * @param state the initial state
+     */
+    public DuplicableLongState(final Long state) {
+      super(state);
     }
 
+    /**
+     * Create a deep copy of this duplicable long state
+     *
+     * @return a copy of this duplicable long state
+     */
     @Override
     public DuplicableLongState deepCopy() {
-      return new DuplicableLongState(getValue());
+      return new DuplicableLongState(getState());
     }
   }
 }

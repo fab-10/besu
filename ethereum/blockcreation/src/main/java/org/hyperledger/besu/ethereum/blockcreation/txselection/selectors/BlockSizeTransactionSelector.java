@@ -58,7 +58,7 @@ public class BlockSizeTransactionSelector
       final TransactionSelectionResults transactionSelectionResults) {
 
     final var selectorState = getWorkingState();
-    final long cumulativeGasUsed = selectorState.getValue();
+    final long cumulativeGasUsed = selectorState.getState();
 
     if (transactionTooLargeForBlock(evaluationContext.getTransaction(), cumulativeGasUsed)) {
       LOG.atTrace()
@@ -75,7 +75,7 @@ public class BlockSizeTransactionSelector
         return TransactionSelectionResult.TX_TOO_LARGE_FOR_REMAINING_GAS;
       }
     }
-    selectorState.setValue(cumulativeGasUsed + evaluationContext.getTransaction().getGasLimit());
+    selectorState.setState(cumulativeGasUsed + evaluationContext.getTransaction().getGasLimit());
     return TransactionSelectionResult.SELECTED;
   }
 

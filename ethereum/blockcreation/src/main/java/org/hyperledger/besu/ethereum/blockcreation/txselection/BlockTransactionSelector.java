@@ -296,13 +296,15 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
 
   private SequencedMap<PendingTransaction, TransactionSelectionResult> evaluatePendingTransactions(
       final List<PendingTransaction> pendingTxs) {
+
+    selectorsStateManager.blockSelectionStarted();
+
     final var selectionResults =
         LinkedHashMap.<PendingTransaction, TransactionSelectionResult>newLinkedHashMap(
             pendingTxs.size());
 
     pendingTxs.forEach(
         pendingTransaction -> {
-          selectorsStateManager.startNewEvaluation();
           final var evaluationResult = evaluatePendingTransaction(pendingTransaction);
 
           TransactionSelectionResult actualResult;

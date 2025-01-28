@@ -225,6 +225,7 @@ public class TransactionSelectionResult {
    * means that the transaction could become valid at a later time.
    *
    * @param invalidReason the reason why transaction is invalid
+   * @param penalize if the pending transaction is penalized
    * @return the selection result
    */
   public static TransactionSelectionResult invalidTransient(
@@ -243,11 +244,6 @@ public class TransactionSelectionResult {
    */
   public static TransactionSelectionResult invalid(final String invalidReason) {
     return new TransactionSelectionResult(BaseStatus.INVALID, invalidReason);
-  }
-
-  public static TransactionSelectionResult copyWithReason(
-      final TransactionSelectionResult selectionResult, final String reason) {
-    return new TransactionSelectionResult(selectionResult.status, reason);
   }
 
   /**
