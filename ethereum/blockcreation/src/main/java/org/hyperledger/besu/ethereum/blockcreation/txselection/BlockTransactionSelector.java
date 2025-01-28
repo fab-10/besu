@@ -203,7 +203,8 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
         new FutureTask<Void>(
             () -> {
               // ToDo: evaluate pendingTxs with priority before call the plugin
-              transactionSelectionService.selectPendingTransactions(this);
+              transactionSelectionService.selectPendingTransactions(
+                  this, blockSelectionContext.pendingBlockHeader());
 
               final var pendingTxs =
                   blockSelectionContext.transactionPool().getPendingTransactionsForBlockSelection();

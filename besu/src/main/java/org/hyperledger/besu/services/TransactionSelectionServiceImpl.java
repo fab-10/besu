@@ -16,6 +16,7 @@ package org.hyperledger.besu.services;
 
 import static com.google.common.base.Preconditions.checkState;
 
+import org.hyperledger.besu.plugin.data.ProcessableBlockHeader;
 import org.hyperledger.besu.plugin.services.TransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
@@ -37,8 +38,10 @@ public class TransactionSelectionServiceImpl implements TransactionSelectionServ
   }
 
   @Override
-  public void selectPendingTransactions(final BlockTransactionSelectionService selectionService) {
-    factory.selectPendingTransactions(selectionService);
+  public void selectPendingTransactions(
+      final BlockTransactionSelectionService selectionService,
+      final ProcessableBlockHeader pendingBlockHeader) {
+    factory.selectPendingTransactions(selectionService, pendingBlockHeader);
   }
 
   @Override

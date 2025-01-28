@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.core;
 
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.plugin.data.ProcessableBlockHeader;
 import org.hyperledger.besu.plugin.services.TransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.BlockTransactionSelectionService;
 import org.hyperledger.besu.plugin.services.txselection.PluginTransactionSelector;
@@ -177,7 +178,8 @@ public abstract class MiningConfiguration {
 
       @Override
       public void selectPendingTransactions(
-          final BlockTransactionSelectionService selectionService) {}
+          final BlockTransactionSelectionService selectionService,
+          final ProcessableBlockHeader pendingBlockHeader) {}
 
       @Override
       public void registerPluginTransactionSelectorFactory(
