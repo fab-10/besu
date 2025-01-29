@@ -48,13 +48,11 @@ public abstract class AbstractTransactionSelector implements TransactionSelector
    * processing result.
    *
    * @param evaluationContext The current selection session data.
-   * @param blockTransactionResults The results of other transaction evaluations in the same block.
    * @param processingResult The result of transaction processing.
    * @return The result of the transaction evaluation
    */
   public abstract TransactionSelectionResult evaluateTransactionPostProcessing(
       final TransactionEvaluationContext evaluationContext,
-      final TransactionSelectionResults blockTransactionResults,
       final TransactionProcessingResult processingResult);
 
   /**

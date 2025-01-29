@@ -51,10 +51,8 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
   static final int NOT_INITIALIZED = -1;
   private static final AtomicLong TRANSACTIONS_ADDED = new AtomicLong();
   private final Transaction transaction;
-  private final List<PendingTransaction> bundledTransactions;
   private final boolean isLocal;
   private final boolean hasPriority;
-  private final boolean isPrivate;
   private final long addedAt;
   private final long sequence;
   private volatile byte score;
@@ -63,18 +61,14 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
 
   private PendingTransaction(
       final Transaction transaction,
-      final List<PendingTransaction> bundledTransactions,
       final boolean isLocal,
       final boolean hasPriority,
-      final boolean isPrivate,
       final long addedAt,
       final long sequence,
       final byte score) {
     this.transaction = transaction;
-    this.bundledTransactions = bundledTransactions;
     this.isLocal = isLocal;
     this.hasPriority = hasPriority;
-    this.isPrivate = isPrivate;
     this.addedAt = addedAt;
     this.sequence = sequence;
     this.score = score;
@@ -97,25 +91,6 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
   @Override
   public boolean hasPriority() {
     return hasPriority;
-  }
-
-  public boolean isPrivate() {
-    return isPrivate;
-  }
-
-  public boolean isBundle() {
-    return !bundledTransactions.isEmpty();
-  }
-
-  public List<PendingTransaction> getBundledTransactions() {
-    if (isBundle()) {
-      final var bundledTransactions =
-          new ArrayList<PendingTransaction>(this.bundledTransactions.size() + 1);
-      bundledTransactions.add(this);
-      bundledTransactions.addAll(this.bundledTransactions);
-      return bundledTransactions;
-    }
-    return List.of();
   }
 
   public Wei getGasPrice() {
@@ -167,10 +142,8 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
   public PendingTransaction detachedCopy() {
     return new PendingTransaction(
         transaction.detachedCopy(),
-        bundledTransactions.stream().map(PendingTransaction::detachedCopy).toList(),
         isLocal,
         hasPriority,
-        isPrivate,
         addedAt,
         sequence,
         score);
@@ -305,7 +278,6 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
 
   @Override
   public String toString() {
-    // ToDo: isPrivate & bundledTxs
     return "Hash="
         + transaction.getHash().toShortHexString()
         + ", nonce="
@@ -326,7 +298,6 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
   }
 
   public String toTraceLog() {
-    // ToDo: isPrivate & bundledTxs
     return "{sequence: "
         + sequence
         + ", addedAt: "
@@ -382,10 +353,8 @@ public class PendingTransaction implements org.hyperledger.besu.datatypes.Pendin
     public PendingTransaction build() {
       return new PendingTransaction(
           transaction,
-          bundledTransactions,
           isLocal,
           hasPriority,
-          isPrivate,
           addedAt == NOT_INITIALIZED ? System.currentTimeMillis() : addedAt,
           TRANSACTIONS_ADDED.getAndIncrement(),
           Byte.MAX_VALUE);

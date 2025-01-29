@@ -184,19 +184,6 @@ public class TransactionSelectionResult {
   public static final TransactionSelectionResult SENDER_WITH_PREVIOUS_TX_NOT_SELECTED =
       TransactionSelectionResult.invalidTransient("SENDER_WITH_PREVIOUS_TX_NOT_SELECTED", false);
 
-  /**
-   * The transaction has not been selected since a previous selection in the group was not selected
-   */
-  public static final TransactionSelectionResult AFTER_NOT_SELECTED_IN_BUNDLE =
-      TransactionSelectionResult.invalidTransient("AFTER_NOT_SELECTED_IN_BUNDLE", false);
-
-  /**
-   * The transaction have not been selected, since it is part of an atomic group where another
-   * transaction was not selected
-   */
-  public static final TransactionSelectionResult BUNDLE_FAILURE =
-      TransactionSelectionResult.invalidTransient("BUNDLE_FAILURE", false);
-
   private final Status status;
   private final Optional<String> maybeInvalidReason;
 

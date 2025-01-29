@@ -217,16 +217,15 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
       throwIfStopped();
 
       final var selectorsStateManager = new SelectorsStateManager();
-      final var pluginTransactionSelection =
+      final var pluginTransactionSelector =
           miningConfiguration
               .getTransactionSelectionService()
               .createPluginTransactionSelector(selectorsStateManager);
-
-      final var operationTracer = pluginTransactionSelection.getOperationTracer();
-
-      pluginTransactionSelection
+      final var operationTracer = pluginTransactionSelector.getOperationTracer();
+      pluginTransactionSelector
           .getOperationTracer()
           .traceStartBlock(processableBlockHeader, miningBeneficiary);
+
       timings.register("preTxsSelection");
       final TransactionSelectionResults transactionResults =
           selectTransactions(
@@ -235,7 +234,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
               maybeTransactions,
               miningBeneficiary,
               newProtocolSpec,
-              pluginTransactionSelection,
+              pluginTransactionSelector,
               selectorsStateManager,
               parentHeader);
       transactionResults.logSelectionStats();

@@ -19,8 +19,6 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.plugin.data.ProcessableBlockHeader;
 
-import java.util.Objects;
-
 import com.google.common.base.Stopwatch;
 
 public class TransactionEvaluationContext
@@ -46,7 +44,6 @@ public class TransactionEvaluationContext
   }
 
   public Transaction getTransaction() {
-    // ToDo Bundle: force the cast?
     return (Transaction) pendingTransaction.getTransaction();
   }
 
@@ -57,7 +54,6 @@ public class TransactionEvaluationContext
 
   @Override
   public PendingTransaction getPendingTransaction() {
-    // ToDo Bundle: force the cast?
     return (PendingTransaction) pendingTransaction;
   }
 
@@ -74,17 +70,5 @@ public class TransactionEvaluationContext
   @Override
   public Wei getMinGasPrice() {
     return minGasPrice;
-  }
-
-  @Override
-  public boolean equals(final Object o) {
-    if (o == null || getClass() != o.getClass()) return false;
-    final TransactionEvaluationContext that = (TransactionEvaluationContext) o;
-    return Objects.equals(pendingTransaction, that.pendingTransaction);
-  }
-
-  @Override
-  public int hashCode() {
-    return Objects.hashCode(pendingTransaction);
   }
 }

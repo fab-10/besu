@@ -156,9 +156,9 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     this.transactionSelectionService = miningConfiguration.getTransactionSelectionService();
     this.transactionSelectors =
         createTransactionSelectors(blockSelectionContext, selectorsStateManager);
+    this.pluginTransactionSelector = pluginTransactionSelector;
     this.operationTracer =
         new InterruptibleOperationTracer(pluginTransactionSelector.getOperationTracer());
-    this.pluginTransactionSelector = pluginTransactionSelector;
     blockWorldStateUpdater = worldState.updater();
     txWorldStateUpdater = blockWorldStateUpdater.updater();
     blockTxsSelectionMaxTime = miningConfiguration.getBlockTxsSelectionMaxTime();
@@ -306,7 +306,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     for (final var pendingTx : pendingTxs) {
       final var evaluationResult = evaluatePendingTransaction(pendingTx);
 
-      TransactionSelectionResult actualResult;
+      final TransactionSelectionResult actualResult;
       if (evaluationResult.selected()) {
         actualResult = commit() ? evaluationResult : BLOCK_SELECTION_TIMEOUT;
       } else {
@@ -446,8 +446,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
 
     for (var selector : transactionSelectors) {
       TransactionSelectionResult result =
-          selector.evaluateTransactionPostProcessing(
-              evaluationContext, transactionSelectionResults, processingResult);
+          selector.evaluateTransactionPostProcessing(evaluationContext, processingResult);
       if (!result.equals(SELECTED)) {
         return result;
       }
@@ -499,6 +498,8 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     final long cumulativeGasUsed =
         transactionSelectionResults.getCumulativeGasUsed() + gasUsedByTransaction;
 
+    // queue the creation of the receipt and the update of the final results
+    // there actions will be performed on commit if the pending tx is definitely selected
     selectedTxPendingActions.add(
         () -> {
           final TransactionReceipt receipt =
@@ -508,6 +509,10 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
           transactionSelectionResults.updateSelected(transaction, receipt, gasUsedByTransaction);
 
           notifySelected(evaluationContext, processingResult);
+          LOG.atTrace()
+              .setMessage("Selected and commited {} for block creation")
+              .addArgument(transaction::toTraceLog)
+              .log();
         });
 
     if (isTimeout.get()) {
@@ -520,7 +525,8 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     }
 
     LOG.atTrace()
-        .setMessage("Selected {} for block creation, evaluated in {}")
+        .setMessage(
+            "Potentially selected {} for block creation, evaluated in {}, waiting for commit")
         .addArgument(transaction::toTraceLog)
         .addArgument(evaluationContext.getEvaluationTimer())
         .log();
@@ -553,11 +559,14 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     notifyNotSelected(evaluationContext, actualResult);
 
     LOG.atTrace()
-        .setMessage(
-            "Not selected {} for block creation with result {} (original result {}), evaluated in {}")
+        .setMessage("Not selected {} for block creation with result {}{}, evaluated in {}")
         .addArgument(pendingTransaction::toTraceLog)
         .addArgument(actualResult)
-        .addArgument(selectionResult)
+        .addArgument(
+            () ->
+                selectionResult.equals(actualResult)
+                    ? ""
+                    : " (original result " + selectionResult + ")")
         .addArgument(evaluationContext.getEvaluationTimer())
         .log();
 

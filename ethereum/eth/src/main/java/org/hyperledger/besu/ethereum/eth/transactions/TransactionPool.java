@@ -209,58 +209,6 @@ public class TransactionPool implements BlockAddedObserver {
     return validationAndAccount.result;
   }
 
-  public Map<Hash, ValidationResult<TransactionInvalidReason>> addBundleViaApi(
-      final List<Transaction> transactions) {
-    final var validationResultsAndAccounts =
-        HashMap.<Hash, ValidationResultAndAccount>newHashMap(transactions.size());
-
-    for (final Transaction transaction : transactions) {
-      final boolean hasPriority = isPriorityTransaction(transaction, true);
-      final var validationAndAccount =
-          validateTransactionWithMetrics(transaction, true, hasPriority);
-
-      validationResultsAndAccounts.put(transaction.getHash(), validationAndAccount);
-
-      if (!validationAndAccount.result.isValid()) {
-        // avoid further processing and just return what we found until now
-        return validationResultsAndAccounts.entrySet().stream()
-            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().result));
-      }
-    }
-
-    List<PendingTransaction> allTxButFirst =
-        transactions.stream()
-            .skip(1)
-            .map(
-                tx ->
-                    PendingTransaction.builder(tx)
-                        .isPrivate(true)
-                        .isLocal(true)
-                        .hasPriority(isPriorityTransaction(tx, true))
-                        .build())
-            .toList();
-
-    final var firstTx = transactions.getFirst();
-    final boolean firstTxHasPriority = isPriorityTransaction(firstTx, true);
-    final var firstTxMaybeAccount =
-        validationResultsAndAccounts.get(firstTx.getHash()).maybeAccount;
-    // at this point build a PendingTransaction.Bundle
-    final var pendingTransactionBundle =
-        PendingTransaction.builder(firstTx)
-            .isPrivate(true)
-            .isLocal(true)
-            .hasPriority(firstTxHasPriority)
-            .bundledTransactions(allTxButFirst)
-            .build();
-
-    final var result =
-        addTransaction(pendingTransactionBundle, true, firstTxHasPriority, firstTxMaybeAccount);
-    if (result.isValid()) {
-      transactionBroadcaster.onTransactionsAdded(transactions);
-    }
-    return transactions.stream().collect(Collectors.toMap(Transaction::getHash, unused -> result));
-  }
-
   public Map<Hash, ValidationResult<TransactionInvalidReason>> addRemoteTransactions(
       final Collection<Transaction> transactions) {
     final long started = System.currentTimeMillis();
