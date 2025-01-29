@@ -53,8 +53,8 @@ import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
-import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
@@ -183,7 +183,7 @@ public abstract class AbstractIsolationTests {
             () -> sorter,
             protocolSchedule,
             protocolContext,
-            mock(PendingTransactionBroadcaster.class),
+            mock(TransactionBroadcaster.class),
             ethContext,
             txPoolMetrics,
             poolConfiguration,

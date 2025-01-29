@@ -77,10 +77,4 @@ public interface PendingTransactions {
   String logStats();
 
   Optional<Transaction> restoreBlob(Transaction transaction);
-
-  @FunctionalInterface
-  interface TransactionSelector {
-    SequencedMap<PendingTransaction, TransactionSelectionResult> evaluateTransaction(
-        final List<PendingTransaction> pendingTransactions);
-  }
 }

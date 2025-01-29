@@ -22,7 +22,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.messages.EthPV65;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool.PendingTransactionBatchAddedListener;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool.TransactionBatchAddedListener;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -37,9 +37,9 @@ import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class PendingTransactionBroadcaster
-    implements PendingTransactionBatchAddedListener, PendingTransactionDroppedListener {
-  private static final Logger LOG = LoggerFactory.getLogger(PendingTransactionBroadcaster.class);
+public class TransactionBroadcaster
+    implements TransactionBatchAddedListener, PendingTransactionDroppedListener {
+  private static final Logger LOG = LoggerFactory.getLogger(TransactionBroadcaster.class);
 
   private static final EnumSet<TransactionType> ANNOUNCE_HASH_ONLY_TX_TYPES = EnumSet.of(BLOB);
 
@@ -52,7 +52,7 @@ public class PendingTransactionBroadcaster
   private final EthContext ethContext;
   private final Random random;
 
-  public PendingTransactionBroadcaster(
+  public TransactionBroadcaster(
       final EthContext ethContext,
       final PeerTransactionTracker transactionTracker,
       final TransactionsMessageSender transactionsMessageSender,
@@ -66,7 +66,7 @@ public class PendingTransactionBroadcaster
   }
 
   @VisibleForTesting
-  protected PendingTransactionBroadcaster(
+  protected TransactionBroadcaster(
       final EthContext ethContext,
       final PeerTransactionTracker transactionTracker,
       final TransactionsMessageSender transactionsMessageSender,
@@ -82,14 +82,12 @@ public class PendingTransactionBroadcaster
   public void relayTransactionPoolTo(
       final EthPeer peer, final Collection<PendingTransaction> pendingTransactions) {
     if (!pendingTransactions.isEmpty()) {
-      final var publicPendingTxs =
-          pendingTransactions.stream().filter(ptx -> !ptx.isPrivate()).toList();
       if (peer.hasSupportForMessage(EthPV65.NEW_POOLED_TRANSACTION_HASHES)) {
-        sendTransactionHashes(toTransactionList(publicPendingTxs), List.of(peer));
+        sendTransactionHashes(toTransactionList(pendingTransactions), List.of(peer));
       } else {
         // we need to exclude txs that support hash only broadcasting
         final var fullBroadcastTxs =
-            publicPendingTxs.stream()
+            pendingTransactions.stream()
                 .map(PendingTransaction::getTransaction)
                 .filter(tx -> !ANNOUNCE_HASH_ONLY_TX_TYPES.contains(tx.getType()))
                 .toList();
@@ -99,7 +97,7 @@ public class PendingTransactionBroadcaster
   }
 
   @Override
-  public void onPendingTransactionsAdded(final Collection<PendingTransaction> pendingTransactions) {
+  public void onTransactionsAdded(final Collection<Transaction> transactions) {
     final int currPeerCount = ethContext.getEthPeers().peerCount();
     if (currPeerCount == 0) {
       return;
@@ -108,9 +106,7 @@ public class PendingTransactionBroadcaster
     final int numPeersToSendFullTransactions = (int) Math.round(Math.sqrt(currPeerCount));
 
     final Map<Boolean, List<Transaction>> transactionByBroadcastMode =
-        pendingTransactions.stream()
-            .filter(ptx -> !ptx.isPrivate())
-            .map(PendingTransaction::getTransaction)
+        transactions.stream()
             .collect(
                 Collectors.partitioningBy(
                     tx -> ANNOUNCE_HASH_ONLY_TX_TYPES.contains(tx.getType())));
@@ -145,7 +141,7 @@ public class PendingTransactionBroadcaster
 
     LOG.atTrace()
         .setMessage(
-            "Sending full pendingTransactions to {} peers, transaction hashes only to {} peers and mixed to {} peers."
+            "Sending full transactions to {} peers, transaction hashes only to {} peers and mixed to {} peers."
                 + " Peers w/o eth/65 {}, peers with eth/65 {}")
         .addArgument(sendOnlyFullTransactionPeers::size)
         .addArgument(sendOnlyHashPeers::size)

@@ -114,7 +114,7 @@ public class TransactionPoolFactory {
                     miningConfiguration),
             protocolSchedule,
             protocolContext,
-            new PendingTransactionBroadcaster(
+            new TransactionBroadcaster(
                 ethContext,
                 transactionTracker,
                 transactionsMessageSender,

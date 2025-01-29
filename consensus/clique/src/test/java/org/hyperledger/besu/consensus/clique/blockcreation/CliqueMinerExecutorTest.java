@@ -49,7 +49,7 @@ import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
-import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionBroadcaster;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.GasPricePendingTransactionsSorter;
@@ -235,7 +235,7 @@ public class CliqueMinerExecutorTest {
                     CliqueMinerExecutorTest::mockBlockHeader),
             cliqueProtocolSchedule,
             cliqueProtocolContext,
-            mock(PendingTransactionBroadcaster.class),
+            mock(TransactionBroadcaster.class),
             cliqueEthContext,
             new TransactionPoolMetrics(metricsSystem),
             conf,

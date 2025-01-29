@@ -104,7 +104,7 @@ public class TransactionPool implements BlockAddedObserver {
   private final ProtocolSchedule protocolSchedule;
   private final ProtocolContext protocolContext;
   private final EthContext ethContext;
-  private final PendingTransactionBroadcaster transactionBroadcaster;
+  private final TransactionBroadcaster transactionBroadcaster;
   private final TransactionPoolMetrics metrics;
   private final TransactionPoolConfiguration configuration;
   private final AtomicBoolean isPoolEnabled = new AtomicBoolean(false);
@@ -123,7 +123,7 @@ public class TransactionPool implements BlockAddedObserver {
       final Supplier<PendingTransactions> pendingTransactionsSupplier,
       final ProtocolSchedule protocolSchedule,
       final ProtocolContext protocolContext,
-      final PendingTransactionBroadcaster transactionBroadcaster,
+      final TransactionBroadcaster transactionBroadcaster,
       final EthContext ethContext,
       final TransactionPoolMetrics metrics,
       final TransactionPoolConfiguration configuration,
@@ -202,7 +202,7 @@ public class TransactionPool implements BlockAddedObserver {
           addTransaction(pendingTransaction, true, hasPriority, validationAndAccount.maybeAccount);
       if (result.isValid()) {
         localSenders.add(transaction.getSender());
-        transactionBroadcaster.onPendingTransactionsAdded(List.of(pendingTransaction));
+        transactionBroadcaster.onTransactionsAdded(List.of(transaction));
       }
       return result;
     }
@@ -256,8 +256,7 @@ public class TransactionPool implements BlockAddedObserver {
     final var result =
         addTransaction(pendingTransactionBundle, true, firstTxHasPriority, firstTxMaybeAccount);
     if (result.isValid()) {
-      transactionBroadcaster.onPendingTransactionsAdded(
-          pendingTransactionBundle.getBundledTransactions());
+      transactionBroadcaster.onTransactionsAdded(transactions);
     }
     return transactions.stream().collect(Collectors.toMap(Transaction::getHash, unused -> result));
   }
@@ -266,7 +265,7 @@ public class TransactionPool implements BlockAddedObserver {
       final Collection<Transaction> transactions) {
     final long started = System.currentTimeMillis();
     final int initialCount = transactions.size();
-    final List<PendingTransaction> addedTransactions = new ArrayList<>(initialCount);
+    final List<Transaction> addedTransactions = new ArrayList<>(initialCount);
     LOG.trace("Adding {} remote transactions", initialCount);
 
     final var validationResults =
@@ -292,7 +291,7 @@ public class TransactionPool implements BlockAddedObserver {
                                 hasPriority,
                                 validationAndAccount.maybeAccount);
                         if (result.isValid()) {
-                          addedTransactions.add(pendingTransaction);
+                          addedTransactions.add(transaction);
                         }
                         return result;
                       }
@@ -316,7 +315,7 @@ public class TransactionPool implements BlockAddedObserver {
         .log();
 
     if (!addedTransactions.isEmpty()) {
-      transactionBroadcaster.onPendingTransactionsAdded(addedTransactions);
+      transactionBroadcaster.onTransactionsAdded(addedTransactions);
     }
     return validationResults;
   }
@@ -670,9 +669,9 @@ public class TransactionPool implements BlockAddedObserver {
     return pendingTransactions.getClass();
   }
 
-  public interface PendingTransactionBatchAddedListener {
+  public interface TransactionBatchAddedListener {
 
-    void onPendingTransactionsAdded(Collection<PendingTransaction> pendingTransactions);
+    void onTransactionsAdded(Collection<Transaction> transactions);
   }
 
   private static class ValidationResultAndAccount {

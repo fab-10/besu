@@ -70,7 +70,7 @@ public class TransactionBroadcasterTest {
   private final EthPeer ethPeerWithEth65_3 = mock(EthPeer.class);
   private final BlockDataGenerator generator = new BlockDataGenerator();
 
-  private PendingTransactionBroadcaster txBroadcaster;
+  private TransactionBroadcaster txBroadcaster;
   private ArgumentCaptor<Runnable> sendTaskCapture;
 
   @BeforeEach
@@ -94,7 +94,7 @@ public class TransactionBroadcasterTest {
 
     // we use the fixed random seed to have a predictable shuffle of peers
     txBroadcaster =
-        new PendingTransactionBroadcaster(
+        new TransactionBroadcaster(
             ethContext,
             transactionTracker,
             transactionsMessageSender,
@@ -143,23 +143,22 @@ public class TransactionBroadcasterTest {
   }
 
   @Test
-  public void onPendingTransactionsAddedWithNoPeersDoesNothing() {
+  public void onTransactionsAddedWithNoPeersDoesNothing() {
     when(ethPeers.peerCount()).thenReturn(0);
 
-    txBroadcaster.onPendingTransactionsAdded(setupTransactionPool(1, 1));
+    txBroadcaster.onTransactionsAdded(toTransactionList(setupTransactionPool(1, 1)));
 
     verifyNothingSent();
   }
 
   @Test
-  public void onTransactionsAddedWithOnlyNonEth65PeersSendFullPendingTransactions() {
+  public void onTransactionsAddedWithOnlyNonEth65PeersSendFullTransactions() {
     when(ethPeers.peerCount()).thenReturn(2);
     when(ethPeers.streamAvailablePeers()).thenReturn(Stream.of(ethPeerNoEth65, ethPeerNoEth65_2));
 
-    final Collection<PendingTransaction> pendingTxs = setupTransactionPool(1, 1);
-    final List<Transaction> txs = toTransactionList(pendingTxs);
+    List<Transaction> txs = toTransactionList(setupTransactionPool(1, 1));
 
-    txBroadcaster.onPendingTransactionsAdded(pendingTxs);
+    txBroadcaster.onTransactionsAdded(txs);
 
     verifyTransactionAddedToPeerSendingQueue(ethPeerNoEth65, txs);
     verifyTransactionAddedToPeerSendingQueue(ethPeerNoEth65_2, txs);
@@ -172,15 +171,14 @@ public class TransactionBroadcasterTest {
   }
 
   @Test
-  public void onTransactionsAddedWithOnlyFewEth65PeersSendFullPendingTransactions() {
+  public void onTransactionsAddedWithOnlyFewEth65PeersSendFullTransactions() {
     when(ethPeers.peerCount()).thenReturn(2);
     when(ethPeers.streamAvailablePeers())
         .thenReturn(Stream.of(ethPeerWithEth65, ethPeerWithEth65_2));
 
-    final Collection<PendingTransaction> pendingTxs = setupTransactionPool(1, 1);
-    final List<Transaction> txs = toTransactionList(pendingTxs);
+    List<Transaction> txs = toTransactionList(setupTransactionPool(1, 1));
 
-    txBroadcaster.onPendingTransactionsAdded(pendingTxs);
+    txBroadcaster.onTransactionsAdded(txs);
     // the shuffled hash only peer list is always:
     // [ethPeerWithEth65_3, ethPeerWithEth65_2, ethPeerWithEth65]
     // so ethPeerWithEth65 and ethPeerWithEth65_2 are moved to the mixed broadcast list
@@ -194,16 +192,14 @@ public class TransactionBroadcasterTest {
   }
 
   @Test
-  public void
-      onTransactionsAddedWithOnlyEth65PeersSendFullPendingTransactionsAndTransactionHashes() {
+  public void onTransactionsAddedWithOnlyEth65PeersSendFullTransactionsAndTransactionHashes() {
     when(ethPeers.peerCount()).thenReturn(3);
     when(ethPeers.streamAvailablePeers())
         .thenReturn(Stream.of(ethPeerWithEth65, ethPeerWithEth65_2, ethPeerWithEth65_3));
 
-    final Collection<PendingTransaction> pendingTxs = setupTransactionPool(1, 1);
-    final List<Transaction> txs = toTransactionList(pendingTxs);
+    List<Transaction> txs = toTransactionList(setupTransactionPool(1, 1));
 
-    txBroadcaster.onPendingTransactionsAdded(pendingTxs);
+    txBroadcaster.onTransactionsAdded(txs);
     // the shuffled hash only peer list is always:
     // [ethPeerWithEth65_3, ethPeerWithEth65_2, ethPeerWithEth65]
     // so ethPeerWithEth65 and ethPeerWithEth65_2 are moved to the mixed broadcast list
@@ -218,17 +214,16 @@ public class TransactionBroadcasterTest {
   }
 
   @Test
-  public void onTransactionsAddedWithMixedPeersSendFullPendingTransactionsAndTransactionHashes() {
+  public void onTransactionsAddedWithMixedPeersSendFullTransactionsAndTransactionHashes() {
     List<EthPeer> eth65Peers = List.of(ethPeerWithEth65, ethPeerWithEth65_2);
 
     when(ethPeers.peerCount()).thenReturn(3);
     when(ethPeers.streamAvailablePeers())
         .thenReturn(Stream.concat(eth65Peers.stream(), Stream.of(ethPeerNoEth65)));
 
-    final Collection<PendingTransaction> pendingTxs = setupTransactionPool(1, 1);
-    final List<Transaction> txs = toTransactionList(pendingTxs);
+    List<Transaction> txs = toTransactionList(setupTransactionPool(1, 1));
 
-    txBroadcaster.onPendingTransactionsAdded(pendingTxs);
+    txBroadcaster.onTransactionsAdded(txs);
     // the shuffled hash only peer list is always:
     // [ethPeerWithEth65, ethPeerWithEth65_2]
     // so ethPeerWithEth65_2 is moved to the mixed broadcast list
@@ -253,17 +248,16 @@ public class TransactionBroadcasterTest {
 
   @Test
   public void
-      onTransactionsAddedWithMixedPeersAndHashOnlyBroadcastPendingTransactionsSendTransactionHashes() {
+      onTransactionsAddedWithMixedPeersAndHashOnlyBroadcastTransactionsSendTransactionHashes() {
     List<EthPeer> eth65Peers = List.of(ethPeerWithEth65, ethPeerWithEth65_2);
 
     when(ethPeers.peerCount()).thenReturn(3);
     when(ethPeers.streamAvailablePeers())
         .thenReturn(Stream.concat(eth65Peers.stream(), Stream.of(ethPeerNoEth65)));
 
-    final Collection<PendingTransaction> pendingTxs = setupTransactionPool(BLOB, 0, 1);
-    List<Transaction> txs = toTransactionList(pendingTxs);
+    List<Transaction> txs = toTransactionList(setupTransactionPool(BLOB, 0, 1));
 
-    txBroadcaster.onPendingTransactionsAdded(pendingTxs);
+    txBroadcaster.onTransactionsAdded(txs);
     // the shuffled hash only peer list is always:
     // [ethPeerWithEth65, ethPeerWithEth65_2]
     // so ethPeerWithEth65_2 is moved to the mixed broadcast list
@@ -283,7 +277,7 @@ public class TransactionBroadcasterTest {
   }
 
   @Test
-  public void onPendingTransactionsAddedWithMixedPeersAndMixedBroadcastKind() {
+  public void onTransactionsAddedWithMixedPeersAndMixedBroadcastKind() {
     List<EthPeer> eth65Peers = List.of(ethPeerWithEth65, ethPeerWithEth65_2);
 
     when(ethPeers.peerCount()).thenReturn(3);
@@ -292,19 +286,14 @@ public class TransactionBroadcasterTest {
 
     // 1 full broadcast transaction type
     // 1 hash only broadcast transaction type
-    final Collection<PendingTransaction> fullBroadcastPendingTxs =
-        setupTransactionPool(TransactionType.EIP1559, 0, 1);
-    final List<Transaction> fullBroadcastTxs = toTransactionList(fullBroadcastPendingTxs);
-    final Collection<PendingTransaction> hashBroadcastPendingTxs = setupTransactionPool(BLOB, 0, 1);
-    final List<Transaction> hashBroadcastTxs = toTransactionList(hashBroadcastPendingTxs);
+    List<Transaction> fullBroadcastTxs =
+        toTransactionList(setupTransactionPool(TransactionType.EIP1559, 0, 1));
+    List<Transaction> hashBroadcastTxs = toTransactionList(setupTransactionPool(BLOB, 0, 1));
 
-    final Collection<PendingTransaction> mixedPendingTxs = new ArrayList<>(fullBroadcastPendingTxs);
-    mixedPendingTxs.addAll(hashBroadcastPendingTxs);
-
-    final List<Transaction> mixedTxs = new ArrayList<>(fullBroadcastTxs);
+    List<Transaction> mixedTxs = new ArrayList<>(fullBroadcastTxs);
     mixedTxs.addAll(hashBroadcastTxs);
 
-    txBroadcaster.onPendingTransactionsAdded(mixedPendingTxs);
+    txBroadcaster.onTransactionsAdded(mixedTxs);
     // the shuffled hash only peer list is always:
     // [ethPeerWithEth65, ethPeerWithEth65_2]
     // so ethPeerWithEth65_2 is moved to the mixed broadcast list

@@ -53,8 +53,8 @@ import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
-import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
@@ -82,7 +82,7 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class EthGetFilterChangesIntegrationTest {
 
-  @Mock private PendingTransactionBroadcaster batchAddedListener;
+  @Mock private TransactionBroadcaster batchAddedListener;
   private MutableBlockchain blockchain;
   private final String ETH_METHOD = "eth_getFilterChanges";
   private final String JSON_RPC_VERSION = "2.0";

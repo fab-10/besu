@@ -36,7 +36,6 @@ import org.hyperledger.besu.config.GenesisConfig;
 import org.hyperledger.besu.crypto.KeyPair;
 import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.datatypes.BlobsWithCommitments;
-import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.ProtocolContext;
@@ -82,7 +81,6 @@ import org.hyperledger.besu.testutil.DeterministicEthScheduler;
 
 import java.math.BigInteger;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -126,7 +124,7 @@ public abstract class AbstractTransactionPoolTestBase {
 
   protected final MetricsSystem metricsSystem = new NoOpMetricsSystem();
   protected MutableBlockchain blockchain;
-  protected PendingTransactionBroadcaster transactionBroadcaster;
+  protected TransactionBroadcaster transactionBroadcaster;
 
   protected PendingTransactions transactions;
   protected final Transaction transaction0 = createTransaction(0);
@@ -242,7 +240,7 @@ public abstract class AbstractTransactionPoolTestBase {
     peerTransactionTracker = new PeerTransactionTracker(ethContext.getEthPeers());
     transactionBroadcaster =
         spy(
-            new PendingTransactionBroadcaster(
+            new TransactionBroadcaster(
                 ethContext,
                 peerTransactionTracker,
                 transactionsMessageSender,
@@ -318,14 +316,7 @@ public abstract class AbstractTransactionPoolTestBase {
   protected void addAndAssertRemoteTransactionInvalid(final Transaction tx) {
     transactionPool.addRemoteTransactions(List.of(tx));
 
-    verify(transactionBroadcaster, never())
-        .onPendingTransactionsAdded(
-            argThat(
-                pendingTransactions ->
-                    pendingTransactions.stream()
-                        .map(PendingTransaction::getTransaction)
-                        .anyMatch(tx::equals)));
-
+    verify(transactionBroadcaster, never()).onTransactionsAdded(singletonList(tx));
     assertTransactionNotPending(tx);
   }
 
@@ -346,14 +337,8 @@ public abstract class AbstractTransactionPoolTestBase {
     transactionPool.addRemoteTransactions(List.of(txs));
 
     verify(transactionBroadcaster)
-        .onPendingTransactionsAdded(
-            argThat(
-                pendingTxs ->
-                    pendingTxs.size() == txs.length
-                        && pendingTxs.stream()
-                            .map(PendingTransaction::getTransaction)
-                            .toList()
-                            .containsAll(List.of(txs))));
+        .onTransactionsAdded(
+            argThat(btxs -> btxs.size() == txs.length && btxs.containsAll(List.of(txs))));
     Arrays.stream(txs).forEach(this::assertTransactionPending);
     assertThat(transactions.getLocalTransactions()).doesNotContain(txs);
     if (hasPriority) {
@@ -368,23 +353,13 @@ public abstract class AbstractTransactionPoolTestBase {
 
     assertThat(result.isValid()).isTrue();
     assertTransactionPending(tx);
-    verify(transactionBroadcaster)
-        .onPendingTransactionsAdded(eq(findByHash(transactions, tx.getHash())));
+    verify(transactionBroadcaster).onTransactionsAdded(singletonList(tx));
     assertThat(transactions.getLocalTransactions()).contains(tx);
     if (disableLocalPriority) {
       assertThat(transactions.getPriorityTransactions()).doesNotContain(tx);
     } else {
       assertThat(transactions.getPriorityTransactions()).contains(tx);
     }
-  }
-
-  protected static Collection<PendingTransaction> findByHash(
-      final PendingTransactions pendingTransactions, final Hash hash) {
-    return singletonList(
-        pendingTransactions.getPendingTransactions().stream()
-            .filter(tx -> tx.getHash().equals(hash))
-            .findFirst()
-            .orElseThrow());
   }
 
   protected void addAndAssertTransactionViaApiInvalid(
@@ -395,13 +370,7 @@ public abstract class AbstractTransactionPoolTestBase {
     assertThat(result.isValid()).isFalse();
     assertThat(result.getInvalidReason()).isEqualTo(invalidReason);
     assertTransactionNotPending(tx);
-    verify(transactionBroadcaster, never())
-        .onPendingTransactionsAdded(
-            argThat(
-                pendingTransactions ->
-                    pendingTransactions.stream()
-                        .map(PendingTransaction::getTransaction)
-                        .anyMatch(tx::equals)));
+    verify(transactionBroadcaster, never()).onTransactionsAdded(singletonList(tx));
   }
 
   @SuppressWarnings("unchecked")
