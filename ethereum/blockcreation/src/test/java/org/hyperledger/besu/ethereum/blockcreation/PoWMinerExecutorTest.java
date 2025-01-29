@@ -114,7 +114,7 @@ public class PoWMinerExecutorTest {
         new TransactionPool(
             () -> pendingTransactions,
             mock(ProtocolSchedule.class),
-            mock(ProtocolContext.class),
+            mock(ProtocolContext.class, RETURNS_DEEP_STUBS),
             mock(PendingTransactionBroadcaster.class),
             ethContext,
             new TransactionPoolMetrics(new NoOpMetricsSystem()),

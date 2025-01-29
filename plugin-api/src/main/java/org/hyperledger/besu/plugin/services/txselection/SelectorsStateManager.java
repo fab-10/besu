@@ -37,11 +37,8 @@ public class SelectorsStateManager {
   private Map<TransactionSelector, DuplicableState> committedState = new HashMap<>();
   private volatile boolean blockSelectionStarted = false;
 
-  /**
-   * Create an empty selectors state manager, here to make javadoc linter happy.
-   */
-  public SelectorsStateManager() {
-  }
+  /** Create an empty selectors state manager, here to make javadoc linter happy. */
+  public SelectorsStateManager() {}
 
   /**
    * Create, initialize and track the state for a selector.

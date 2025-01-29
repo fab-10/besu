@@ -303,19 +303,22 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
         LinkedHashMap.<PendingTransaction, TransactionSelectionResult>newLinkedHashMap(
             pendingTxs.size());
 
-    pendingTxs.forEach(
-        pendingTransaction -> {
-          final var evaluationResult = evaluatePendingTransaction(pendingTransaction);
+    for (final var pendingTx : pendingTxs) {
+      final var evaluationResult = evaluatePendingTransaction(pendingTx);
 
-          TransactionSelectionResult actualResult;
-          if (evaluationResult.selected()) {
-            actualResult = commit() ? evaluationResult : BLOCK_SELECTION_TIMEOUT;
-          } else {
-            rollback();
-            actualResult = evaluationResult;
-          }
-          selectionResults.put(pendingTransaction, actualResult);
-        });
+      TransactionSelectionResult actualResult;
+      if (evaluationResult.selected()) {
+        actualResult = commit() ? evaluationResult : BLOCK_SELECTION_TIMEOUT;
+      } else {
+        rollback();
+        actualResult = evaluationResult;
+      }
+      selectionResults.put(pendingTx, actualResult);
+      if (actualResult.stop()) {
+        break;
+      }
+    }
+
     return selectionResults;
   }
 
@@ -334,6 +337,8 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
       final org.hyperledger.besu.datatypes.PendingTransaction pendingTransaction) {
 
     checkCancellation();
+
+    LOG.atTrace().setMessage("Starting evaluation of {}").addArgument(pendingTransaction).log();
 
     final TransactionEvaluationContext evaluationContext =
         createTransactionEvaluationContext(pendingTransaction);
@@ -368,6 +373,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
         for (final var pendingAction : selectedTxPendingActions) {
           pendingAction.run();
         }
+        selectedTxPendingActions.clear();
         return true;
       }
     }
@@ -379,6 +385,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
 
   @Override
   public void rollback() {
+    selectedTxPendingActions.clear();
     selectorsStateManager.rollback();
     txWorldStateUpdater = blockWorldStateUpdater.updater();
   }
@@ -502,15 +509,15 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
 
           notifySelected(evaluationContext, processingResult);
         });
-    //
-    //    if (isTimeout.get()) {
-    //      // even if this tx passed all the checks, it is too late to include it in this block,
-    //      // so we need to treat it as not selected
-    //
-    //      // do not rely on the presence of this result, since by the time it is added, the code
-    //      // reading it could have been already executed by another thread
-    //      return handleTransactionNotSelected(evaluationContext, BLOCK_SELECTION_TIMEOUT);
-    //    }
+
+    if (isTimeout.get()) {
+      // even if this tx passed all the checks, it is too late to include it in this block,
+      // so we need to treat it as not selected
+
+      // do not rely on the presence of this result, since by the time it is added, the code
+      // reading it could have been already executed by another thread
+      return handleTransactionNotSelected(evaluationContext, BLOCK_SELECTION_TIMEOUT);
+    }
 
     LOG.atTrace()
         .setMessage("Selected {} for block creation, evaluated in {}")

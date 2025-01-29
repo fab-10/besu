@@ -27,12 +27,12 @@ public interface TransactionSelectionService extends BesuService {
 
   /**
    * Create a transaction selector plugin
+   *
    * @param selectorsStateManager the selectors state manager
    * @return the transaction selector plugin
    */
   PluginTransactionSelector createPluginTransactionSelector(
       SelectorsStateManager selectorsStateManager);
-
 
   /**
    * Called during the block creation to allow plugins to propose their own pending transactions for

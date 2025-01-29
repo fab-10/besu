@@ -21,6 +21,7 @@ import static org.awaitility.Awaitility.await;
 import static org.hyperledger.besu.ethereum.blockcreation.AbstractBlockTransactionSelectorTest.Sender.SENDER1;
 import static org.hyperledger.besu.ethereum.blockcreation.AbstractBlockTransactionSelectorTest.Sender.SENDER2;
 import static org.hyperledger.besu.ethereum.blockcreation.AbstractBlockTransactionSelectorTest.Sender.SENDER3;
+import static org.hyperledger.besu.ethereum.blockcreation.AbstractBlockTransactionSelectorTest.Sender.SENDER4;
 import static org.hyperledger.besu.ethereum.blockcreation.AbstractBlockTransactionSelectorTest.Sender.SENDER5;
 import static org.hyperledger.besu.ethereum.core.MiningConfiguration.DEFAULT_NON_POA_BLOCK_TXS_SELECTION_MAX_TIME;
 import static org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason.EXECUTION_INTERRUPTED;
@@ -426,10 +427,10 @@ public abstract class AbstractBlockTransactionSelectorTest {
     // NOTE - PendingTransactions will output these in nonce order.
     final Transaction[] txs =
         new Transaction[] {
-          createTransaction(0, Wei.of(10), (long) (blockHeader.getGasLimit() * 0.15)),
-          createTransaction(1, Wei.of(10), (long) (blockHeader.getGasLimit() * 0.79)),
-          createTransaction(2, Wei.of(10), (long) (blockHeader.getGasLimit() * 0.25)),
-          createTransaction(3, Wei.of(10), (long) (blockHeader.getGasLimit() * 0.1))
+          createTransaction(0, Wei.of(10), (long) (blockHeader.getGasLimit() * 0.15), SENDER1),
+          createTransaction(0, Wei.of(10), (long) (blockHeader.getGasLimit() * 0.79), SENDER2),
+          createTransaction(0, Wei.of(10), (long) (blockHeader.getGasLimit() * 0.25), SENDER3),
+          createTransaction(0, Wei.of(10), (long) (blockHeader.getGasLimit() * 0.1), SENDER4)
         };
 
     for (Transaction tx : txs) {
