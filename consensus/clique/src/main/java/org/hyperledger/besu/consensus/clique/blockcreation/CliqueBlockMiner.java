@@ -73,7 +73,7 @@ public class CliqueBlockMiner extends BlockMiner<CliqueBlockCreator> {
       return super.mineBlock();
     }
 
-    return true; // terminate mining.
+    return super.mineBlock();
   }
 
   @Override

@@ -57,6 +57,7 @@ public class BlockMiner<M extends AbstractBlockCreator> implements Runnable {
   private final ProtocolSchedule protocolSchedule;
   private final Subscribers<MinedBlockObserver> observers;
   private final DefaultBlockScheduler scheduler;
+  private final boolean simulating;
 
   public BlockMiner(
       final Function<BlockHeader, M> blockCreatorFactory,
@@ -72,6 +73,7 @@ public class BlockMiner<M extends AbstractBlockCreator> implements Runnable {
     this.observers = observers;
     this.scheduler = scheduler;
     this.parentHeader = parentHeader;
+    this.simulating = true;
   }
 
   @Override
@@ -149,7 +151,7 @@ public class BlockMiner<M extends AbstractBlockCreator> implements Runnable {
         block.getBody().getTransactions().size());
 
     if (!shouldImportBlock(block)) {
-      return false;
+      return simulating || false;
     }
 
     final BlockImporter importer =
@@ -157,14 +159,14 @@ public class BlockMiner<M extends AbstractBlockCreator> implements Runnable {
     final BlockImportResult blockImportResult =
         importer.importBlock(protocolContext, block, HeaderValidationMode.FULL);
     timing.register("importingBlock");
-    if (blockImportResult.isImported()) {
+    if (simulating || blockImportResult.isImported()) {
       notifyNewBlockListeners(block);
       timing.register("notifyListeners");
       logProducedBlock(block, timing);
     } else {
       LOG.error("Illegal block mined, could not be imported to local chain.");
     }
-    return blockImportResult.isImported();
+    return simulating || blockImportResult.isImported();
   }
 
   private void logProducedBlock(final Block block, final BlockCreationTiming blockCreationTiming) {
@@ -182,11 +184,15 @@ public class BlockMiner<M extends AbstractBlockCreator> implements Runnable {
   }
 
   public void cancel() {
-    minerBlockCreator.cancel();
+    if (!simulating) {
+      minerBlockCreator.cancel();
+    }
   }
 
   private void notifyNewBlockListeners(final Block block) {
-    observers.forEach(obs -> obs.blockMined(block));
+    if (!simulating) {
+      observers.forEach(obs -> obs.blockMined(block));
+    }
   }
 
   public BlockHeader getParentHeader() {
