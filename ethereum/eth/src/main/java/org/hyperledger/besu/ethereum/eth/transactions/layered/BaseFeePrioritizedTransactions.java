@@ -39,6 +39,7 @@ import org.slf4j.LoggerFactory;
 public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransactions {
 
   private static final Logger LOG = LoggerFactory.getLogger(BaseFeePrioritizedTransactions.class);
+  private final SenderBalances senderBalances;
   private Optional<Wei> nextBlockBaseFee;
 
   public BaseFeePrioritizedTransactions(
@@ -51,7 +52,8 @@ public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransacti
           transactionReplacementTester,
       final FeeMarket feeMarket,
       final BlobCache blobCache,
-      final MiningConfiguration miningConfiguration) {
+      final MiningConfiguration miningConfiguration,
+      final SenderBalances senderBalances) {
     super(
         poolConfig,
         ethScheduler,
@@ -62,6 +64,7 @@ public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransacti
         miningConfiguration);
     this.nextBlockBaseFee =
         Optional.of(calculateNextBlockBaseFee(feeMarket, chainHeadHeaderSupplier.get()));
+    this.senderBalances = senderBalances;
   }
 
   @Override
@@ -105,12 +108,14 @@ public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransacti
     while (itTxsBySender.hasNext()) {
       final var senderTxs = itTxsBySender.next().getValue();
 
+      boolean checkBalance = true; // check balance only on first tx
       Optional<Long> maybeFirstDemotedNonce = Optional.empty();
 
       for (final var e : senderTxs.entrySet()) {
         final PendingTransaction tx = e.getValue();
         // it must pass the promotion filter to be prioritized
-        if (promotionFilter(tx)) {
+        if ((checkBalance && promotionFilter(tx))
+            || (!checkBalance && promotionFilterWithoutCheckBalance(tx))) {
           orderByFee.add(tx);
         } else {
           // otherwise sender txs starting from this nonce need to be demoted to next layer,
@@ -118,6 +123,7 @@ public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransacti
           maybeFirstDemotedNonce = Optional.of(e.getKey());
           break;
         }
+        checkBalance = false;
       }
 
       maybeFirstDemotedNonce.ifPresent(
@@ -158,9 +164,7 @@ public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransacti
     return Wei.ZERO;
   }
 
-  @Override
-  protected boolean promotionFilter(final PendingTransaction pendingTransaction) {
-
+  private boolean promotionFilterWithoutCheckBalance(final PendingTransaction pendingTransaction) {
     // check if the tx is willing to pay at least the base fee
     if (nextBlockBaseFee
         .map(pendingTransaction.getTransaction().getMaxGasPrice()::lessThan)
@@ -174,18 +178,37 @@ public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransacti
       if (pendingTransaction
           .getTransaction()
           .getEffectiveGasPrice(nextBlockBaseFee)
-          .lessThan(miningConfiguration.getMinTransactionGasPrice())) {
+          .lessThan(getAndLogMinTransactionGasPrice())) {
         return false;
       }
 
       // check if enough priority fee is paid
-      if (!miningConfiguration.getMinPriorityFeePerGas().equals(Wei.ZERO)) {
+      final var minPriorityFeePerGas = getAndLogMinPriorityFeePerGas();
+      if (!minPriorityFeePerGas.equals(Wei.ZERO)) {
         final Wei priorityFeePerGas =
             pendingTransaction.getTransaction().getEffectivePriorityFeePerGas(nextBlockBaseFee);
-        if (priorityFeePerGas.lessThan(miningConfiguration.getMinPriorityFeePerGas())) {
+        if (priorityFeePerGas.lessThan(minPriorityFeePerGas)) {
           return false;
         }
       }
+    }
+
+    return true;
+  }
+
+  @Override
+  protected boolean promotionFilter(final PendingTransaction pendingTransaction) {
+    if (!promotionFilterWithoutCheckBalance(pendingTransaction)) {
+      return false;
+    }
+
+    // check is the sender has enough balance
+    if (!senderBalances.hasEnoughBalanceFor(pendingTransaction)) {
+      LOG.atTrace()
+          .setMessage("Sender hasn't enough balance for transaction {}")
+          .addArgument(pendingTransaction::toTraceLog)
+          .log();
+      return false;
     }
 
     return true;

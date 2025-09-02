@@ -19,19 +19,21 @@ import java.util.Locale;
 /** Describe why we are trying to add a tx to a layer. */
 public enum AddReason {
   /** When adding a tx, that is not present in the pool. */
-  NEW(true, true),
+  NEW(true, true, false),
   /** When adding a tx as result of an internal move between layers. */
-  MOVE(false, false),
+  MOVE(false, false, false),
   /** When adding a tx as result of a promotion from a lower layer. */
-  PROMOTED(false, false);
+  PROMOTED(false, false, true);
 
   private final boolean sendNotification;
   private final boolean makeCopy;
+  private final boolean checkBalance;
   private final String label;
 
-  AddReason(final boolean sendNotification, final boolean makeCopy) {
+  AddReason(final boolean sendNotification, final boolean makeCopy, final boolean checkBalance) {
     this.sendNotification = sendNotification;
     this.makeCopy = makeCopy;
+    this.checkBalance = checkBalance;
     this.label = name().toLowerCase(Locale.ROOT);
   }
 
@@ -52,6 +54,10 @@ public enum AddReason {
    */
   public boolean makeCopy() {
     return makeCopy;
+  }
+
+  public boolean checkBalance() {
+    return checkBalance;
   }
 
   /**

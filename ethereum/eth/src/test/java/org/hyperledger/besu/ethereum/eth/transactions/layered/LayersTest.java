@@ -1469,7 +1469,8 @@ public class LayersTest extends BaseTransactionPoolTest {
               (pt1, pt2) -> transactionReplacementTester(poolConfig, pt1, pt2),
               FeeMarket.london(0L),
               new BlobCache(),
-              MiningConfiguration.newDefault().setMinTransactionGasPrice(MIN_GAS_PRICE));
+              MiningConfiguration.newDefault().setMinTransactionGasPrice(MIN_GAS_PRICE),
+              senderBalances);
 
       this.pending = new LayeredPendingTransactions(poolConfig, this.prio, ethScheduler);
 

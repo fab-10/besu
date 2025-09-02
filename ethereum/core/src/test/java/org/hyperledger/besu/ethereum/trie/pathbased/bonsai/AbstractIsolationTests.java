@@ -61,6 +61,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolReplacement
 import org.hyperledger.besu.ethereum.eth.transactions.layered.EndLayer;
 import org.hyperledger.besu.ethereum.eth.transactions.layered.GasPricePrioritizedTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.layered.LayeredPendingTransactions;
+import org.hyperledger.besu.ethereum.eth.transactions.layered.SenderBalances;
 import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.storage.StorageProvider;
@@ -132,6 +133,8 @@ public abstract class AbstractIsolationTests {
   protected TransactionPoolMetrics txPoolMetrics =
       new TransactionPoolMetrics(new NoOpMetricsSystem());
 
+  protected SenderBalances senderBalances = new SenderBalances(protocolSchedule, protocolContext);
+
   protected final PendingTransactions sorter =
       new LayeredPendingTransactions(
           poolConfiguration,
@@ -142,7 +145,8 @@ public abstract class AbstractIsolationTests {
               txPoolMetrics,
               transactionReplacementTester,
               new BlobCache(),
-              MiningConfiguration.newDefault()),
+              MiningConfiguration.newDefault(),
+              senderBalances),
           ethScheduler);
 
   protected final List<GenesisAccount> accounts =
