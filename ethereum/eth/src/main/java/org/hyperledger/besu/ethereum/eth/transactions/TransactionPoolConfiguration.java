@@ -67,6 +67,7 @@ public interface TransactionPoolConfiguration {
     }
   }
 
+
   enum Implementation {
     LEGACY, // Remove in future version
     LAYERED,
@@ -190,6 +191,12 @@ public interface TransactionPoolConfiguration {
   default byte getMinScore() {
     return DEFAULT_TX_POOL_MIN_SCORE;
   }
+
+  @Value.Default
+  default boolean getShuffleSenders() {
+    return true;
+  }
+
 
   @Value.Default
   default TransactionPoolValidatorService getTransactionPoolValidatorService() {
