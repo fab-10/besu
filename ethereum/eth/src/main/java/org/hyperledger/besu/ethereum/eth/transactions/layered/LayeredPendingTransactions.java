@@ -324,7 +324,32 @@ public class LayeredPendingTransactions implements PendingTransactions {
     selection:
     for (final var entry : candidateTxsByScore.entrySet()) {
       LOG.trace("Evaluating txs with score {}", entry.getKey());
+      /*
+      final var lists =
+          entry.getValue().stream()
+              .collect(
+                  Collectors.partitioningBy(
+                      senderPendingTransactions ->
+                          senderPendingTransactions.pendingTransactions().stream()
+                              .anyMatch(
+                                  org.hyperledger.besu.datatypes.PendingTransaction::hasPriority)));
 
+      final var priorityList = lists.get(Boolean.TRUE);
+
+      final var normalList = lists.get(Boolean.FALSE);
+
+      Collections.shuffle(normalList);
+
+      final var finalList =
+          new ArrayList<SenderPendingTransactions>(priorityList.size() + normalList.size());
+
+      finalList.addAll(priorityList);
+
+      finalList.addAll(normalList);
+
+      for (final var senderTxs : finalList) {
+
+       */
       for (final var senderTxs : entry.getValue()) {
         LOG.trace("Evaluating sender txs {}", senderTxs);
 
@@ -559,5 +584,10 @@ public class LayeredPendingTransactions implements PendingTransactions {
   @Override
   public Optional<Transaction> restoreBlob(final Transaction transaction) {
     return prioritizedTransactions.getBlobCache().restoreBlob(transaction);
+  }
+
+  @Override
+  public synchronized void penalize(final PendingTransaction pendingTransaction) {
+    prioritizedTransactions.penalize(pendingTransaction);
   }
 }

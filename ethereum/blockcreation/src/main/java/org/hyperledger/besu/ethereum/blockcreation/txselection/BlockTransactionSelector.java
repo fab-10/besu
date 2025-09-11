@@ -229,7 +229,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
         isTimeout.set(true);
       }
 
-      cancelEvaluatingTxWithGraceTime(txSelectionTask);
+      cancelEvaluatingTxWithGraceTime(blockSelectionContext, txSelectionTask);
 
       final var logBuilder =
           LOG.atWarn()
@@ -246,7 +246,8 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     }
   }
 
-  private void cancelEvaluatingTxWithGraceTime(final FutureTask<Void> txSelectionTask) {
+  private void cancelEvaluatingTxWithGraceTime(
+      final BlockSelectionContext blockSelectionContext, final FutureTask<Void> txSelectionTask) {
     final long elapsedTime =
         currTxEvaluationContext.getEvaluationTimer().elapsed(TimeUnit.MILLISECONDS);
     // adding 100ms so we are sure it take strictly more than the block selection max time
@@ -254,8 +255,8 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
 
     LOG.atDebug()
         .setMessage(
-            "Transaction {} is processing for {}ms, giving it {}ms grace time," +
-                " before considering it taking too much time to execute")
+            "Transaction {} is processing for {}ms, giving it {}ms grace time,"
+                + " before considering it taking too much time to execute")
         .addArgument(currTxEvaluationContext.getPendingTransaction()::toTraceLog)
         .addArgument(elapsedTime)
         .addArgument(txRemainingTime)
@@ -276,6 +277,15 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
                 .addArgument(100)
                 .log();
           } else {
+            blockSelectionContext
+                .transactionPool()
+                .penalizeTransaction(
+                    (PendingTransaction) currTxEvaluationContext.getPendingTransaction());
+            LOG.atDebug()
+                .setMessage("Force penalization of tx that took too much time to execute {}")
+                .addArgument(currTxEvaluationContext.getPendingTransaction()::toTraceLog)
+                .log();
+
             final var cancelResult = txSelectionTask.cancel(true);
             if (LOG.isDebugEnabled()) {
               final var elapsedTimeBeforeCancellation =
