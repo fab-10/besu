@@ -1,4 +1,5 @@
 FROM ubuntu:24.04
+ARG TARGETARCH
 ARG VERSION="dev"
 ENV NO_PROXY_CACHE="-o Acquire::BrokenProxy=true -o Acquire::http::No-Cache=true -o Acquire::http::Pipeline-Depth=0"
 
@@ -6,7 +7,7 @@ ENV NO_PROXY_CACHE="-o Acquire::BrokenProxy=true -o Acquire::http::No-Cache=true
 RUN apt-get update $NO_PROXY_CACHE  && \
   # $NO_PROXY_CACHE must not be used here or otherwise will trigger a hadolint error
   apt-get -o Acquire::BrokenProxy=true -o Acquire::http::No-Cache=true -o Acquire::http::Pipeline-Depth=0 \
-    --no-install-recommends -q --assume-yes install openjdk-21-jre-headless=21* libjemalloc-dev=5.* adduser=3*  && \
+    --no-install-recommends -q --assume-yes install libjemalloc-dev=5.* adduser=3* wget=1* ca-certificates=2* && \
   # Clean apt cache
   apt-get clean  && \
   rm -rf /var/cache/apt/archives/* /var/cache/apt/archives/partial/*  && \
@@ -16,7 +17,24 @@ RUN apt-get update $NO_PROXY_CACHE  && \
   # Ensure we use a stable UID for besu, as file permissions are tied to UIDs.
   adduser --uid 1000 --disabled-password --gecos "" --home /opt/besu besu  && \
   chown besu:besu /opt/besu  && \
-  chmod 0755 /opt/besu
+  chmod 0755 /opt/besu && \
+  case "${TARGETARCH}" in \
+        amd64) JDK_ARCH=x64 \
+               CHECKSUM=59cdcaf255add4721de38eb411d4ecfe779356b61fb671aee63c7dec78054c2b \
+               ;; \
+        arm64) JDK_ARCH=aarch64 \
+               CHECKSUM=f4a8d27429458a529148f90ebafcd1ae9b1968fa323f9e5e40d579a5c8c0288f \
+               ;; \
+        *) echo "Unsupported architecture: ${TARGETARCH}" && exit 1 ;; \
+  esac && \
+  wget -q "https://download.java.net/java/GA/jdk25/bd75d5f9689641da8e1daabeccb5528b/36/GPL/openjdk-25_linux-${JDK_ARCH}_bin.tar.gz" && \
+  if [ "$(sha256sum "openjdk-25_linux-${JDK_ARCH}_bin.tar.gz")" != "${CHECKSUM}  openjdk-25_linux-${JDK_ARCH}_bin.tar.gz" ]; \
+  then \
+    echo "Checksum failed" && exit 1; \
+  else \
+    tar -xzf "openjdk-25_linux-${JDK_ARCH}_bin.tar.gz" -C /opt ; \
+    rm "openjdk-25_linux-${JDK_ARCH}_bin.tar.gz"; \
+  fi
 
 ARG BESU_USER=besu
 USER ${BESU_USER}
@@ -49,8 +67,9 @@ ENV BESU_GRAPHQL_HTTP_HOST 0.0.0.0
 ENV BESU_PID_PATH "/tmp/pid"
 ENV OTEL_RESOURCE_ATTRIBUTES="service.name=besu,service.version=$VERSION"
 
+ENV JAVA_HOME="/opt/jdk-25"
 ENV OLDPATH="${PATH}"
-ENV PATH="/opt/besu/bin:${OLDPATH}"
+ENV PATH="/opt/besu/bin:${JAVA_HOME}/bin:${OLDPATH}"
 
 # The entry script just sets permissions as needed based on besu config
 # and is replaced by the besu process running as besu user.
