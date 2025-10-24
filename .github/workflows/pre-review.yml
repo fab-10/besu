@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  GRADLE_OPTS: "-Xmx6g -Dorg.gradle.parallel=true"
+  GRADLE_OPTS: "-Xmx6g -Dorg.gradle.parallel=true  -Dorg.gradle.caching=true"
   total-runners: 14
 
 jobs:
@@ -79,7 +79,6 @@ jobs:
     env:
         GRADLEW_UNIT_TEST_ARGS: ${{matrix.gradle_args}}
     runs-on: ubuntu-22.04
-    needs: [spotless, gradle-wrapper, repolint]
     permissions:
       checks: write
       statuses: write
@@ -104,7 +103,7 @@ jobs:
         with:
           cache-disabled: true
       - name: List unit tests
-        run: ./gradlew test --test-dry-run -Dorg.gradle.parallel=true -Dorg.gradle.caching=true
+        run: ./gradlew test --test-dry-run
       - name: Extract current test list
         run: mkdir tmp; find . -type f -name TEST-*.xml | xargs -I{} bash -c "xmlstarlet sel -t -v '/testsuite/@name' '{}'; echo '{}' | sed 's#\./\(.*\)/build/test-results/.*# \1#'" | tee tmp/currentTests.list
       - name: Get unit test reports
@@ -136,7 +135,7 @@ jobs:
           name: testList-${{ matrix.runner_index }}.txt
           path: testList.txt
       - name: run unit tests
-        run: cat testList.txt | xargs -P 1 ./gradlew -Dorg.gradle.parallel=true -Dorg.gradle.caching=true
+        run: bash testList.txt
       - name: Remove downloaded test results
         run: rm -rf tmp/junit-xml-reports-downloaded
       - name: Upload Unit Test Results

@@ -120,9 +120,10 @@ do
 done
 
 # return the requests index, without quotes to drop the last trailing space
+echo "./gradlew"
 for module_dir in "${module_list[@]}"
 do
 	module_test_task=":${module_dir//\//:}:test"
 	module_tests=$( echo "${group_by_module[$module_dir]% }" | sed -e 's/^\| / --tests /g' )
-	echo "$module_test_task $module_tests"
+	echo -n " $module_test_task $module_tests"
 done
