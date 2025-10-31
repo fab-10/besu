@@ -76,7 +76,7 @@ public class EthScheduler {
       final MetricsSystem metricsSystem) {
     this(
         MonitoredExecutors.newFixedThreadPool(
-            EthScheduler.class.getSimpleName() + "-Workers", syncWorkerCount, metricsSystem),
+            EthScheduler.class.getSimpleName() + "-SyncWorkers", syncWorkerCount, metricsSystem),
         MonitoredExecutors.newScheduledThreadPool(
             EthScheduler.class.getSimpleName() + "-Timer", 1, metricsSystem),
         MonitoredExecutors.newBoundedThreadPool(
