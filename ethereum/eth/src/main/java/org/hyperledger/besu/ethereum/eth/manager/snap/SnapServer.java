@@ -17,6 +17,7 @@ package org.hyperledger.besu.ethereum.eth.manager.snap;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.core.Synchronizer;
+import org.hyperledger.besu.ethereum.eth.manager.EthMessage;
 import org.hyperledger.besu.ethereum.eth.manager.EthMessages;
 import org.hyperledger.besu.ethereum.eth.messages.snap.AccountRangeMessage;
 import org.hyperledger.besu.ethereum.eth.messages.snap.ByteCodesMessage;
@@ -196,25 +197,24 @@ class SnapServer implements BesuEvents.InitialSyncCompletionListener {
   private void registerResponseConstructors() {
     snapMessages.registerResponseConstructor(
         SnapV1.GET_ACCOUNT_RANGE,
-        (messageData, capability) -> constructGetAccountRangeResponse(messageData));
+        (message, capability) -> constructGetAccountRangeResponse(message));
     snapMessages.registerResponseConstructor(
         SnapV1.GET_STORAGE_RANGE,
-        (messageData, capability) -> constructGetStorageRangeResponse(messageData));
+        (message, capability) -> constructGetStorageRangeResponse(message));
     snapMessages.registerResponseConstructor(
-        SnapV1.GET_BYTECODES,
-        (messageData, capability) -> constructGetBytecodesResponse(messageData));
+        SnapV1.GET_BYTECODES, (message, capability) -> constructGetBytecodesResponse(message));
     snapMessages.registerResponseConstructor(
-        SnapV1.GET_TRIE_NODES,
-        (messageData, capability) -> constructGetTrieNodesResponse(messageData));
+        SnapV1.GET_TRIE_NODES, (message, capability) -> constructGetTrieNodesResponse(message));
   }
 
-  MessageData constructGetAccountRangeResponse(final MessageData message) {
+  MessageData constructGetAccountRangeResponse(final EthMessage message) {
     if (!isStarted.get()) {
       return EMPTY_ACCOUNT_RANGE;
     }
     StopWatch stopWatch = StopWatch.createStarted();
 
-    final GetAccountRangeMessage getAccountRangeMessage = GetAccountRangeMessage.readFrom(message);
+    final GetAccountRangeMessage getAccountRangeMessage =
+        GetAccountRangeMessage.readFrom(message.getData());
     final GetAccountRangeMessage.Range range = getAccountRangeMessage.range(true);
     final int maxResponseBytes = Math.min(range.responseBytes().intValue(), MAX_RESPONSE_SIZE);
 
@@ -306,20 +306,21 @@ class SnapServer implements BesuEvents.InitialSyncCompletionListener {
     return EMPTY_ACCOUNT_RANGE;
   }
 
-  MessageData constructGetStorageRangeResponse(final MessageData message) {
+  MessageData constructGetStorageRangeResponse(final EthMessage message) {
     if (!isStarted.get()) {
       return EMPTY_STORAGE_RANGE;
     }
     StopWatch stopWatch = StopWatch.createStarted();
 
-    final GetStorageRangeMessage getStorageRangeMessage = GetStorageRangeMessage.readFrom(message);
+    final GetStorageRangeMessage getStorageRangeMessage =
+        GetStorageRangeMessage.readFrom(message.getData());
     final GetStorageRangeMessage.StorageRange range = getStorageRangeMessage.range(true);
     final int maxResponseBytes = Math.min(range.responseBytes().intValue(), MAX_RESPONSE_SIZE);
 
     LOGGER
         .atTrace()
         .setMessage("Receive get storage range message size {} from {} to {} for {}")
-        .addArgument(message::getSize)
+        .addArgument(message.getData()::getSize)
         .addArgument(() -> asLogHash(range.startKeyHash()))
         .addArgument(
             () -> Optional.ofNullable(range.endKeyHash()).map(SnapServer::asLogHash).orElse("''"))
@@ -441,13 +442,13 @@ class SnapServer implements BesuEvents.InitialSyncCompletionListener {
     }
   }
 
-  MessageData constructGetBytecodesResponse(final MessageData message) {
+  MessageData constructGetBytecodesResponse(final EthMessage message) {
     if (!isStarted.get()) {
       return EMPTY_BYTE_CODES_MESSAGE;
     }
     StopWatch stopWatch = StopWatch.createStarted();
 
-    final GetByteCodesMessage getByteCodesMessage = GetByteCodesMessage.readFrom(message);
+    final GetByteCodesMessage getByteCodesMessage = GetByteCodesMessage.readFrom(message.getData());
     final GetByteCodesMessage.CodeHashes codeHashes = getByteCodesMessage.codeHashes(true);
     final int maxResponseBytes = Math.min(codeHashes.responseBytes().intValue(), MAX_RESPONSE_SIZE);
     LOGGER
@@ -491,13 +492,13 @@ class SnapServer implements BesuEvents.InitialSyncCompletionListener {
     }
   }
 
-  MessageData constructGetTrieNodesResponse(final MessageData message) {
+  MessageData constructGetTrieNodesResponse(final EthMessage message) {
     if (!isStarted.get()) {
       return EMPTY_TRIE_NODES_MESSAGE;
     }
     StopWatch stopWatch = StopWatch.createStarted();
 
-    final GetTrieNodesMessage getTrieNodesMessage = GetTrieNodesMessage.readFrom(message);
+    final GetTrieNodesMessage getTrieNodesMessage = GetTrieNodesMessage.readFrom(message.getData());
     final GetTrieNodesMessage.TrieNodesPaths triePaths = getTrieNodesMessage.paths(true);
     final int maxResponseBytes = Math.min(triePaths.responseBytes().intValue(), MAX_RESPONSE_SIZE);
     LOGGER

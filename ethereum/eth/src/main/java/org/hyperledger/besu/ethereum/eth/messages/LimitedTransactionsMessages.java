@@ -21,10 +21,13 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.tuweni.bytes.Bytes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class LimitedTransactionsMessages {
+  private static final Logger LOG = LoggerFactory.getLogger(LimitedTransactionsMessages.class);
 
-  static final int LIMIT = 1048576;
+  static final int LIMIT = 1048576 - 100; // subtract an amount to account for closing the list
 
   private final TransactionsMessage transactionsMessage;
   private final Set<Transaction> includedTransactions;
@@ -35,9 +38,8 @@ public final class LimitedTransactionsMessages {
     this.includedTransactions = includedTransactions;
   }
 
-  public static LimitedTransactionsMessages createLimited(
-      final Iterable<Transaction> transactions) {
-    final Set<Transaction> includedTransactions = new HashSet<>();
+  public static LimitedTransactionsMessages createLimited(final Set<Transaction> transactions) {
+    final Set<Transaction> includedTransactions = HashSet.newHashSet(transactions.size());
     final BytesValueRLPOutput message = new BytesValueRLPOutput();
     int messageSize = 0;
     message.startList();
@@ -55,15 +57,23 @@ public final class LimitedTransactionsMessages {
       messageSize += encodedBytes.size();
     }
     message.endList();
+    LOG.atTrace()
+        .setMessage(
+            "Transactions message created with {} txs included out of {} txs available, message size {}-{}")
+        .addArgument(includedTransactions::size)
+        .addArgument(transactions::size)
+        .addArgument(messageSize)
+        .addArgument(message::encodedSize)
+        .log();
     return new LimitedTransactionsMessages(
         new TransactionsMessage(message.encoded()), includedTransactions);
   }
 
-  public final TransactionsMessage getTransactionsMessage() {
+  public TransactionsMessage getTransactionsMessage() {
     return transactionsMessage;
   }
 
-  public final Set<Transaction> getIncludedTransactions() {
+  public Set<Transaction> getIncludedTransactions() {
     return includedTransactions;
   }
 }

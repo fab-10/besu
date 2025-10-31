@@ -43,7 +43,7 @@ public class EthMessages {
     return Optional.ofNullable(messageResponseConstructorsByCode.get(code))
         .map(
             messageResponseConstructor ->
-                messageResponseConstructor.response(ethMessage.getData(), capability));
+                messageResponseConstructor.response(ethMessage, capability));
   }
 
   public long subscribe(final int messageCode, final MessageCallback callback) {
@@ -81,6 +81,6 @@ public class EthMessages {
 
   @FunctionalInterface
   public interface MessageResponseConstructor {
-    MessageData response(MessageData message, Capability capability);
+    MessageData response(EthMessage message, Capability capability);
   }
 }

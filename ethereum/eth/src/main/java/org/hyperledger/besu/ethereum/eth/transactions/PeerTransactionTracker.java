@@ -91,12 +91,7 @@ public class PeerTransactionTracker
 
   public synchronized Set<Transaction> claimTransactionsToSendToPeer(final EthPeer peer) {
     final Set<Transaction> transactionsToSend = this.transactionsToSend.remove(peer);
-    if (transactionsToSend != null) {
-      markTransactionsAsSeen(peer, transactionsToSend);
-      return transactionsToSend;
-    } else {
-      return emptySet();
-    }
+    return transactionsToSend == null ? emptySet() : transactionsToSend;
   }
 
   public synchronized Set<Transaction> claimTransactionHashesToSendToPeer(final EthPeer peer) {

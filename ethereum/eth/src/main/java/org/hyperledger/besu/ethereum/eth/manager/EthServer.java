@@ -44,13 +44,17 @@ import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 import org.hyperledger.besu.ethereum.rlp.RLP;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
 import org.apache.tuweni.bytes.Bytes;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class EthServer {
+  private static final Logger LOG = LoggerFactory.getLogger(EthServer.class);
   private final Blockchain blockchain;
   private final WorldStateArchive worldStateArchive;
   private final TransactionPool transactionPool;
@@ -119,11 +123,11 @@ class EthServer {
 
   static MessageData constructGetHeadersResponse(
       final Blockchain blockchain,
-      final MessageData message,
+      final EthMessage message,
       final int requestLimit,
       final int maxMessageSize) {
     // Extract parameters from request
-    final GetBlockHeadersMessage getHeaders = GetBlockHeadersMessage.readFrom(message);
+    final GetBlockHeadersMessage getHeaders = GetBlockHeadersMessage.readFrom(message.getData());
     final Optional<Hash> hash = getHeaders.hash();
     final int skip = getHeaders.skip();
     final int maxHeaders = Math.min(requestLimit, getHeaders.maxHeaders());
@@ -180,10 +184,11 @@ class EthServer {
 
   static MessageData constructGetBodiesResponse(
       final Blockchain blockchain,
-      final MessageData message,
+      final EthMessage message,
       final int requestLimit,
       final int maxMessageSize) {
-    final GetBlockBodiesMessage getBlockBodiesMessage = GetBlockBodiesMessage.readFrom(message);
+    final GetBlockBodiesMessage getBlockBodiesMessage =
+        GetBlockBodiesMessage.readFrom(message.getData());
     final Iterable<Hash> hashes = getBlockBodiesMessage.hashes();
 
     int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;
@@ -216,11 +221,11 @@ class EthServer {
 
   static MessageData constructGetReceiptsResponse(
       final Blockchain blockchain,
-      final MessageData message,
+      final EthMessage message,
       final int requestLimit,
       final int maxMessageSize,
       final Capability cap) {
-    final GetReceiptsMessage getReceipts = GetReceiptsMessage.readFrom(message);
+    final GetReceiptsMessage getReceipts = GetReceiptsMessage.readFrom(message.getData());
     final Iterable<Hash> hashes = getReceipts.hashes();
 
     int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;
@@ -262,17 +267,27 @@ class EthServer {
 
   static MessageData constructGetPooledTransactionsResponse(
       final TransactionPool transactionPool,
-      final MessageData message,
+      final EthMessage message,
       final int requestLimit,
       final int maxMessageSize) {
     final GetPooledTransactionsMessage getPooledTransactions =
-        GetPooledTransactionsMessage.readFrom(message);
-    final Iterable<Hash> hashes = getPooledTransactions.pooledTransactions();
+        GetPooledTransactionsMessage.readFrom(message.getData());
+    final List<Hash> hashes = getPooledTransactions.pooledTransactions();
+
+    LOG.atTrace()
+        .setMessage("Requested pooled transactions: peer={}, requested hashes={}")
+        .addArgument(message::getPeer)
+        .addArgument(hashes)
+        .log();
+
+    final List<Hash> returnedHashes = new ArrayList<>(hashes.size());
 
     int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;
     final BytesValueRLPOutput rlp = new BytesValueRLPOutput();
     rlp.startList();
     int count = 0;
+    int notFoundCount = 0;
+
     for (final Hash hash : hashes) {
       if (count >= requestLimit) {
         break;
@@ -280,6 +295,7 @@ class EthServer {
       count++;
       final Optional<Transaction> maybeTx = transactionPool.getTransactionByHash(hash);
       if (maybeTx.isEmpty()) {
+        notFoundCount++;
         continue;
       }
 
@@ -289,21 +305,28 @@ class EthServer {
       if (responseSizeEstimate + encodedSize > maxMessageSize) {
         break;
       }
-
+      returnedHashes.add(hash);
       responseSizeEstimate += encodedSize;
       rlp.writeRaw(txRlp.encoded());
     }
     rlp.endList();
+
+    LOG.atTrace()
+        .setMessage("Sending pooled transactions: peer={}, returned hashes={}, notFoundCount={}")
+        .addArgument(message::getPeer)
+        .addArgument(returnedHashes)
+        .addArgument(notFoundCount)
+        .log();
 
     return PooledTransactionsMessage.createUnsafe(rlp.encoded());
   }
 
   static MessageData constructGetNodeDataResponse(
       final WorldStateArchive worldStateArchive,
-      final MessageData message,
+      final EthMessage message,
       final int requestLimit,
       final int maxMessageSize) {
-    final GetNodeDataMessage getNodeDataMessage = GetNodeDataMessage.readFrom(message);
+    final GetNodeDataMessage getNodeDataMessage = GetNodeDataMessage.readFrom(message.getData());
     final Iterable<Hash> hashes = getNodeDataMessage.hashes();
 
     int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;

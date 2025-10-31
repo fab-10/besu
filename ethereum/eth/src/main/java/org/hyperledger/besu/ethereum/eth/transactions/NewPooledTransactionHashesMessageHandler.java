@@ -25,6 +25,7 @@ import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 class NewPooledTransactionHashesMessageHandler implements EthMessages.MessageCallback {
@@ -49,11 +50,30 @@ class NewPooledTransactionHashesMessageHandler implements EthMessages.MessageCal
       final Capability capability = message.getPeer().getConnection().capability(EthProtocol.NAME);
       final NewPooledTransactionHashesMessage transactionsMessage =
           NewPooledTransactionHashesMessage.readFrom(message.getData(), capability);
-      final Instant startedAt = now();
+      final Instant queuedAt = now();
       scheduler.scheduleTxWorkerTask(
-          () ->
+          new EthScheduler.RejectableTask() {
+            @Override
+            public void run() {
               transactionsMessageProcessor.processNewPooledTransactionHashesMessage(
-                  message.getPeer(), transactionsMessage, startedAt, txMsgKeepAlive));
+                  message.getPeer(), transactionsMessage, queuedAt, txMsgKeepAlive);
+            }
+
+            @Override
+            public Map<String, String> getDataAsText() {
+              return Map.of(
+                  "message",
+                  "transactions",
+                  "queueAt",
+                  queuedAt.toString(),
+                  "keepAlive",
+                  txMsgKeepAlive.toString(),
+                  "peer",
+                  message.getPeer().toString(),
+                  "hashes",
+                  transactionsMessage.pendingTransactionHashes().toString());
+            }
+          });
     }
   }
 

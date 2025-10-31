@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.eth.transactions;
 
 import static java.time.Instant.now;
 
+import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.manager.EthMessage;
 import org.hyperledger.besu.ethereum.eth.manager.EthMessages;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
@@ -23,10 +24,10 @@ import org.hyperledger.besu.ethereum.eth.messages.TransactionsMessage;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 class TransactionsMessageHandler implements EthMessages.MessageCallback {
-
   private final TransactionsMessageProcessor transactionsMessageProcessor;
   private final EthScheduler scheduler;
   private final Duration txMsgKeepAlive;
@@ -46,11 +47,30 @@ class TransactionsMessageHandler implements EthMessages.MessageCallback {
     if (isEnabled.get()) {
       final TransactionsMessage transactionsMessage =
           TransactionsMessage.readFrom(message.getData());
-      final Instant startedAt = now();
+      final Instant queuedAt = now();
       scheduler.scheduleTxWorkerTask(
-          () ->
+          new EthScheduler.RejectableTask() {
+            @Override
+            public void run() {
               transactionsMessageProcessor.processTransactionsMessage(
-                  message.getPeer(), transactionsMessage, startedAt, txMsgKeepAlive));
+                  message.getPeer(), transactionsMessage, queuedAt, txMsgKeepAlive);
+            }
+
+            @Override
+            public Map<String, String> getDataAsText() {
+              return Map.of(
+                  "message",
+                  "transactions",
+                  "queuedAt",
+                  queuedAt.toString(),
+                  "keepAlive",
+                  txMsgKeepAlive.toString(),
+                  "peer",
+                  message.getPeer().toString(),
+                  "hashes",
+                  Transaction.toHashList(transactionsMessage.transactions()).toString());
+            }
+          });
     }
   }
 

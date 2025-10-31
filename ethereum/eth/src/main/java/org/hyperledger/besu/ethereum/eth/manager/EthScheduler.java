@@ -23,6 +23,7 @@ import org.hyperledger.besu.util.ExceptionUtils;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -135,7 +136,7 @@ public class EthScheduler {
     return syncFuture;
   }
 
-  public void scheduleTxWorkerTask(final Runnable command) {
+  public void scheduleTxWorkerTask(final RejectableTask command) {
     txWorkerExecutor.execute(command);
   }
 
@@ -364,5 +365,10 @@ public class EthScheduler {
             });
       }
     }
+  }
+
+  public abstract static class RejectableTask implements Runnable {
+
+    public abstract Map<String, String> getDataAsText();
   }
 }

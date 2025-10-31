@@ -17,6 +17,8 @@ package org.hyperledger.besu.ethereum.eth.manager;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -87,11 +89,11 @@ public class EthSchedulerShutdownTest {
 
   @Test
   public void shutdown_txWorkerShutsDown() throws InterruptedException {
-    final MockEthTask task1 = new MockEthTask(1);
-    final MockEthTask task2 = new MockEthTask();
+    final TestTask task1 = new TestTask(1);
+    final TestTask task2 = new TestTask(0);
 
-    ethScheduler.scheduleTxWorkerTask(task1::executeTask);
-    ethScheduler.scheduleTxWorkerTask(task2::executeTask);
+    ethScheduler.scheduleTxWorkerTask(task1);
+    ethScheduler.scheduleTxWorkerTask(task2);
     ethScheduler.stop();
 
     assertThat(txWorkerExecutor.isShutdown()).isTrue();
@@ -145,5 +147,33 @@ public class EthSchedulerShutdownTest {
     assertThat(computationExecutor.isShutdown()).isTrue();
     assertThat(computationExecutor.isTerminated()).isTrue();
     assertThat(task2.hasBeenStarted()).isFalse();
+  }
+
+  private static class TestTask extends EthScheduler.RejectableTask {
+    private final CountDownLatch startedLatch = new CountDownLatch(1);
+    private final CountDownLatch countdown;
+
+    TestTask(final int count) {
+      countdown = new CountDownLatch(count);
+    }
+
+    @Override
+    public Map<String, String> getDataAsText() {
+      return Map.of();
+    }
+
+    @Override
+    public void run() {
+      startedLatch.countDown();
+      try {
+        countdown.await();
+      } catch (final InterruptedException ignore) {
+        // ignore
+      }
+    }
+
+    boolean hasBeenStarted() {
+      return startedLatch.getCount() == 0;
+    }
   }
 }
