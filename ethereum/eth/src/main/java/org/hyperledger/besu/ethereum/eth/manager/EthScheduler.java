@@ -23,6 +23,7 @@ import org.hyperledger.besu.util.ExceptionUtils;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -49,7 +50,7 @@ public class EthScheduler {
 
   private final AtomicBoolean stopped = new AtomicBoolean(false);
   private final CountDownLatch shutdown = new CountDownLatch(1);
-  private static final int TX_WORKER_CAPACITY = 1_000;
+  private static final int TX_WORKER_CAPACITY = 10;
 
   protected final ExecutorService syncWorkerExecutor;
   protected final ScheduledExecutorService scheduler;
@@ -76,12 +77,11 @@ public class EthScheduler {
       final MetricsSystem metricsSystem) {
     this(
         MonitoredExecutors.newFixedThreadPool(
-            EthScheduler.class.getSimpleName() + "-Workers", 1, syncWorkerCount, metricsSystem),
+            EthScheduler.class.getSimpleName() + "-Workers", syncWorkerCount, metricsSystem),
         MonitoredExecutors.newScheduledThreadPool(
             EthScheduler.class.getSimpleName() + "-Timer", 1, metricsSystem),
         MonitoredExecutors.newBoundedThreadPool(
             EthScheduler.class.getSimpleName() + "-Transactions",
-            1,
             txWorkerCount,
             txWorkerQueueSize,
             metricsSystem),
@@ -89,7 +89,6 @@ public class EthScheduler {
             EthScheduler.class.getSimpleName() + "-Services", metricsSystem),
         MonitoredExecutors.newFixedThreadPool(
             EthScheduler.class.getSimpleName() + "-Computation",
-            1,
             computationWorkerCount,
             metricsSystem),
         MonitoredExecutors.newCachedThreadPool(
@@ -137,7 +136,7 @@ public class EthScheduler {
     return syncFuture;
   }
 
-  public void scheduleTxWorkerTask(final Runnable command) {
+  public void scheduleTxWorkerTask(final RejectableTask command) {
     txWorkerExecutor.execute(command);
   }
 
@@ -366,5 +365,10 @@ public class EthScheduler {
             });
       }
     }
+  }
+
+  public abstract static class RejectableTask implements Runnable {
+
+    public abstract Map<String, String> getDataAsText();
   }
 }
