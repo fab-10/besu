@@ -14,13 +14,19 @@
  */
 package org.hyperledger.besu.ethereum.eth.manager.bounded;
 
+import org.hyperledger.besu.ethereum.eth.manager.EthScheduler.LoggableTask;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
 
 import java.util.concurrent.LinkedBlockingDeque;
 
-public class BoundedQueue extends LinkedBlockingDeque<Runnable> {
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+public class BoundedQueue<T extends LoggableTask> extends LinkedBlockingDeque<T> {
+  private static final Logger LOG = LoggerFactory.getLogger(BoundedQueue.class);
+
   private final MetricsSystem metricsSystem;
   private final Counter totalEvictedTaskCounter;
 
@@ -36,9 +42,13 @@ public class BoundedQueue extends LinkedBlockingDeque<Runnable> {
   }
 
   @Override
-  public boolean offer(final Runnable task) {
+  public boolean offer(final T task) {
     while (!super.offer(task)) {
-      remove();
+      final var removed = remove();
+      LOG.atDebug()
+          .setMessage("Removed task {}, since the bounded queue is full")
+          .addArgument(removed::toLogString)
+          .log();
       totalEvictedTaskCounter.inc();
     }
     return true;

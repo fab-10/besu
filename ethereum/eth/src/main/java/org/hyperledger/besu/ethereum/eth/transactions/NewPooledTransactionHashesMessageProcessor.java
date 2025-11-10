@@ -14,18 +14,13 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions;
 
-import static java.time.Instant.now;
-
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
-import org.hyperledger.besu.ethereum.eth.manager.task.BufferedGetPooledTransactionsFromPeerFetcher;
 import org.hyperledger.besu.ethereum.eth.messages.NewPooledTransactionHashesMessage;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.messages.DisconnectMessage.DisconnectReason;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
@@ -38,11 +33,8 @@ public class NewPooledTransactionHashesMessageProcessor {
   private static final Logger LOG =
       LoggerFactory.getLogger(NewPooledTransactionHashesMessageProcessor.class);
 
-  static final String METRIC_LABEL = "new_pooled_transaction_hashes";
-
   private final ConcurrentHashMap<EthPeer, BufferedGetPooledTransactionsFromPeerFetcher>
       scheduledTasks;
-
   private final PeerTransactionTracker transactionTracker;
   private final TransactionPool transactionPool;
   private final TransactionPoolConfiguration transactionPoolConfiguration;
@@ -60,34 +52,18 @@ public class NewPooledTransactionHashesMessageProcessor {
     this.transactionPoolConfiguration = transactionPoolConfiguration;
     this.ethContext = ethContext;
     this.metrics = metrics;
-    metrics.initExpiredMessagesCounter(METRIC_LABEL);
     this.scheduledTasks = new ConcurrentHashMap<>();
   }
 
   void processNewPooledTransactionHashesMessage(
-      final EthPeer peer,
-      final NewPooledTransactionHashesMessage transactionsMessage,
-      final Instant startedAt,
-      final Duration keepAlive) {
-    // Check if message is not expired.
-    if (startedAt.plus(keepAlive).isAfter(now())) {
-      this.processNewPooledTransactionHashesMessage(peer, transactionsMessage);
-    } else {
-      metrics.incrementExpiredMessages(METRIC_LABEL);
-    }
-  }
-
-  @SuppressWarnings("UnstableApiUsage")
-  private void processNewPooledTransactionHashesMessage(
       final EthPeer peer, final NewPooledTransactionHashesMessage transactionsMessage) {
     try {
       final List<Hash> incomingTransactionHashes = transactionsMessage.pendingTransactionHashes();
+      transactionTracker.markTransactionHashesAsSeen(peer, incomingTransactionHashes);
 
       LOG.atTrace()
-          .setMessage(
-              "Received pooled transaction hashes message from {} incoming hashes {}, incoming list {}")
-          .addArgument(() -> peer == null ? null : peer.getLoggableId())
-          .addArgument(incomingTransactionHashes::size)
+          .setMessage("Received pooled transaction hashes message: peer={}, incoming hashes {}")
+          .addArgument(peer)
           .addArgument(incomingTransactionHashes)
           .log();
 
@@ -112,9 +88,9 @@ public class NewPooledTransactionHashesMessageProcessor {
                     scheduledFuture,
                     peer,
                     transactionPool,
+                    transactionPoolConfiguration,
                     transactionTracker,
-                    metrics,
-                    METRIC_LABEL);
+                    metrics);
               });
 
       bufferedTask.addHashes(

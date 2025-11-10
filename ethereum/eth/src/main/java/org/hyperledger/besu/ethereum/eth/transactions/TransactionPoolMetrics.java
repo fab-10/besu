@@ -136,7 +136,8 @@ public class TransactionPoolMetrics {
             BesuMetricCategory.TRANSACTION_POOL,
             EXPIRED_MESSAGES_COUNTER_NAME,
             "Total number of received transaction pool messages expired and not processed.",
-            "message");
+            "message",
+            "direction");
 
     alreadySeenTransactionsCounter =
         metricsSystem.createLabelledCounter(
@@ -205,15 +206,16 @@ public class TransactionPoolMetrics {
         });
   }
 
-  public void initExpiredMessagesCounter(final String message) {
+  public void initExpiredMessagesCounter(final String message, final boolean incoming) {
     expiredMessagesRunnableCounters.put(
         message,
         new RunnableCounter(
-            expiredMessagesCounter.labels(message),
+            expiredMessagesCounter.labels(message, direction(incoming)),
             () ->
                 LOG.warn(
-                    "{} expired {} messages have been skipped.",
+                    "{} expired {} {} messages have been skipped.",
                     SKIPPED_MESSAGES_LOGGING_THRESHOLD,
+                    incoming ? "incoming" : "outgoing",
                     message),
             SKIPPED_MESSAGES_LOGGING_THRESHOLD));
   }
@@ -271,8 +273,8 @@ public class TransactionPoolMetrics {
         .inc();
   }
 
-  public void incrementExpiredMessages(final String message) {
-    expiredMessagesCounter.labels(message).inc();
+  public void incrementExpiredMessages(final String message, final boolean incoming) {
+    expiredMessagesCounter.labels(message, direction(incoming)).inc();
   }
 
   public void incrementAlreadySeenTransactions(final String message, final long count) {
@@ -285,6 +287,10 @@ public class TransactionPoolMetrics {
 
   private String priority(final boolean hasPriority) {
     return hasPriority ? "yes" : "no";
+  }
+
+  private String direction(final boolean incoming) {
+    return incoming ? "in" : "out";
   }
 
   public void createBlobCacheSizeMetric(final IntSupplier sizeSupplier) {

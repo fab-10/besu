@@ -22,7 +22,6 @@ import org.hyperledger.besu.ethereum.eth.messages.LimitedTransactionsMessages;
 import org.hyperledger.besu.ethereum.p2p.rlpx.connections.PeerConnection.PeerNotConnected;
 
 import java.util.Set;
-import java.util.stream.StreamSupport;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -34,12 +33,6 @@ class TransactionsMessageSender {
 
   public TransactionsMessageSender(final PeerTransactionTracker transactionTracker) {
     this.transactionTracker = transactionTracker;
-  }
-
-  public void sendTransactionsToPeers() {
-    StreamSupport.stream(transactionTracker.getEthPeersWithUnsentTransactions().spliterator(), true)
-        .parallel()
-        .forEach(this::sendTransactionsToPeer);
   }
 
   void sendTransactionsToPeer(final EthPeer peer) {

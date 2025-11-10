@@ -14,6 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.eth.manager;
 
+import org.hyperledger.besu.ethereum.eth.manager.EthScheduler.LoggableTask;
 import org.hyperledger.besu.ethereum.eth.manager.bounded.BoundedQueue;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -34,8 +35,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 
 import com.google.common.util.concurrent.ThreadFactoryBuilder;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MonitoredExecutors {
+  private static final Logger LOG = LoggerFactory.getLogger(MonitoredExecutors.class);
 
   public static ExecutorService newFixedThreadPool(
       final String name, final int maxWorkerCount, final MetricsSystem metricsSystem) {
@@ -50,14 +54,15 @@ public class MonitoredExecutors {
     return newFixedThreadPool(
         name,
         maxWorkerCount,
-        new BoundedQueue(queueSize, toMetricName(name), metricsSystem),
+        new BoundedQueue<>(queueSize, toMetricName(name), metricsSystem),
         metricsSystem);
   }
 
-  private static ExecutorService newFixedThreadPool(
+  @SuppressWarnings("unchecked")
+  private static <R extends Runnable> ExecutorService newFixedThreadPool(
       final String name,
       final int maxWorkerCount,
-      final BlockingQueue<Runnable> workingQueue,
+      final BlockingQueue<R> workingQueue,
       final MetricsSystem metricsSystem) {
     return newMonitoredExecutor(
         name,
@@ -69,7 +74,7 @@ public class MonitoredExecutors {
                   maxWorkerCount,
                   60L,
                   TimeUnit.SECONDS,
-                  workingQueue,
+                  (BlockingQueue<Runnable>) workingQueue,
                   threadFactory,
                   rejectedExecutionHandler);
           tpe.allowCoreThreadTimeOut(true);
@@ -93,7 +98,7 @@ public class MonitoredExecutors {
                 Integer.MAX_VALUE,
                 60L,
                 TimeUnit.SECONDS,
-                new SynchronousQueue<Runnable>(),
+                new SynchronousQueue<>(),
                 threadFactory,
                 rejectedExecutionHandler));
   }
@@ -116,7 +121,7 @@ public class MonitoredExecutors {
 
     final T executor =
         creator.apply(
-            new CountingAbortPolicy(metricName, metricsSystem),
+            new LogAndCountingAbortPolicy(metricName, metricsSystem),
             new ThreadFactoryBuilder().setNameFormat(name + "-%d").build());
 
     metricsSystem.createIntegerGauge(
@@ -156,11 +161,11 @@ public class MonitoredExecutors {
     return name.toLowerCase(Locale.US).replace('-', '_');
   }
 
-  private static class CountingAbortPolicy extends AbortPolicy {
+  private static class LogAndCountingAbortPolicy extends AbortPolicy {
 
     private final Counter rejectedTaskCounter;
 
-    public CountingAbortPolicy(final String metricName, final MetricsSystem metricsSystem) {
+    public LogAndCountingAbortPolicy(final String metricName, final MetricsSystem metricsSystem) {
       this.rejectedTaskCounter =
           metricsSystem.createCounter(
               BesuMetricCategory.EXECUTORS,
@@ -170,6 +175,14 @@ public class MonitoredExecutors {
 
     @Override
     public void rejectedExecution(final Runnable r, final ThreadPoolExecutor e) {
+      LOG.atDebug()
+          .setMessage("Rejected task {}")
+          .addArgument(
+              () ->
+                  r instanceof LoggableTask loggableTask
+                      ? loggableTask.toLogString()
+                      : r.getClass().getName())
+          .log();
       rejectedTaskCounter.inc();
       super.rejectedExecution(r, e);
     }

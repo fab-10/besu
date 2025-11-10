@@ -14,31 +14,34 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions;
 
-import static java.time.Instant.now;
-
+import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.manager.EthMessage;
 import org.hyperledger.besu.ethereum.eth.manager.EthMessages;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
+import org.hyperledger.besu.ethereum.eth.manager.EthScheduler.ExpirableTask;
 import org.hyperledger.besu.ethereum.eth.messages.TransactionsMessage;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 class TransactionsMessageHandler implements EthMessages.MessageCallback {
-
+  private static final String METRIC_LABEL = "transactions";
   private final TransactionsMessageProcessor transactionsMessageProcessor;
   private final EthScheduler scheduler;
+  private final TransactionPoolMetrics metrics;
   private final Duration txMsgKeepAlive;
   private final AtomicBoolean isEnabled = new AtomicBoolean(false);
 
   public TransactionsMessageHandler(
       final EthScheduler scheduler,
       final TransactionsMessageProcessor transactionsMessageProcessor,
+      final TransactionPoolMetrics metrics,
       final int txMsgKeepAliveSeconds) {
     this.scheduler = scheduler;
     this.transactionsMessageProcessor = transactionsMessageProcessor;
+    this.metrics = metrics;
     this.txMsgKeepAlive = Duration.ofSeconds(txMsgKeepAliveSeconds);
+    metrics.initExpiredMessagesCounter(METRIC_LABEL, true);
   }
 
   @Override
@@ -46,11 +49,29 @@ class TransactionsMessageHandler implements EthMessages.MessageCallback {
     if (isEnabled.get()) {
       final TransactionsMessage transactionsMessage =
           TransactionsMessage.readFrom(message.getData());
-      final Instant startedAt = now();
-      scheduler.scheduleTxWorkerTask(
-          () ->
-              transactionsMessageProcessor.processTransactionsMessage(
-                  message.getPeer(), transactionsMessage, startedAt, txMsgKeepAlive));
+      scheduler
+          .scheduleTxWorkerExpirableTask(
+              new ExpirableTask<Void>(
+                  txMsgKeepAlive,
+                  () -> {
+                    transactionsMessageProcessor.processTransactionsMessage(
+                        message.getPeer(), transactionsMessage);
+                    return null;
+                  }) {
+                @Override
+                public String toLogString() {
+                  return "message=transactions, peer="
+                      + message.getPeer()
+                      + ", hashes="
+                      + Transaction.toHashList(transactionsMessage.transactions());
+                }
+              })
+          .whenComplete(
+              (r, t) -> {
+                if (t instanceof EthScheduler.ExpiredException) {
+                  metrics.incrementExpiredMessages(METRIC_LABEL, true);
+                }
+              });
     }
   }
 

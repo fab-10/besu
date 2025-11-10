@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.eth.manager.bounded;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 
 import org.junit.jupiter.api.Test;
@@ -25,9 +26,9 @@ public class BoundedQueueTest {
   @Test
   public void offerShouldAcceptNewElements() {
     int size = 10;
-    final BoundedQueue queue = new BoundedQueue(size, "test", new NoOpMetricsSystem());
+    final var queue = new BoundedQueue<TestTask>(size, "test", new NoOpMetricsSystem());
     for (int i = 0; i < size; i++) {
-      final Runnable task = () -> {};
+      final TestTask task = new TestTask(i);
       assertThat(queue.offer(task)).isTrue();
       assertThat(queue).contains(task);
       assertThat(queue.size()).isEqualTo(i + 1);
@@ -36,10 +37,10 @@ public class BoundedQueueTest {
 
   @Test
   public void offerShouldMakeARoomAndAcceptNewElementAtFullCapacity() {
-    final BoundedQueue queue = new BoundedQueue(2, "test", new NoOpMetricsSystem());
-    final Runnable task1 = () -> {};
-    final Runnable task2 = () -> {};
-    final Runnable task3 = () -> {};
+    final var queue = new BoundedQueue<TestTask>(2, "test", new NoOpMetricsSystem());
+    final TestTask task1 = new TestTask(1);
+    final TestTask task2 = new TestTask(2);
+    final TestTask task3 = new TestTask(3);
     assertThat(queue.offer(task1)).isTrue();
     assertThat(queue.size()).isEqualTo(1);
     assertThat(queue).contains(task1);
@@ -51,5 +52,21 @@ public class BoundedQueueTest {
     assertThat(queue).contains(task2);
     assertThat(queue).contains(task3);
     assertThat(queue.size()).isEqualTo(2);
+  }
+
+  private static class TestTask implements Runnable, EthScheduler.LoggableTask {
+    final int index;
+
+    public TestTask(final int index) {
+      this.index = index;
+    }
+
+    @Override
+    public void run() {}
+
+    @Override
+    public String toLogString() {
+      return "index=" + index;
+    }
   }
 }

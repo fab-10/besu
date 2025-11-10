@@ -14,7 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions;
 
-import static java.time.Instant.now;
 import static org.hyperledger.besu.ethereum.core.Transaction.toHashList;
 
 import org.hyperledger.besu.ethereum.core.Transaction;
@@ -23,11 +22,8 @@ import org.hyperledger.besu.ethereum.eth.messages.TransactionsMessage;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.messages.DisconnectMessage.DisconnectReason;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 
-import java.time.Duration;
-import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -47,23 +43,9 @@ class TransactionsMessageProcessor {
     this.transactionTracker = transactionTracker;
     this.transactionPool = transactionPool;
     this.metrics = metrics;
-    metrics.initExpiredMessagesCounter(METRIC_LABEL);
   }
 
   void processTransactionsMessage(
-      final EthPeer peer,
-      final TransactionsMessage transactionsMessage,
-      final Instant startedAt,
-      final Duration keepAlive) {
-    // Check if message is not expired.
-    if (startedAt.plus(keepAlive).isAfter(now())) {
-      this.processTransactionsMessage(peer, transactionsMessage);
-    } else {
-      metrics.incrementExpiredMessages(METRIC_LABEL);
-    }
-  }
-
-  private void processTransactionsMessage(
       final EthPeer peer, final TransactionsMessage transactionsMessage) {
     try {
       final List<Transaction> incomingTransactions = transactionsMessage.transactions();
@@ -74,13 +56,9 @@ class TransactionsMessageProcessor {
       metrics.incrementAlreadySeenTransactions(
           METRIC_LABEL, incomingTransactions.size() - freshTransactions.size());
       LOG.atTrace()
-          .setMessage(
-              "Received transactions message from {}, incoming transactions {}, incoming list {}"
-                  + ", fresh transactions {}, fresh list {}")
+          .setMessage("Received transactions message: peer={} incoming hashes {}, fresh hashes={}")
           .addArgument(peer)
-          .addArgument(incomingTransactions::size)
           .addArgument(() -> toHashList(incomingTransactions))
-          .addArgument(freshTransactions::size)
           .addArgument(() -> toHashList(freshTransactions))
           .log();
 
@@ -100,6 +78,6 @@ class TransactionsMessageProcessor {
   private Collection<Transaction> skipSeenTransactions(final List<Transaction> inTransactions) {
     return inTransactions.stream()
         .filter(tx -> !transactionTracker.hasSeenTransaction(tx.getHash()))
-        .collect(Collectors.toUnmodifiableList());
+        .toList();
   }
 }

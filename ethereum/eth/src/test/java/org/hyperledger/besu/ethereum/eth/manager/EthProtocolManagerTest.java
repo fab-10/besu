@@ -1250,7 +1250,8 @@ public final class EthProtocolManagerTest {
     final MessageData raw =
         new RawMessage(EthProtocolMessages.TRANSACTIONS, initialMessage.getData());
     final TransactionsMessage transactionMessage = TransactionsMessage.readFrom(raw);
-
+    final EthProtocolConfiguration ethProtocolConfiguration =
+        EthProtocolConfiguration.defaultConfig();
     try (final EthProtocolManager ethManager =
         EthProtocolManagerTestBuilder.builder()
             .setProtocolSchedule(protocolSchedule)
@@ -1258,7 +1259,7 @@ public final class EthProtocolManagerTest {
             .setEthScheduler(ethScheduler)
             .setWorldStateArchive(protocolContext.getWorldStateArchive())
             .setTransactionPool(transactionPool)
-            .setEthereumWireProtocolConfiguration(EthProtocolConfiguration.defaultConfig())
+            .setEthereumWireProtocolConfiguration(ethProtocolConfiguration)
             .build()) {
       // Create a transaction pool.  This has a side effect of registering a listener for the
       // transactions message.
@@ -1271,7 +1272,9 @@ public final class EthProtocolManagerTest {
               new SyncState(blockchain, ethManager.ethContext().getEthPeers()),
               TransactionPoolConfiguration.DEFAULT,
               new BlobCache(),
-              MiningConfiguration.newDefault())
+              MiningConfiguration.newDefault(),
+              ethProtocolConfiguration,
+              new EthMessages())
           .setEnabled();
 
       // Send just a transaction message.

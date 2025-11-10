@@ -245,9 +245,11 @@ public abstract class AbstractTransactionPoolTestBase extends TrustedSetupClassL
         spy(
             new TransactionBroadcaster(
                 ethContext,
+                TransactionPoolConfiguration.DEFAULT,
                 peerTransactionTracker,
                 transactionsMessageSender,
-                newPooledTransactionHashesMessageSender));
+                newPooledTransactionHashesMessageSender,
+                new TransactionPoolMetrics(metricsSystem)));
 
     transactionPool = createTransactionPool();
     blockchain.observeBlockAdded(transactionPool);

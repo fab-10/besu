@@ -12,7 +12,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-package org.hyperledger.besu.ethereum.eth.manager.task;
+package org.hyperledger.besu.ethereum.eth.transactions;
 
 import static org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration.DEFAULT_MAX_PENDING_TRANSACTIONS;
 
@@ -20,18 +20,17 @@ import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
+import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
+import org.hyperledger.besu.ethereum.eth.manager.EthScheduler.ExpirableTask;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetPooledTransactionsFromPeerTask;
-import org.hyperledger.besu.ethereum.eth.transactions.PeerTransactionTracker;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledFuture;
 
 import com.google.common.collect.EvictingQueue;
@@ -42,13 +41,14 @@ import org.slf4j.LoggerFactory;
 public class BufferedGetPooledTransactionsFromPeerFetcher {
   private static final Logger LOG =
       LoggerFactory.getLogger(BufferedGetPooledTransactionsFromPeerFetcher.class);
+  private static final String METRIC_LABEL = "new_pooled_transaction_hashes";
   private static final int MAX_HASHES = 256;
 
   private final TransactionPool transactionPool;
   private final PeerTransactionTracker transactionTracker;
   private final EthContext ethContext;
   private final TransactionPoolMetrics metrics;
-  private final String metricLabel;
+  private final Duration txMsgKeepAlive;
   private final ScheduledFuture<?> scheduledFuture;
   private final EthPeer peer;
   private final Queue<Hash> txAnnounces;
@@ -58,18 +58,21 @@ public class BufferedGetPooledTransactionsFromPeerFetcher {
       final ScheduledFuture<?> scheduledFuture,
       final EthPeer peer,
       final TransactionPool transactionPool,
+      final TransactionPoolConfiguration transactionPoolConfiguration,
       final PeerTransactionTracker transactionTracker,
-      final TransactionPoolMetrics metrics,
-      final String metricLabel) {
+      final TransactionPoolMetrics metrics) {
     this.ethContext = ethContext;
     this.scheduledFuture = scheduledFuture;
     this.peer = peer;
     this.transactionPool = transactionPool;
     this.transactionTracker = transactionTracker;
     this.metrics = metrics;
-    this.metricLabel = metricLabel;
+    this.txMsgKeepAlive =
+        Duration.ofSeconds(
+            transactionPoolConfiguration.getUnstable().getTxMessageKeepAliveSeconds());
     this.txAnnounces =
         Queues.synchronizedQueue(EvictingQueue.create(DEFAULT_MAX_PENDING_TRANSACTIONS));
+    metrics.initExpiredMessagesCounter(METRIC_LABEL, false);
   }
 
   public ScheduledFuture<?> getScheduledFuture() {
@@ -83,28 +86,46 @@ public class BufferedGetPooledTransactionsFromPeerFetcher {
           new GetPooledTransactionsFromPeerTask(txHashesAnnounced);
       ethContext
           .getScheduler()
-          .scheduleServiceTask(
-              () -> {
-                PeerTaskExecutorResult<List<Transaction>> taskResult =
-                    ethContext.getPeerTaskExecutor().executeAgainstPeer(task, peer);
-                if (taskResult.responseCode() != PeerTaskExecutorResponseCode.SUCCESS
-                    || taskResult.result().isEmpty()) {
-                  return CompletableFuture.failedFuture(
-                      new RuntimeException("Failed to retrieve transactions for hashes"));
+          .scheduleTxWorkerExpirableTask(
+              new ExpirableTask<Void>(
+                  txMsgKeepAlive,
+                  () -> {
+                    final PeerTaskExecutorResult<List<Transaction>> taskResult =
+                        ethContext.getPeerTaskExecutor().executeAgainstPeer(task, peer);
+
+                    if (taskResult.responseCode() != PeerTaskExecutorResponseCode.SUCCESS
+                        || taskResult.result().isEmpty()) {
+                      LOG.trace("Failed to retrieve transactions for hashes {}", task.getHashes());
+                      return null;
+                    }
+
+                    final var retrievedTransactions = taskResult.result().get();
+
+                    transactionTracker.markTransactionsAsSeen(peer, retrievedTransactions);
+
+                    LOG.atTrace()
+                        .setMessage("Got transactions requested from peer {}, hashes {}")
+                        .addArgument(peer)
+                        .addArgument(retrievedTransactions)
+                        .log();
+
+                    transactionPool.addRemoteTransactions(retrievedTransactions);
+                    return null;
+                  }) {
+
+                @Override
+                public String toLogString() {
+                  return "message=getPooledTransactions, peer="
+                      + peer
+                      + ", hashes="
+                      + task.getHashes();
                 }
-                return CompletableFuture.completedFuture(taskResult.result().get());
               })
-          .thenAccept(
-              retrievedTransactions -> {
-                transactionTracker.markTransactionsAsSeen(peer, retrievedTransactions);
-
-                LOG.atTrace()
-                    .setMessage("Got {} transactions requested from peer {}")
-                    .addArgument(retrievedTransactions::size)
-                    .addArgument(peer::getLoggableId)
-                    .log();
-
-                transactionPool.addRemoteTransactions(retrievedTransactions);
+          .whenComplete(
+              (r, t) -> {
+                if (t instanceof EthScheduler.ExpiredException) {
+                  metrics.incrementExpiredMessages(METRIC_LABEL, false);
+                }
               });
     }
   }
@@ -126,11 +147,11 @@ public class BufferedGetPooledTransactionsFromPeerFetcher {
     }
 
     final int alreadySeenCount = discarded;
-    metrics.incrementAlreadySeenTransactions(metricLabel, alreadySeenCount);
+    metrics.incrementAlreadySeenTransactions(METRIC_LABEL, alreadySeenCount);
     LOG.atTrace()
         .setMessage(
             "Transaction hashes to request from peer {} fresh count {}, already seen count {}")
-        .addArgument(peer::getLoggableId)
+        .addArgument(peer)
         .addArgument(toRetrieve::size)
         .addArgument(alreadySeenCount)
         .log();

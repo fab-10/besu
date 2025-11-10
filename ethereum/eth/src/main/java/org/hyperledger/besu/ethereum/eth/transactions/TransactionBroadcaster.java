@@ -22,8 +22,10 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeerImmutableAttributes;
+import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool.TransactionBatchAddedListener;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -31,6 +33,7 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
+import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -40,7 +43,9 @@ import org.slf4j.LoggerFactory;
 public class TransactionBroadcaster
     implements TransactionBatchAddedListener, PendingTransactionDroppedListener {
   private static final Logger LOG = LoggerFactory.getLogger(TransactionBroadcaster.class);
-
+  private static final String METRIC_LABEL_NEW_POOLED_TX_HASHES =
+      "new_pooled_transaction_hashes_outgoing";
+  private static final String METRIC_LABEL_TRANSACTIONS = "transactions_outgoing";
   private static final EnumSet<TransactionType> ANNOUNCE_HASH_ONLY_TX_TYPES = EnumSet.of(BLOB);
 
   private static final Boolean HASH_ONLY_BROADCAST = Boolean.TRUE;
@@ -50,18 +55,25 @@ public class TransactionBroadcaster
   private final TransactionsMessageSender transactionsMessageSender;
   private final NewPooledTransactionHashesMessageSender newPooledTransactionHashesMessageSender;
   private final EthContext ethContext;
+  private final TransactionPoolMetrics metrics;
+  private final Duration txMsgKeepAlive;
   private final Random random;
 
   public TransactionBroadcaster(
       final EthContext ethContext,
+      final TransactionPoolConfiguration transactionPoolConfiguration,
       final PeerTransactionTracker transactionTracker,
       final TransactionsMessageSender transactionsMessageSender,
-      final NewPooledTransactionHashesMessageSender newPooledTransactionHashesMessageSender) {
+      final NewPooledTransactionHashesMessageSender newPooledTransactionHashesMessageSender,
+      final TransactionPoolMetrics metrics) {
     this(
         ethContext,
         transactionTracker,
         transactionsMessageSender,
         newPooledTransactionHashesMessageSender,
+        metrics,
+        Duration.ofSeconds(
+            transactionPoolConfiguration.getUnstable().getTxMessageKeepAliveSeconds()),
         null);
   }
 
@@ -71,12 +83,18 @@ public class TransactionBroadcaster
       final PeerTransactionTracker transactionTracker,
       final TransactionsMessageSender transactionsMessageSender,
       final NewPooledTransactionHashesMessageSender newPooledTransactionHashesMessageSender,
+      final TransactionPoolMetrics metrics,
+      final Duration txMsgKeepAlive,
       final Long seed) {
     this.transactionTracker = transactionTracker;
     this.transactionsMessageSender = transactionsMessageSender;
     this.newPooledTransactionHashesMessageSender = newPooledTransactionHashesMessageSender;
     this.ethContext = ethContext;
+    this.metrics = metrics;
+    this.txMsgKeepAlive = txMsgKeepAlive;
     this.random = seed != null ? new Random(seed) : new Random();
+    metrics.initExpiredMessagesCounter(METRIC_LABEL_TRANSACTIONS, false);
+    metrics.initExpiredMessagesCounter(METRIC_LABEL_NEW_POOLED_TX_HASHES, false);
   }
 
   public void relayTransactionPoolTo(
@@ -148,10 +166,11 @@ public class TransactionBroadcaster
           peer -> {
             transactions.forEach(
                 transaction -> transactionTracker.addToPeerSendQueue(peer, transaction));
-            ethContext
-                .getScheduler()
-                .scheduleSyncWorkerTask(
-                    () -> transactionsMessageSender.sendTransactionsToPeer(peer));
+            broadcastTransactions(
+                transactions,
+                peer,
+                transactionsMessageSender::sendTransactionsToPeer,
+                METRIC_LABEL_TRANSACTIONS);
           });
     }
   }
@@ -164,18 +183,67 @@ public class TransactionBroadcaster
               peer -> {
                 transactions.forEach(
                     transaction -> transactionTracker.addToPeerHashSendQueue(peer, transaction));
-                ethContext
-                    .getScheduler()
-                    .scheduleSyncWorkerTask(
-                        () ->
-                            newPooledTransactionHashesMessageSender.sendTransactionHashesToPeer(
-                                peer));
+
+                broadcastTransactions(
+                    transactions,
+                    peer,
+                    newPooledTransactionHashesMessageSender::sendTransactionHashesToPeer,
+                    METRIC_LABEL_NEW_POOLED_TX_HASHES);
               });
     }
+  }
+
+  private void broadcastTransactions(
+      final List<Transaction> transactions,
+      final EthPeer peer,
+      final Consumer<EthPeer> sendAction,
+      final String metricLabel) {
+    ethContext
+        .getScheduler()
+        .scheduleTxWorkerExpirableTask(
+            new BroadcastTask(sendAction, peer, transactions, metricLabel))
+        .whenComplete(
+            (r, t) -> {
+              if (t instanceof EthScheduler.ExpiredException) {
+                metrics.incrementExpiredMessages(metricLabel, true);
+              }
+            });
   }
 
   @Override
   public void onTransactionDropped(final Transaction transaction, final RemovalReason reason) {
     transactionTracker.onTransactionDropped(transaction, reason);
+  }
+
+  private class BroadcastTask extends EthScheduler.ExpirableTask<Void> {
+    private final EthPeer peer;
+    final Collection<Transaction> transactions;
+    private final String metricLabel;
+
+    BroadcastTask(
+        final Consumer<EthPeer> sendAction,
+        final EthPeer peer,
+        final Collection<Transaction> transactions,
+        final String metricLabel) {
+      super(
+          txMsgKeepAlive,
+          () -> {
+            sendAction.accept(peer);
+            return null;
+          });
+      this.peer = peer;
+      this.transactions = transactions;
+      this.metricLabel = metricLabel;
+    }
+
+    @Override
+    public String toLogString() {
+      return "message="
+          + metricLabel
+          + ", peer="
+          + peer
+          + ", hashes="
+          + Transaction.toHashList(transactions);
+    }
   }
 }

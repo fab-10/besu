@@ -96,7 +96,7 @@ public class TransactionPoolFactoryTest {
   EthPeers ethPeers;
 
   SyncState syncState;
-
+  EthProtocolConfiguration ethProtocolConfiguration = EthProtocolConfiguration.defaultConfig();
   EthProtocolManager ethProtocolManager;
 
   ProtocolContext protocolContext;
@@ -310,9 +310,9 @@ public class TransactionPoolFactoryTest {
             BigInteger.ONE,
             mock(WorldStateArchive.class),
             pool,
-            EthProtocolConfiguration.defaultConfig(),
+            ethProtocolConfiguration,
             ethPeers,
-            mock(EthMessages.class),
+            ethMessages,
             ethContext,
             Collections.emptyList(),
             Optional.empty(),
@@ -413,7 +413,9 @@ public class TransactionPoolFactoryTest {
         transactionsMessageSender,
         newPooledTransactionHashesMessageSender,
         new BlobCache(),
-        MiningConfiguration.newDefault());
+        MiningConfiguration.newDefault(),
+        ethProtocolConfiguration,
+        ethMessages);
   }
 
   private TransactionPool createAndEnableTransactionPool(

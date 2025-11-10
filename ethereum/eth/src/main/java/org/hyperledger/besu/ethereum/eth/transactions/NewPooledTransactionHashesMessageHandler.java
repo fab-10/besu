@@ -14,22 +14,22 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions;
 
-import static java.time.Instant.now;
-
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.manager.EthMessage;
 import org.hyperledger.besu.ethereum.eth.manager.EthMessages;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
+import org.hyperledger.besu.ethereum.eth.manager.EthScheduler.ExpirableTask;
 import org.hyperledger.besu.ethereum.eth.messages.NewPooledTransactionHashesMessage;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 
 import java.time.Duration;
-import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 class NewPooledTransactionHashesMessageHandler implements EthMessages.MessageCallback {
+  private static final String METRIC_LABEL = "new_pooled_transaction_hashes";
 
   private final NewPooledTransactionHashesMessageProcessor transactionsMessageProcessor;
+  private final TransactionPoolMetrics metrics;
   private final EthScheduler scheduler;
   private final Duration txMsgKeepAlive;
   private final AtomicBoolean isEnabled = new AtomicBoolean(false);
@@ -37,10 +37,13 @@ class NewPooledTransactionHashesMessageHandler implements EthMessages.MessageCal
   public NewPooledTransactionHashesMessageHandler(
       final EthScheduler scheduler,
       final NewPooledTransactionHashesMessageProcessor transactionsMessageProcessor,
+      final TransactionPoolMetrics metrics,
       final int txMsgKeepAliveSeconds) {
     this.scheduler = scheduler;
     this.transactionsMessageProcessor = transactionsMessageProcessor;
+    this.metrics = metrics;
     this.txMsgKeepAlive = Duration.ofSeconds(txMsgKeepAliveSeconds);
+    metrics.initExpiredMessagesCounter(METRIC_LABEL, true);
   }
 
   @Override
@@ -49,11 +52,30 @@ class NewPooledTransactionHashesMessageHandler implements EthMessages.MessageCal
       final Capability capability = message.getPeer().getConnection().capability(EthProtocol.NAME);
       final NewPooledTransactionHashesMessage transactionsMessage =
           NewPooledTransactionHashesMessage.readFrom(message.getData(), capability);
-      final Instant startedAt = now();
-      scheduler.scheduleTxWorkerTask(
-          () ->
-              transactionsMessageProcessor.processNewPooledTransactionHashesMessage(
-                  message.getPeer(), transactionsMessage, startedAt, txMsgKeepAlive));
+      scheduler
+          .scheduleTxWorkerExpirableTask(
+              new ExpirableTask<Void>(
+                  txMsgKeepAlive,
+                  () -> {
+                    transactionsMessageProcessor.processNewPooledTransactionHashesMessage(
+                        message.getPeer(), transactionsMessage);
+                    return null;
+                  }) {
+
+                @Override
+                public String toLogString() {
+                  return "message=transactions, peer="
+                      + message.getPeer()
+                      + ", hashes="
+                      + transactionsMessage.pendingTransactionHashes();
+                }
+              })
+          .whenComplete(
+              (r, t) -> {
+                if (t instanceof EthScheduler.ExpiredException) {
+                  metrics.incrementExpiredMessages(METRIC_LABEL, true);
+                }
+              });
     }
   }
 

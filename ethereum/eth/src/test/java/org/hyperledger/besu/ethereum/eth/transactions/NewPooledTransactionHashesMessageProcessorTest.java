@@ -14,9 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions;
 
-import static java.time.Duration.ofMillis;
-import static java.time.Duration.ofMinutes;
-import static java.time.Instant.now;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hyperledger.besu.ethereum.eth.encoding.TransactionAnnouncementDecoder.getDecoder;
@@ -108,10 +105,7 @@ class NewPooledTransactionHashesMessageProcessorTest {
   void shouldAddInitiatedRequestingTransactions() {
 
     messageHandler.processNewPooledTransactionHashesMessage(
-        peer1,
-        NewPooledTransactionHashesMessage.create(transactionList, EthProtocol.ETH66),
-        now(),
-        ofMinutes(1));
+        peer1, NewPooledTransactionHashesMessage.create(transactionList, EthProtocol.ETH66));
 
     verify(transactionPool).getTransactionByHash(hash1);
     verify(transactionPool).getTransactionByHash(hash2);
@@ -126,10 +120,7 @@ class NewPooledTransactionHashesMessageProcessorTest {
     when(transactionPool.getTransactionByHash(hash2)).thenReturn(Optional.of(transaction2));
 
     messageHandler.processNewPooledTransactionHashesMessage(
-        peer1,
-        NewPooledTransactionHashesMessage.create(transactionList, EthProtocol.ETH66),
-        now(),
-        ofMinutes(1));
+        peer1, NewPooledTransactionHashesMessage.create(transactionList, EthProtocol.ETH66));
 
     verify(transactionPool).getTransactionByHash(hash1);
     verify(transactionPool).getTransactionByHash(hash2);
@@ -141,40 +132,31 @@ class NewPooledTransactionHashesMessageProcessorTest {
   void shouldAddInitiatedRequestingTransactionsWhenOutOfSync() {
 
     messageHandler.processNewPooledTransactionHashesMessage(
-        peer1,
-        NewPooledTransactionHashesMessage.create(transactionList, EthProtocol.ETH66),
-        now(),
-        ofMinutes(1));
+        peer1, NewPooledTransactionHashesMessage.create(transactionList, EthProtocol.ETH66));
     verify(transactionPool, times(3)).getTransactionByHash(any());
   }
 
   @Test
   void shouldNotMarkReceivedExpiredTransactionsAsSeen() {
     messageHandler.processNewPooledTransactionHashesMessage(
-        peer1,
-        NewPooledTransactionHashesMessage.create(transactionList, EthProtocol.ETH66),
-        now().minus(ofMinutes(1)),
-        ofMillis(1));
+        peer1, NewPooledTransactionHashesMessage.create(transactionList, EthProtocol.ETH66));
     verifyNoInteractions(transactionTracker);
     assertThat(
             metricsSystem.getCounterValue(
                 TransactionPoolMetrics.EXPIRED_MESSAGES_COUNTER_NAME,
-                NewPooledTransactionHashesMessageProcessor.METRIC_LABEL))
+                "new_pooled_transaction_hashes"))
         .isEqualTo(1);
   }
 
   @Test
   void shouldNotAddReceivedTransactionsToTransactionPoolIfExpired() {
     messageHandler.processNewPooledTransactionHashesMessage(
-        peer1,
-        NewPooledTransactionHashesMessage.create(transactionList, EthProtocol.ETH66),
-        now().minus(ofMinutes(1)),
-        ofMillis(1));
+        peer1, NewPooledTransactionHashesMessage.create(transactionList, EthProtocol.ETH66));
     verifyNoInteractions(transactionPool);
     assertThat(
             metricsSystem.getCounterValue(
                 TransactionPoolMetrics.EXPIRED_MESSAGES_COUNTER_NAME,
-                NewPooledTransactionHashesMessageProcessor.METRIC_LABEL))
+                "new_pooled_transaction_hashes"))
         .isEqualTo(1);
   }
 
@@ -187,9 +169,7 @@ class NewPooledTransactionHashesMessageProcessorTest {
     messageHandler.processNewPooledTransactionHashesMessage(
         peer1,
         NewPooledTransactionHashesMessage.create(
-            List.of(transaction1, transaction2), EthProtocol.ETH66),
-        now(),
-        ofMinutes(1));
+            List.of(transaction1, transaction2), EthProtocol.ETH66));
 
     verify(ethScheduler, times(1))
         .scheduleFutureTaskWithFixedDelay(
@@ -202,16 +182,12 @@ class NewPooledTransactionHashesMessageProcessorTest {
     messageHandler.processNewPooledTransactionHashesMessage(
         peer1,
         NewPooledTransactionHashesMessage.create(
-            Collections.singletonList(transaction1), EthProtocol.ETH66),
-        now(),
-        ofMinutes(1));
+            Collections.singletonList(transaction1), EthProtocol.ETH66));
 
     messageHandler.processNewPooledTransactionHashesMessage(
         peer1,
         NewPooledTransactionHashesMessage.create(
-            Collections.singletonList(transaction2), EthProtocol.ETH66),
-        now(),
-        ofMinutes(1));
+            Collections.singletonList(transaction2), EthProtocol.ETH66));
 
     verify(ethScheduler, times(1))
         .scheduleFutureTaskWithFixedDelay(

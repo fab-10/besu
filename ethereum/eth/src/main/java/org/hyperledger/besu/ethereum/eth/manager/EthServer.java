@@ -107,6 +107,7 @@ class EthServer {
                 messageData,
                 ethereumWireProtocolConfiguration.getMaxGetNodeData(),
                 maxMessageSize));
+
     ethMessages.registerResponseConstructor(
         EthProtocolMessages.GET_POOLED_TRANSACTIONS,
         (messageData, capability) ->

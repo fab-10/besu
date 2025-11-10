@@ -38,7 +38,10 @@ import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.manager.PeerReputation;
 import org.hyperledger.besu.ethereum.p2p.rlpx.connections.PeerConnection;
+import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
+import org.hyperledger.besu.plugin.services.MetricsSystem;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -72,7 +75,7 @@ public class TransactionBroadcasterTest {
   private final EthPeer ethPeer2 = mockPeer();
   private final EthPeer ethPeer3 = mockPeer();
   private final BlockDataGenerator generator = new BlockDataGenerator();
-
+  private final MetricsSystem metricsSystem = new NoOpMetricsSystem();
   private TransactionBroadcaster txBroadcaster;
   private ArgumentCaptor<Runnable> sendTaskCapture;
 
@@ -91,6 +94,9 @@ public class TransactionBroadcasterTest {
             transactionTracker,
             transactionsMessageSender,
             newPooledTransactionHashesMessageSender,
+            new TransactionPoolMetrics(metricsSystem),
+            Duration.ofSeconds(
+                TransactionPoolConfiguration.DEFAULT.getUnstable().getTxMessageKeepAliveSeconds()),
             FIXED_RANDOM_SEED);
   }
 

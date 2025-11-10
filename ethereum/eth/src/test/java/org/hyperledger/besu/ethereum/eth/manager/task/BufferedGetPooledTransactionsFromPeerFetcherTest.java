@@ -35,6 +35,7 @@ import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutor;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult;
+import org.hyperledger.besu.ethereum.eth.transactions.BufferedGetPooledTransactionsFromPeerFetcher;
 import org.hyperledger.besu.ethereum.eth.transactions.PeerTransactionTracker;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
@@ -88,9 +89,9 @@ public class BufferedGetPooledTransactionsFromPeerFetcherTest {
             mock,
             ethPeer,
             transactionPool,
+            TransactionPoolConfiguration.DEFAULT,
             transactionTracker,
-            new TransactionPoolMetrics(metricsSystem),
-            "new_pooled_transaction_hashes");
+            new TransactionPoolMetrics(metricsSystem));
   }
 
   @Test

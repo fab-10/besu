@@ -14,9 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions;
 
-import static java.time.Duration.ofMillis;
-import static java.time.Duration.ofMinutes;
-import static java.time.Instant.now;
 import static java.util.Arrays.asList;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
@@ -61,10 +58,7 @@ public class TransactionsMessageProcessorTest {
   @Test
   public void shouldMarkAllReceivedTransactionsAsSeen() {
     messageHandler.processTransactionsMessage(
-        peer1,
-        TransactionsMessage.create(asList(transaction1, transaction2, transaction3)),
-        now(),
-        ofMinutes(1));
+        peer1, TransactionsMessage.create(asList(transaction1, transaction2, transaction3)));
 
     verify(transactionTracker)
         .markTransactionsAsSeen(peer1, asList(transaction1, transaction2, transaction3));
@@ -73,20 +67,14 @@ public class TransactionsMessageProcessorTest {
   @Test
   public void shouldAddReceivedTransactionsToTransactionPool() {
     messageHandler.processTransactionsMessage(
-        peer1,
-        TransactionsMessage.create(asList(transaction1, transaction2, transaction3)),
-        now(),
-        ofMinutes(1));
+        peer1, TransactionsMessage.create(asList(transaction1, transaction2, transaction3)));
     verify(transactionPool).addRemoteTransactions(asList(transaction1, transaction2, transaction3));
   }
 
   @Test
   public void shouldNotMarkReceivedExpiredTransactionsAsSeen() {
     messageHandler.processTransactionsMessage(
-        peer1,
-        TransactionsMessage.create(asList(transaction1, transaction2, transaction3)),
-        now().minus(ofMinutes(1)),
-        ofMillis(1));
+        peer1, TransactionsMessage.create(asList(transaction1, transaction2, transaction3)));
     verifyNoInteractions(transactionTracker);
     assertThat(
             metricsSystem.getCounterValue(
@@ -98,10 +86,7 @@ public class TransactionsMessageProcessorTest {
   @Test
   public void shouldNotAddReceivedTransactionsToTransactionPoolIfExpired() {
     messageHandler.processTransactionsMessage(
-        peer1,
-        TransactionsMessage.create(asList(transaction1, transaction2, transaction3)),
-        now().minus(ofMinutes(1)),
-        ofMillis(1));
+        peer1, TransactionsMessage.create(asList(transaction1, transaction2, transaction3)));
     verifyNoInteractions(transactionPool);
     assertThat(
             metricsSystem.getCounterValue(

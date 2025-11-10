@@ -135,8 +135,8 @@ public class EthScheduler {
     return syncFuture;
   }
 
-  public void scheduleTxWorkerTask(final Runnable command) {
-    txWorkerExecutor.execute(command);
+  public <T> CompletableFuture<T> scheduleTxWorkerExpirableTask(final ExpirableTask<T> task) {
+    return CompletableFuture.supplyAsync(task, txWorkerExecutor);
   }
 
   public void executeServiceTask(final Runnable command) {
@@ -363,6 +363,46 @@ public class EthScheduler {
               }
             });
       }
+    }
+  }
+
+  public interface LoggableTask {
+    String toLogString();
+  }
+
+  public abstract static class ExpirableTask<T> implements LoggableTask, Supplier<T> {
+    private final long queuedAt = System.nanoTime();
+    private final Duration ttl;
+    private final Supplier<T> delegate;
+
+    public ExpirableTask(final Duration ttl, final Supplier<T> delegate) {
+      this.ttl = ttl;
+      this.delegate = delegate;
+    }
+
+    @Override
+    public T get() {
+      final var elapsed = System.nanoTime() - queuedAt;
+      if (ttl.toNanos() < elapsed) {
+        return delegate.get();
+      } else {
+        LOG.atTrace()
+            .setMessage("Ignoring expired task {}, queued for {}, more than allowed ttl of {}")
+            .addArgument(this::toLogString)
+            .addArgument(() -> Duration.ofNanos(elapsed))
+            .addArgument(ttl)
+            .log();
+        throw new ExpiredException("Task expired while waiting execution");
+      }
+    }
+
+    @Override
+    public abstract String toLogString();
+  }
+
+  public static class ExpiredException extends RuntimeException {
+    public ExpiredException(final String message) {
+      super(message);
     }
   }
 }

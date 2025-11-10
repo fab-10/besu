@@ -17,9 +17,11 @@ package org.hyperledger.besu.ethereum.eth.manager;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.time.Duration;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.Supplier;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -87,11 +89,11 @@ public class EthSchedulerShutdownTest {
 
   @Test
   public void shutdown_txWorkerShutsDown() throws InterruptedException {
-    final MockEthTask task1 = new MockEthTask(1);
-    final MockEthTask task2 = new MockEthTask();
+    final TestSupplier sup1 = new TestSupplier(1);
+    final TestSupplier sup2 = new TestSupplier(0);
 
-    ethScheduler.scheduleTxWorkerTask(task1::executeTask);
-    ethScheduler.scheduleTxWorkerTask(task2::executeTask);
+    ethScheduler.scheduleTxWorkerExpirableTask(new TestTask(sup1));
+    ethScheduler.scheduleTxWorkerExpirableTask(new TestTask(sup2));
     ethScheduler.stop();
 
     assertThat(txWorkerExecutor.isShutdown()).isTrue();
@@ -100,7 +102,7 @@ public class EthSchedulerShutdownTest {
 
     assertThat(txWorkerExecutor.isShutdown()).isTrue();
     assertThat(txWorkerExecutor.isTerminated()).isTrue();
-    assertThat(task2.hasBeenStarted()).isFalse();
+    assertThat(sup2.hasBeenStarted()).isFalse();
   }
 
   @Test
@@ -145,5 +147,41 @@ public class EthSchedulerShutdownTest {
     assertThat(computationExecutor.isShutdown()).isTrue();
     assertThat(computationExecutor.isTerminated()).isTrue();
     assertThat(task2.hasBeenStarted()).isFalse();
+  }
+
+  private static class TestSupplier implements Supplier<Void> {
+    private final CountDownLatch startedLatch = new CountDownLatch(1);
+    private final CountDownLatch countdown;
+
+    public TestSupplier(final int count) {
+      this.countdown = new CountDownLatch(count);
+    }
+
+    @Override
+    public Void get() {
+      startedLatch.countDown();
+      try {
+        countdown.await();
+      } catch (final InterruptedException ignore) {
+        // ignore
+      }
+      return null;
+    }
+
+    boolean hasBeenStarted() {
+      return startedLatch.getCount() == 0;
+    }
+  }
+
+  private static class TestTask extends EthScheduler.ExpirableTask<Void> {
+
+    TestTask(final TestSupplier supplier) {
+      super(Duration.ofSeconds(10), supplier);
+    }
+
+    @Override
+    public String toLogString() {
+      return "";
+    }
   }
 }
