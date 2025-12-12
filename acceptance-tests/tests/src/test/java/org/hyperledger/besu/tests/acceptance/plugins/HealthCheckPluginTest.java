@@ -35,8 +35,11 @@ public class HealthCheckPluginTest extends AcceptanceTestBase {
 
   @BeforeEach
   public void setUp() throws Exception {
-    node = besu.createPluginsNode("node1", List.of("testPlugins"), 
-        List.of("--rpc-http-enabled", "--rpc-http-host=127.0.0.1", "--rpc-http-port=0"));
+    node =
+        besu.createPluginsNode(
+            "node1",
+            List.of("testPlugins"),
+            List.of("--rpc-http-enabled", "--rpc-http-host=127.0.0.1", "--rpc-http-port=0"));
     cluster.start(node);
     client = new OkHttpClient();
   }
@@ -86,7 +89,7 @@ public class HealthCheckPluginTest extends AcceptanceTestBase {
     // different minPeers parameters
     Response response1 = callHealthEndpoint("/readiness?minPeers=0");
     assertThat(response1.code()).isEqualTo(200);
-    
+
     Response response2 = callHealthEndpoint("/readiness?minPeers=100");
     // if we have less than 100 peers
     assertThat(response2.code()).isEqualTo(503);
@@ -97,9 +100,9 @@ public class HealthCheckPluginTest extends AcceptanceTestBase {
     // different maxBlocksBehind parameters
     Response response1 = callHealthEndpoint("/readiness?maxBlocksBehind=1000");
     assertThat(response1.code()).isEqualTo(200);
-    
+
     Response response2 = callHealthEndpoint("/readiness?maxBlocksBehind=0");
-    // if we're behind by any blocks, it should fail 
+    // if we're behind by any blocks, it should fail
     assertThat(response2.code()).isEqualTo(503);
   }
 
@@ -107,9 +110,9 @@ public class HealthCheckPluginTest extends AcceptanceTestBase {
   public void healthEndpointsShouldHandleInvalidParameters() throws IOException {
     // invalid parameters
     Response response1 = callHealthEndpoint("/readiness?minPeers=invalid");
-    // default value 
+    // default value
     assertThat(response1.code()).isEqualTo(200);
-    
+
     Response response2 = callHealthEndpoint("/readiness?maxBlocksBehind=invalid");
     assertThat(response2.code()).isEqualTo(200);
   }
@@ -119,7 +122,7 @@ public class HealthCheckPluginTest extends AcceptanceTestBase {
     // without any parameters
     Response livenessResponse = callHealthEndpoint("/liveness");
     assertThat(livenessResponse.code()).isEqualTo(200);
-    
+
     Response readinessResponse = callHealthEndpoint("/readiness");
     assertThat(readinessResponse.code()).isEqualTo(200);
   }

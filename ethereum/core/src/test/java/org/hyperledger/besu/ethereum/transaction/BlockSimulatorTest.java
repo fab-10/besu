@@ -51,6 +51,7 @@ import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.plugin.data.BlockOverrides;
 
 import java.math.BigInteger;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -76,6 +77,7 @@ public class BlockSimulatorTest {
   @Mock private MutableWorldState mutableWorldState;
   @Mock private Blockchain blockchain;
   @Mock private WorldUpdater updater;
+  @Mock private ProtocolSpec protocolSpec;
 
   private BlockHeader blockHeader;
   private BlockSimulator blockSimulator;
@@ -91,7 +93,6 @@ public class BlockSimulatorTest {
             blockchain,
             0);
     blockHeader = BlockHeaderBuilder.createDefault().buildBlockHeader();
-    ProtocolSpec protocolSpec = mock(ProtocolSpec.class);
     when(miningConfiguration.getCoinbase())
         .thenReturn(Optional.ofNullable(Address.fromHexString("0x1")));
     when(protocolSchedule.getForNextBlockHeader(any(), anyLong())).thenReturn(protocolSpec);
@@ -103,6 +104,8 @@ public class BlockSimulatorTest {
     when(gasLimitCalculator.nextGasLimit(anyLong(), anyLong(), anyLong())).thenReturn(1L);
     when(protocolSpec.getFeeMarket()).thenReturn(mock(FeeMarket.class));
     when(protocolSpec.getPreExecutionProcessor()).thenReturn(mock(PreExecutionProcessor.class));
+    when(protocolSpec.getSlotDuration()).thenReturn(Duration.ofSeconds(12));
+    when(gasLimitCalculator.computeExcessBlobGas(anyLong(), anyLong(), anyLong())).thenReturn(0L);
   }
 
   @Test
@@ -218,7 +221,6 @@ public class BlockSimulatorTest {
 
   @Test
   public void shouldOverrideBlockHeaderCorrectly() {
-    ProtocolSpec protocolSpec = mock(ProtocolSpec.class);
 
     var expectedTimestamp = 1L;
     var expectedBlockNumber = 2L;
@@ -228,6 +230,7 @@ public class BlockSimulatorTest {
     var expectedDifficulty = BigInteger.ONE;
     var expectedMixHashOrPrevRandao = Hash.hash(Bytes.fromHexString("0x01"));
     var expectedPrevRandao = Hash.hash(Bytes.fromHexString("0x01"));
+    var expectedParentBeaconBlockRoot = Hash.hash(Bytes.fromHexString("0x03"));
     var expectedExtraData = Bytes.fromHexString("0x02");
 
     BlockOverrides blockOverrides =
@@ -240,6 +243,7 @@ public class BlockSimulatorTest {
             .difficulty(expectedDifficulty)
             .mixHashOrPrevRandao(expectedMixHashOrPrevRandao)
             .extraData(expectedExtraData)
+            .parentBeaconBlockRoot(expectedParentBeaconBlockRoot)
             .build();
 
     BlockHeader result =

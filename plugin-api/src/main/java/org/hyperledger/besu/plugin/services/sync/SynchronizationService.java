@@ -17,6 +17,7 @@ package org.hyperledger.besu.plugin.services.sync;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.plugin.data.BlockBody;
 import org.hyperledger.besu.plugin.data.BlockHeader;
+import org.hyperledger.besu.plugin.data.SyncStatus;
 import org.hyperledger.besu.plugin.services.BesuService;
 
 import java.util.Optional;
@@ -74,6 +75,27 @@ public interface SynchronizationService extends BesuService {
   void start();
 
   /**
+   * Returns the current sync status.
+   *
+   * @return the current sync status, or empty if not syncing.
+   */
+  Optional<SyncStatus> getSyncStatus();
+
+  /**
+   * Checks if the node is in sync.
+   *
+   * @return true if the node is in sync, false otherwise.
+   */
+  boolean isInSync();
+
+  /**
+   * Returns the best peer chain head.
+   *
+   * @return the best peer chain head, or empty if no peers are connected.
+   */
+  Optional<Long> getBestPeerChainHead();
+
+  /**
    * Get the highest block number known to the network.
    *
    * @return the highest block number, or empty if not available
@@ -86,13 +108,6 @@ public interface SynchronizationService extends BesuService {
    * @return the current block number, or empty if not available
    */
   Optional<Long> getCurrentBlock();
-
-  /**
-   * Check if the node is currently in sync with the network.
-   *
-   * @return true if the node is in sync, false otherwise
-   */
-  boolean isInSync();
 
   /**
    * Get the number of blocks this node is behind the network head.

@@ -24,6 +24,7 @@ import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.StorageSlotKey;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.MutableWorldState;
+import org.hyperledger.besu.ethereum.mainnet.staterootcommitter.StateRootCommitter;
 import org.hyperledger.besu.ethereum.trie.common.StateRootMismatchException;
 import org.hyperledger.besu.ethereum.trie.pathbased.common.StorageSubscriber;
 import org.hyperledger.besu.ethereum.trie.pathbased.common.cache.PathBasedCachedWorldStorageManager;
@@ -34,7 +35,6 @@ import org.hyperledger.besu.ethereum.trie.pathbased.common.trielog.TrieLogManage
 import org.hyperledger.besu.ethereum.trie.pathbased.common.worldview.accumulator.PathBasedWorldStateUpdateAccumulator;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateKeyValueStorage;
 import org.hyperledger.besu.evm.account.Account;
-import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.plugin.services.exception.StorageException;
 import org.hyperledger.besu.plugin.services.storage.KeyValueStorageTransaction;
 import org.hyperledger.besu.plugin.services.storage.SegmentIdentifier;
@@ -141,6 +141,10 @@ public abstract class PathBasedWorldState
     return !(worldStateKeyValueStorage instanceof PathBasedSnapshotWorldStateKeyValueStorage);
   }
 
+  public boolean isStorageFrozen() {
+    return isStorageFrozen;
+  }
+
   /**
    * Reset the worldState to this block header
    *
@@ -175,14 +179,39 @@ public abstract class PathBasedWorldState
   }
 
   @Override
-  public void persist(final BlockHeader blockHeader) {
+  public Hash calculateOrReadRootHash(
+      final WorldStateKeyValueStorage.Updater stateUpdater,
+      final BlockHeader blockHeader,
+      final WorldStateConfig cfg) {
+    final PathBasedWorldStateKeyValueStorage.Updater pathBasedUpdater =
+        (PathBasedWorldStateKeyValueStorage.Updater) stateUpdater;
+    if (blockHeader == null || !cfg.isTrieDisabled()) {
+      // TODO - rename calculateRootHash() to be clearer that it updates state, it doesn't just
+      // calculate a hash
+      return calculateRootHash(
+          isStorageFrozen ? Optional.empty() : Optional.of(pathBasedUpdater), accumulator);
+    } else {
+      // if the trie is disabled, we cannot calculate the state root, so we directly use the root
+      // of the block. It's important to understand that in all networks,
+      // the state root must be validated independently and the block should not be trusted
+      // implicitly. This mode
+      // can be used in cases where Besu would just be a follower of another trusted client.
+      LOG.atDebug()
+          .setMessage("Unsafe state root verification for block header {}")
+          .addArgument(blockHeader)
+          .log();
+      return unsafeRootHashUpdate(blockHeader, pathBasedUpdater);
+    }
+  }
+
+  @Override
+  public void persist(final BlockHeader blockHeader, final StateRootCommitter committer) {
+
     final Optional<BlockHeader> maybeBlockHeader = Optional.ofNullable(blockHeader);
     LOG.atDebug()
         .setMessage("Persist world state for block {}")
         .addArgument(maybeBlockHeader)
         .log();
-
-    final PathBasedWorldStateUpdateAccumulator<?> localCopy = accumulator.copy();
 
     boolean success = false;
 
@@ -192,26 +221,9 @@ public abstract class PathBasedWorldState
     Runnable cacheWorldState = () -> {};
 
     try {
-      final Hash calculatedRootHash;
+      final Hash calculatedRootHash =
+          committer.computeRootAndCommit(this, stateUpdater, blockHeader, worldStateConfig);
 
-      if (blockHeader == null || !worldStateConfig.isTrieDisabled()) {
-        // TODO - rename calculateRootHash() to be clearer that it updates state, it doesn't just
-        // calculate a hash
-        calculatedRootHash =
-            calculateRootHash(
-                isStorageFrozen ? Optional.empty() : Optional.of(stateUpdater), accumulator);
-      } else {
-        // if the trie is disabled, we cannot calculate the state root, so we directly use the root
-        // of the block. It's important to understand that in all networks,
-        // the state root must be validated independently and the block should not be trusted
-        // implicitly. This mode
-        // can be used in cases where Besu would just be a follower of another trusted client.
-        LOG.atDebug()
-            .setMessage("Unsafe state root verification for block header {}")
-            .addArgument(maybeBlockHeader)
-            .log();
-        calculatedRootHash = unsafeRootHashUpdate(blockHeader, stateUpdater);
-      }
       // if we are persisted with a block header, and the prior state is the parent
       // then persist the TrieLog for that transition.
       // If specified but not a direct descendant simply store the new block hash.
@@ -219,7 +231,7 @@ public abstract class PathBasedWorldState
         verifyWorldStateRoot(calculatedRootHash, blockHeader);
         saveTrieLog =
             () -> {
-              trieLogManager.saveTrieLog(localCopy, calculatedRootHash, blockHeader, this);
+              trieLogManager.saveTrieLog(accumulator, calculatedRootHash, blockHeader, this);
             };
         cacheWorldState =
             () -> cachedWorldStorageManager.addCachedLayer(blockHeader, calculatedRootHash, this);
@@ -272,7 +284,7 @@ public abstract class PathBasedWorldState
   }
 
   @Override
-  public WorldUpdater updater() {
+  public PathBasedWorldStateUpdateAccumulator<?> updater() {
     return accumulator;
   }
 
@@ -307,6 +319,11 @@ public abstract class PathBasedWorldState
         public void rollback() {
           // no-op
         }
+
+        @Override
+        public void close() {
+          // no-op
+        }
       };
 
   protected static final SegmentedKeyValueStorageTransaction noOpSegmentedTx =
@@ -330,6 +347,11 @@ public abstract class PathBasedWorldState
 
         @Override
         public void rollback() {
+          // no-op
+        }
+
+        @Override
+        public void close() {
           // no-op
         }
       };
@@ -406,7 +428,7 @@ public abstract class PathBasedWorldState
   @Override
   public abstract Optional<Bytes> getCode(@NotNull final Address address, final Hash codeHash);
 
-  protected abstract Hash calculateRootHash(
+  public abstract Hash calculateRootHash(
       final Optional<PathBasedWorldStateKeyValueStorage.Updater> maybeStateUpdater,
       final PathBasedWorldStateUpdateAccumulator<?> worldStateUpdater);
 

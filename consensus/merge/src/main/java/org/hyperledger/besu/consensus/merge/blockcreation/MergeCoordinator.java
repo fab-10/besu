@@ -18,6 +18,7 @@ import static java.util.stream.Collectors.joining;
 import static org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator.ForkchoiceResult.Status.INVALID;
 import static org.hyperledger.besu.ethereum.trie.pathbased.common.provider.WorldStateQueryParams.withBlockHeaderAndUpdateNodeHead;
 
+import org.hyperledger.besu.config.NetworkDefinition;
 import org.hyperledger.besu.consensus.merge.MergeContext;
 import org.hyperledger.besu.consensus.merge.PayloadWrapper;
 import org.hyperledger.besu.datatypes.Address;
@@ -25,6 +26,7 @@ import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.BlockProcessingResult;
 import org.hyperledger.besu.ethereum.ProtocolContext;
+import org.hyperledger.besu.ethereum.blockcreation.BlockCreationTiming;
 import org.hyperledger.besu.ethereum.blockcreation.BlockCreator.BlockCreationResult;
 import org.hyperledger.besu.ethereum.chain.BadBlockCause;
 import org.hyperledger.besu.ethereum.chain.BadBlockManager;
@@ -51,6 +53,7 @@ import org.hyperledger.besu.plugin.services.exception.StorageException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.math.BigInteger;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -59,6 +62,7 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
@@ -79,21 +83,6 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
    * to fill 100% of the block.
    */
   private static final double TRY_FILL_BLOCK = 1.0;
-
-  // if you change these gas limits, also update the tests in MergeCoordinatorTest
-  private static final long DEFAULT_TARGET_GAS_LIMIT = 45_000_000L;
-  // testnets might have higher gas limits than mainnet and are incrementally updated
-  private static final long DEFAULT_TARGET_GAS_LIMIT_TESTNET = 60_000_000L;
-  // next target gas limit TBD
-  // private static final long NEXT_STEP_TARGET_GAS_LIMIT_TESTNET = 60_000_000L;
-
-  private static final Map<BigInteger, Long> TESTNET_CHAIN_IDS =
-      Map.of(
-          BigInteger.valueOf(11155111), DEFAULT_TARGET_GAS_LIMIT_TESTNET, // Sepolia
-          BigInteger.valueOf(17000), DEFAULT_TARGET_GAS_LIMIT_TESTNET, // Holesky
-          BigInteger.valueOf(560048), DEFAULT_TARGET_GAS_LIMIT_TESTNET, // Hoodi
-          BigInteger.valueOf(39438135), DEFAULT_TARGET_GAS_LIMIT_TESTNET // Ephemery
-          );
 
   /** The Mining parameters. */
   protected final MiningConfiguration miningConfiguration;
@@ -128,7 +117,6 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
    * @param transactionPool the pending transactions
    * @param miningParams the mining params
    * @param backwardSyncContext the backward sync context
-   * @param depositContractAddress the address of the deposit contract
    */
   public MergeCoordinator(
       final ProtocolContext protocolContext,
@@ -136,38 +124,24 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
       final EthScheduler ethScheduler,
       final TransactionPool transactionPool,
       final MiningConfiguration miningParams,
-      final BackwardSyncContext backwardSyncContext,
-      final Optional<Address> depositContractAddress) {
-    this.protocolContext = protocolContext;
-    this.protocolSchedule = protocolSchedule;
-    this.ethScheduler = ethScheduler;
-    this.mergeContext = protocolContext.getConsensusContext(MergeContext.class);
-    this.backwardSyncContext = backwardSyncContext;
-
-    if (miningParams.getCoinbase().isEmpty()) {
-      miningParams.setCoinbase(Address.ZERO);
-    }
-    if (miningParams.getTargetGasLimit().isEmpty()) {
-      miningParams.setTargetGasLimit(getDefaultGasLimit(protocolSchedule));
-    }
-    miningParams.setMinBlockOccupancyRatio(TRY_FILL_BLOCK);
-
-    this.miningConfiguration = miningParams;
-
-    this.mergeBlockCreatorFactory =
+      final BackwardSyncContext backwardSyncContext) {
+    this(
+        protocolContext,
+        protocolSchedule,
+        ethScheduler,
+        miningParams,
+        backwardSyncContext,
         (parentHeader, address) -> {
           address.ifPresent(miningParams::setCoinbase);
           return new MergeBlockCreator(
-              miningConfiguration,
-              parent -> miningConfiguration.getExtraData(),
+              miningParams,
+              parent -> miningParams.getExtraData(),
               transactionPool,
               protocolContext,
               protocolSchedule,
               parentHeader,
               ethScheduler);
-        };
-
-    this.backwardSyncContext.subscribeBadChainListener(this);
+        });
   }
 
   /**
@@ -180,6 +154,7 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
    * @param backwardSyncContext the backward sync context
    * @param mergeBlockCreatorFactory the merge block creator factory
    */
+  @VisibleForTesting
   public MergeCoordinator(
       final ProtocolContext protocolContext,
       final ProtocolSchedule protocolSchedule,
@@ -187,14 +162,17 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
       final MiningConfiguration miningParams,
       final BackwardSyncContext backwardSyncContext,
       final MergeBlockCreatorFactory mergeBlockCreatorFactory) {
-
     this.protocolContext = protocolContext;
     this.protocolSchedule = protocolSchedule;
     this.ethScheduler = ethScheduler;
     this.mergeContext = protocolContext.getConsensusContext(MergeContext.class);
     this.backwardSyncContext = backwardSyncContext;
+
+    if (miningParams.getCoinbase().isEmpty()) {
+      miningParams.setCoinbase(Address.ZERO);
+    }
     if (miningParams.getTargetGasLimit().isEmpty()) {
-      miningParams.setTargetGasLimit(getDefaultGasLimit(protocolSchedule));
+      getDefaultGasLimit(protocolSchedule).ifPresent(miningParams::setTargetGasLimit);
     }
     miningParams.setMinBlockOccupancyRatio(TRY_FILL_BLOCK);
     this.miningConfiguration = miningParams;
@@ -299,8 +277,6 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
     final MergeBlockCreator mergeBlockCreator =
         this.mergeBlockCreatorFactory.forParams(parentHeader, Optional.ofNullable(feeRecipient));
 
-    blockCreationTasks.put(payloadIdentifier, new BlockCreationTask(mergeBlockCreator));
-
     // put the empty block in first
     final Block emptyBlock =
         mergeBlockCreator
@@ -319,7 +295,8 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
           new PayloadWrapper(
               payloadIdentifier,
               new BlockWithReceipts(emptyBlock, result.getReceipts()),
-              result.getRequests()));
+              result.getRequests(),
+              BlockCreationTiming.EMPTY));
       LOG.info(
           "Start building proposals for block {} identified by {}",
           emptyBlock.getHeader().getNumber(),
@@ -334,6 +311,7 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
       }
     }
 
+    // Create the async block building task and store it
     tryToBuildBetterBlock(
         timestamp,
         prevRandao,
@@ -373,7 +351,67 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
   @Override
   public void finalizeProposalById(final PayloadIdentifier payloadId) {
     LOG.debug("Finalizing block proposal for payload id {}", payloadId);
-    cleanupBlockCreationTask(payloadId);
+
+    // Signal graceful cancellation to the block creator
+    blockCreationTasks.computeIfPresent(
+        payloadId,
+        (pid, task) -> {
+          task.cancel();
+          LOG.debug("Signaled block creator to cancel gracefully for payload {}", payloadId);
+          return task;
+        });
+
+    // Schedule cleanup after a short delay to allow graceful completion
+    ethScheduler.scheduleFutureTask(
+        () -> cleanupBlockCreationTask(payloadId),
+        Duration.ofMillis(miningConfiguration.getUnstable().getPosBlockFinalizationTimeoutMs()));
+  }
+
+  @Override
+  public void awaitCurrentBuildCompletion(final PayloadIdentifier payloadId) {
+    final BlockCreationTask task = blockCreationTasks.get(payloadId);
+    if (task == null) {
+      LOG.debug("No block creation task found for payload {}", payloadId);
+      return;
+    }
+
+    final CompletableFuture<Void> blockCreationFuture = task.getBlockCreationFuture();
+    if (blockCreationFuture == null) {
+      LOG.debug("No blockCreationFuture found for payload {}", payloadId);
+      return;
+    }
+
+    final long timeoutMs = getPosBlockFinalizationTimeoutMs();
+    final long startTime = System.currentTimeMillis();
+    try {
+      LOG.debug(
+          "Waiting up to {}ms for block building to complete for payload {}", timeoutMs, payloadId);
+      blockCreationFuture.get(timeoutMs, TimeUnit.MILLISECONDS);
+      final long elapsedTime = System.currentTimeMillis() - startTime;
+      LOG.debug("Block building completed for payload {} in {}ms", payloadId, elapsedTime);
+    } catch (java.util.concurrent.TimeoutException e) {
+      final long elapsedTime = System.currentTimeMillis() - startTime;
+      LOG.debug(
+          "Timeout waiting for block building for payload {} after {}ms", payloadId, elapsedTime);
+    } catch (java.util.concurrent.ExecutionException e) {
+      final long elapsedTime = System.currentTimeMillis() - startTime;
+      LOG.debug(
+          "Exception while waiting for block building for payload {} after {}ms: {}",
+          payloadId,
+          elapsedTime,
+          e.getMessage());
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
+      final long elapsedTime = System.currentTimeMillis() - startTime;
+      LOG.debug(
+          "Interrupted while waiting for block building for payload {} after {}ms",
+          payloadId,
+          elapsedTime);
+    }
+  }
+
+  private long getPosBlockFinalizationTimeoutMs() {
+    return miningConfiguration.getUnstable().getPosBlockFinalizationTimeoutMs();
   }
 
   private void tryToBuildBetterBlock(
@@ -400,19 +438,41 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
         payloadIdentifier,
         miningConfiguration.getUnstable().getPosBlockCreationMaxTime());
 
+    // Create a future that we control
+    final CompletableFuture<Void> blockCreationFuture = new CompletableFuture<>();
+
+    // Store the task BEFORE scheduling to avoid race condition where async work
+    // starts before task is registered, causing isBlockCreationCancelled to incorrectly
+    // return true during the race window
+    blockCreationTasks.put(
+        payloadIdentifier, new BlockCreationTask(mergeBlockCreator, blockCreationFuture));
+
+    // Schedule the async work and chain it to complete our controlled future
     ethScheduler
         .scheduleBlockCreationTask(
+            parentHeader.getNumber() + 1,
             () -> retryBlockCreationUntilUseful(payloadIdentifier, blockCreator))
         .orTimeout(
             miningConfiguration.getUnstable().getPosBlockCreationMaxTime(), TimeUnit.MILLISECONDS)
         .whenComplete(
             (unused, throwable) -> {
+              // Complete our controlled future to unblock any waiters
               if (throwable != null) {
-                LOG.atDebug()
-                    .setMessage("Exception building block for payload id {}, reason {}")
-                    .addArgument(payloadIdentifier)
-                    .addArgument(() -> logException(throwable))
-                    .log();
+                if (throwable instanceof TimeoutException) {
+                  LOG.atDebug()
+                      .setMessage("Block creation for payload id {} has timed out")
+                      .addArgument(payloadIdentifier)
+                      .log();
+                } else {
+                  LOG.atDebug()
+                      .setMessage("Exception building block for payload id {}, reason {}")
+                      .addArgument(payloadIdentifier)
+                      .addArgument(() -> logException(throwable))
+                      .log();
+                }
+                blockCreationFuture.completeExceptionally(throwable);
+              } else {
+                blockCreationFuture.complete(null);
               }
               cleanupBlockCreationTask(payloadIdentifier);
             });
@@ -459,7 +519,7 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
       final long startedAt) {
 
     try {
-      evaluateNewBlock(blockCreator.get().getBlock(), payloadIdentifier, startedAt);
+      evaluateNewBlock(blockCreator.get(), payloadIdentifier, startedAt);
     } catch (final Throwable throwable) {
       if (canRetryBlockCreation(throwable) && !isBlockCreationCancelled(payloadIdentifier)) {
         LOG.atDebug()
@@ -475,20 +535,19 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
   }
 
   private void evaluateNewBlock(
-      final Block bestBlock, final PayloadIdentifier payloadIdentifier, final long startedAt) {
-
-    if (isBlockCreationCancelled(payloadIdentifier)) return;
-
+      final BlockCreationResult blockCreationResult,
+      final PayloadIdentifier payloadIdentifier,
+      final long startedAt) {
+    final var bestBlock = blockCreationResult.getBlock();
     final var resultBest = validateProposedBlock(bestBlock);
     if (resultBest.isSuccessful()) {
-
-      if (isBlockCreationCancelled(payloadIdentifier)) return;
 
       mergeContext.putPayloadById(
           new PayloadWrapper(
               payloadIdentifier,
               new BlockWithReceipts(bestBlock, resultBest.getReceipts()),
-              resultBest.getRequests()));
+              resultBest.getRequests(),
+              blockCreationResult.getBlockCreationTimings()));
       LOG.atDebug()
           .setMessage(
               "Successfully built block {} for proposal identified by {}, with {} transactions, in {}ms")
@@ -775,10 +834,9 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
                 protocolContext
                     .getBadBlockManager()
                     .getBadBlock(parentHash)
-                    .map(
+                    .flatMap(
                         badParent ->
-                            findValidAncestor(chain, badParent.getHeader().getParentHash()))
-                    .orElse(Optional.empty()));
+                            findValidAncestor(chain, badParent.getHeader().getParentHash())));
   }
 
   @Override
@@ -902,11 +960,11 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
     return job.cancelled.get();
   }
 
-  private long getDefaultGasLimit(final ProtocolSchedule protocolSchedule) {
+  private Optional<Long> getDefaultGasLimit(final ProtocolSchedule protocolSchedule) {
     return protocolSchedule
         .getChainId()
-        .map(TESTNET_CHAIN_IDS::get)
-        .orElse(DEFAULT_TARGET_GAS_LIMIT);
+        .flatMap(NetworkDefinition::fromChainId)
+        .map(NetworkDefinition::getTargetGasLimit);
   }
 
   /**
@@ -915,8 +973,10 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
    * @param chainId the chain id
    * @return default gas limit by chain id
    */
-  public static long getDefaultGasLimitByChainId(final Optional<BigInteger> chainId) {
-    return chainId.map(TESTNET_CHAIN_IDS::get).orElse(DEFAULT_TARGET_GAS_LIMIT);
+  public static Optional<Long> getDefaultGasLimitByChainId(final Optional<BigInteger> chainId) {
+    return chainId
+        .flatMap(NetworkDefinition::fromChainId)
+        .map(NetworkDefinition::getTargetGasLimit);
   }
 
   private static class BlockCreationTask {
@@ -926,14 +986,29 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
     /** The Cancelled. */
     final AtomicBoolean cancelled;
 
+    /** The Future for the async block creation task. */
+    final CompletableFuture<Void> blockCreationFuture;
+
     /**
      * Instantiates a new Block creation task.
      *
      * @param blockCreator the block creator
+     * @param blockCreationFuture the completable future for the async task
      */
-    public BlockCreationTask(final MergeBlockCreator blockCreator) {
+    public BlockCreationTask(
+        final MergeBlockCreator blockCreator, final CompletableFuture<Void> blockCreationFuture) {
       this.blockCreator = blockCreator;
       this.cancelled = new AtomicBoolean(false);
+      this.blockCreationFuture = blockCreationFuture;
+    }
+
+    /**
+     * Gets the blockCreationFuture.
+     *
+     * @return the blockCreationFuture
+     */
+    public CompletableFuture<Void> getBlockCreationFuture() {
+      return blockCreationFuture;
     }
 
     /** Cancel. */

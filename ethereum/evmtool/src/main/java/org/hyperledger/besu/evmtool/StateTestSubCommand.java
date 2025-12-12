@@ -36,8 +36,9 @@ import org.hyperledger.besu.ethereum.referencetests.ReferenceTestProtocolSchedul
 import org.hyperledger.besu.ethereum.rlp.RLP;
 import org.hyperledger.besu.evm.account.Account;
 import org.hyperledger.besu.evm.log.Log;
+import org.hyperledger.besu.evm.tracing.OpCodeTracerConfigBuilder;
 import org.hyperledger.besu.evm.tracing.OperationTracer;
-import org.hyperledger.besu.evm.tracing.StandardJsonTracer;
+import org.hyperledger.besu.evm.tracing.StreamingOperationTracer;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.evmtool.exception.UnsupportedForkException;
 import org.hyperledger.besu.util.LogConfigurator;
@@ -48,6 +49,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -212,13 +214,16 @@ public class StateTestSubCommand implements Runnable {
       final boolean isLastIteration) {
     final OperationTracer tracer = // You should have picked Mercy.
         parentCommand.showJsonResults && isLastIteration
-            ? new StandardJsonTracer(
+            ? new StreamingOperationTracer(
                 parentCommand.out,
-                parentCommand.showMemory,
-                !parentCommand.hideStack,
-                parentCommand.showReturnData,
-                parentCommand.showStorage,
-                parentCommand.eip3155strict)
+                OpCodeTracerConfigBuilder.create()
+                    .traceMemory(parentCommand.showMemory)
+                    .traceStack(!parentCommand.hideStack)
+                    .traceReturnData(parentCommand.showReturnData)
+                    .traceStorage(parentCommand.showStorage)
+                    .traceOpcodes(Collections.emptySet())
+                    .eip3155Strict(parentCommand.eip3155strict)
+                    .build())
             : OperationTracer.NO_TRACING;
 
     final ObjectMapper objectMapper = JsonUtils.createObjectMapper();
@@ -263,7 +268,8 @@ public class StateTestSubCommand implements Runnable {
 
         final String forkName = fork == null ? spec.getFork() : fork;
         final ProtocolSchedule protocolSchedule =
-            ReferenceTestProtocolSchedules.getInstance().getByName(forkName);
+            ReferenceTestProtocolSchedules.create(parentCommand.getEvmConfiguration())
+                .getByName(forkName);
         if (protocolSchedule == null) {
           throw new UnsupportedForkException(forkName);
         }
@@ -272,8 +278,9 @@ public class StateTestSubCommand implements Runnable {
         final MainnetTransactionProcessor processor = protocolSpec.getTransactionProcessor();
         final WorldUpdater worldStateUpdater = worldState.updater();
         final Stopwatch timer = Stopwatch.createStarted();
-        // Todo: EIP-4844 use the excessBlobGas of the parent instead of BlobGas.ZERO
-        final Wei blobGasPrice = protocolSpec.getFeeMarket().blobGasPricePerGas(BlobGas.ZERO);
+        // EIP-4844: use excessBlobGas from block header for correct blob gas price calculation
+        final BlobGas excessBlobGas = blockHeader.getExcessBlobGas().orElse(BlobGas.ZERO);
+        final Wei blobGasPrice = protocolSpec.getFeeMarket().blobGasPricePerGas(excessBlobGas);
         final TransactionProcessingResult result =
             processor.processTransaction(
                 worldStateUpdater,
@@ -286,19 +293,24 @@ public class StateTestSubCommand implements Runnable {
                 TransactionValidationParams.processingBlock(),
                 blobGasPrice);
         timer.stop();
-        if (shouldClearEmptyAccounts(spec.getFork())) {
-          final Account coinbase =
-              worldStateUpdater.getOrCreate(spec.getBlockHeader().getCoinbase());
-          if (coinbase != null && coinbase.isEmpty()) {
-            worldStateUpdater.deleteAccount(coinbase.getAddress());
+        // Only touch coinbase and commit state changes if the transaction was valid.
+        // When transaction fails validation (e.g., insufficient balance), we should not
+        // modify state at all - matching geth's behavior for consensus compatibility.
+        if (!result.isInvalid()) {
+          if (shouldClearEmptyAccounts(spec.getFork())) {
+            final Account coinbase =
+                worldStateUpdater.getOrCreate(spec.getBlockHeader().getCoinbase());
+            if (coinbase != null && coinbase.isEmpty()) {
+              worldStateUpdater.deleteAccount(coinbase.getAddress());
+            }
+            final Account sender = worldStateUpdater.getAccount(transaction.getSender());
+            if (sender != null && sender.isEmpty()) {
+              worldStateUpdater.deleteAccount(sender.getAddress());
+            }
           }
-          final Account sender = worldStateUpdater.getAccount(transaction.getSender());
-          if (sender != null && sender.isEmpty()) {
-            worldStateUpdater.deleteAccount(sender.getAddress());
-          }
+          worldStateUpdater.commit();
+          worldState.persist(blockHeader);
         }
-        worldStateUpdater.commit();
-        worldState.persist(blockHeader);
 
         summaryLine.put("output", result.getOutput().toUnprefixedHexString());
         final long gasUsed = transaction.getGasLimit() - result.getGasRemaining();
@@ -306,7 +318,7 @@ public class StateTestSubCommand implements Runnable {
         final float mGps = gasUsed * 1000.0f / timeNs;
 
         if (parentCommand.eip3155strict) {
-          summaryLine.put("gasUsed", StandardJsonTracer.shortNumber(gasUsed));
+          summaryLine.put("gasUsed", StreamingOperationTracer.shortNumber(gasUsed));
         } else {
           summaryLine.put("gasUsed", gasUsed);
         }

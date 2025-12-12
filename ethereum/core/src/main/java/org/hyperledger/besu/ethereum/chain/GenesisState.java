@@ -15,9 +15,7 @@
 package org.hyperledger.besu.ethereum.chain;
 
 import static java.util.Collections.emptyList;
-import static org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueSegmentIdentifier.TRIE_BRANCH_STORAGE;
 import static org.hyperledger.besu.ethereum.trie.common.GenesisWorldStateProvider.createGenesisWorldState;
-import static org.hyperledger.besu.ethereum.trie.pathbased.common.storage.PathBasedWorldStateKeyValueStorage.WORLD_BLOCK_NUMBER_KEY;
 
 import org.hyperledger.besu.config.GenesisAccount;
 import org.hyperledger.besu.config.GenesisConfig;
@@ -33,13 +31,12 @@ import org.hyperledger.besu.ethereum.core.MutableWorldState;
 import org.hyperledger.besu.ethereum.core.Withdrawal;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ScheduleBasedBlockHeaderFunctions;
+import org.hyperledger.besu.ethereum.mainnet.block.access.list.BlockAccessList;
 import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.cache.CodeCache;
-import org.hyperledger.besu.ethereum.trie.pathbased.common.worldview.PathBasedWorldState;
 import org.hyperledger.besu.ethereum.worldstate.DataStorageConfiguration;
 import org.hyperledger.besu.evm.account.MutableAccount;
 import org.hyperledger.besu.evm.log.LogsBloomFilter;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
-import org.hyperledger.besu.plugin.services.storage.SegmentedKeyValueStorageTransaction;
 
 import java.net.URL;
 import java.util.List;
@@ -157,32 +154,16 @@ public final class GenesisState {
     final Optional<List<Withdrawal>> withdrawals =
         isShanghaiAtGenesis(config) ? Optional.of(emptyList()) : Optional.empty();
 
-    return new BlockBody(emptyList(), emptyList(), withdrawals);
+    final Optional<BlockAccessList> blockAccessList =
+        isAmsterdamAtGenesis(config)
+            ? Optional.of(BlockAccessList.builder().build())
+            : Optional.empty();
+
+    return new BlockBody(emptyList(), emptyList(), withdrawals, blockAccessList);
   }
 
   public Block getBlock() {
     return block;
-  }
-
-  private static void ensureGenesisArchiveContext(final MutableWorldState genesisState) {
-    if (genesisState instanceof PathBasedWorldState) {
-      if (((PathBasedWorldState) genesisState)
-          .getWorldStateStorage()
-          .getWorldStateBlockNumber()
-          .isEmpty()) {
-        // Bonsai archive nodes need the block number for the current state in order to persist flat
-        // DB keys. For every other block this is automatically set to the previous block number +
-        // 1. Since this is not possible for the genesis block we manually set it.
-        SegmentedKeyValueStorageTransaction genesisStateTX =
-            ((PathBasedWorldState) genesisState)
-                .getWorldStateStorage()
-                .getComposedWorldStateStorage()
-                .startTransaction();
-        genesisStateTX.put(
-            TRIE_BRANCH_STORAGE, WORLD_BLOCK_NUMBER_KEY, Bytes.ofUnsignedLong(0).toArrayUnsafe());
-        genesisStateTX.commit();
-      }
-    }
   }
 
   /**
@@ -199,7 +180,6 @@ public final class GenesisState {
       final Stream<GenesisAccount> genesisAccounts,
       final BlockHeader rootHeader) {
     final WorldUpdater updater = target.updater();
-    ensureGenesisArchiveContext(target);
     genesisAccounts.forEach(
         genesisAccount -> {
           final MutableAccount account = updater.createAccount(genesisAccount.address());
@@ -253,6 +233,7 @@ public final class GenesisState {
         .parentBeaconBlockRoot(
             (isCancunAtGenesis(genesis) ? parseParentBeaconBlockRoot(genesis) : null))
         .requestsHash(isPragueAtGenesis(genesis) ? Hash.EMPTY_REQUESTS_HASH : null)
+        .balHash(isAmsterdamAtGenesis(genesis) ? Hash.EMPTY_BAL_HASH : null)
         .buildBlockHeader();
   }
 
@@ -359,6 +340,14 @@ public final class GenesisState {
     final OptionalLong osakaTimestamp = genesis.getConfigOptions().getOsakaTime();
     if (osakaTimestamp.isPresent()) {
       return genesis.getTimestamp() >= osakaTimestamp.getAsLong();
+    }
+    return isAmsterdamAtGenesis(genesis);
+  }
+
+  private static boolean isAmsterdamAtGenesis(final GenesisConfig genesis) {
+    final OptionalLong amsterdamTimestamp = genesis.getConfigOptions().getAmsterdamTime();
+    if (amsterdamTimestamp.isPresent()) {
+      return genesis.getTimestamp() >= amsterdamTimestamp.getAsLong();
     }
     return isFutureEipsTimeAtGenesis(genesis);
   }

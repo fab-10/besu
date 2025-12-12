@@ -14,7 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.eth.manager.peertask;
 
-import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
+import org.hyperledger.besu.ethereum.eth.manager.EthPeerImmutableAttributes;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.SubProtocol;
 
@@ -47,8 +47,10 @@ public interface PeerTask<T> {
    * @param messageData the response MessageData to be parsed
    * @return a T built from the response MessageData
    * @throws InvalidPeerTaskResponseException if the response messageData is invalid
+   * @throws MalformedRlpFromPeerException if the peer sent malformed RLP
    */
-  T processResponse(MessageData messageData) throws InvalidPeerTaskResponseException;
+  T processResponse(MessageData messageData)
+      throws InvalidPeerTaskResponseException, MalformedRlpFromPeerException;
 
   /**
    * Gets the number of times this task may be attempted against other peers
@@ -78,11 +80,11 @@ public interface PeerTask<T> {
   }
 
   /**
-   * Gets a Predicate that checks if an EthPeer is suitable for this PeerTask
+   * Gets a Predicate that checks if an EthPeerImmutableAttributes is suitable for this PeerTask
    *
-   * @return a Predicate that checks if an EthPeer is suitable for this PeerTask
+   * @return a Predicate that checks if an EthPeerImmutableAttributes is suitable for this PeerTask
    */
-  Predicate<EthPeer> getPeerRequirementFilter();
+  Predicate<EthPeerImmutableAttributes> getPeerRequirementFilter();
 
   /**
    * Performs a high level check of the results, returning a PeerTaskValidationResponse to describe

@@ -30,8 +30,10 @@ import org.hyperledger.besu.evm.internal.JumpDestOnlyCodeCache;
 import org.hyperledger.besu.evm.internal.OverflowException;
 import org.hyperledger.besu.evm.internal.UnderflowException;
 import org.hyperledger.besu.evm.operation.AddModOperation;
+import org.hyperledger.besu.evm.operation.AddModOperationOptimized;
 import org.hyperledger.besu.evm.operation.AddOperation;
 import org.hyperledger.besu.evm.operation.AndOperation;
+import org.hyperledger.besu.evm.operation.AndOperationOptimized;
 import org.hyperledger.besu.evm.operation.ByteOperation;
 import org.hyperledger.besu.evm.operation.ChainIdOperation;
 import org.hyperledger.besu.evm.operation.CountLeadingZerosOperation;
@@ -46,13 +48,17 @@ import org.hyperledger.besu.evm.operation.JumpOperation;
 import org.hyperledger.besu.evm.operation.JumpiOperation;
 import org.hyperledger.besu.evm.operation.LtOperation;
 import org.hyperledger.besu.evm.operation.ModOperation;
+import org.hyperledger.besu.evm.operation.ModOperationOptimized;
 import org.hyperledger.besu.evm.operation.MulModOperation;
+import org.hyperledger.besu.evm.operation.MulModOperationOptimized;
 import org.hyperledger.besu.evm.operation.MulOperation;
 import org.hyperledger.besu.evm.operation.NotOperation;
+import org.hyperledger.besu.evm.operation.NotOperationOptimized;
 import org.hyperledger.besu.evm.operation.Operation;
 import org.hyperledger.besu.evm.operation.Operation.OperationResult;
 import org.hyperledger.besu.evm.operation.OperationRegistry;
 import org.hyperledger.besu.evm.operation.OrOperation;
+import org.hyperledger.besu.evm.operation.OrOperationOptimized;
 import org.hyperledger.besu.evm.operation.PopOperation;
 import org.hyperledger.besu.evm.operation.Push0Operation;
 import org.hyperledger.besu.evm.operation.PushOperation;
@@ -60,12 +66,14 @@ import org.hyperledger.besu.evm.operation.SDivOperation;
 import org.hyperledger.besu.evm.operation.SGtOperation;
 import org.hyperledger.besu.evm.operation.SLtOperation;
 import org.hyperledger.besu.evm.operation.SModOperation;
+import org.hyperledger.besu.evm.operation.SModOperationOptimized;
 import org.hyperledger.besu.evm.operation.SignExtendOperation;
 import org.hyperledger.besu.evm.operation.StopOperation;
 import org.hyperledger.besu.evm.operation.SubOperation;
 import org.hyperledger.besu.evm.operation.SwapOperation;
 import org.hyperledger.besu.evm.operation.VirtualOperation;
 import org.hyperledger.besu.evm.operation.XorOperation;
+import org.hyperledger.besu.evm.operation.XorOperationOptimized;
 import org.hyperledger.besu.evm.tracing.OperationTracer;
 
 import java.util.Optional;
@@ -239,10 +247,22 @@ public class EVM {
               case 0x03 -> SubOperation.staticOperation(frame);
               case 0x04 -> DivOperation.staticOperation(frame);
               case 0x05 -> SDivOperation.staticOperation(frame);
-              case 0x06 -> ModOperation.staticOperation(frame);
-              case 0x07 -> SModOperation.staticOperation(frame);
-              case 0x08 -> AddModOperation.staticOperation(frame);
-              case 0x09 -> MulModOperation.staticOperation(frame);
+              case 0x06 ->
+                  evmConfiguration.enableOptimizedOpcodes()
+                      ? ModOperationOptimized.staticOperation(frame)
+                      : ModOperation.staticOperation(frame);
+              case 0x07 ->
+                  evmConfiguration.enableOptimizedOpcodes()
+                      ? SModOperationOptimized.staticOperation(frame)
+                      : SModOperation.staticOperation(frame);
+              case 0x08 ->
+                  evmConfiguration.enableOptimizedOpcodes()
+                      ? AddModOperationOptimized.staticOperation(frame)
+                      : AddModOperation.staticOperation(frame);
+              case 0x09 ->
+                  evmConfiguration.enableOptimizedOpcodes()
+                      ? MulModOperationOptimized.staticOperation(frame)
+                      : MulModOperation.staticOperation(frame);
               case 0x0a -> ExpOperation.staticOperation(frame, gasCalculator);
               case 0x0b -> SignExtendOperation.staticOperation(frame);
               case 0x0c, 0x0d, 0x0e, 0x0f -> InvalidOperation.invalidOperationResult(opcode);
@@ -251,10 +271,22 @@ public class EVM {
               case 0x12 -> SLtOperation.staticOperation(frame);
               case 0x13 -> SGtOperation.staticOperation(frame);
               case 0x15 -> IsZeroOperation.staticOperation(frame);
-              case 0x16 -> AndOperation.staticOperation(frame);
-              case 0x17 -> OrOperation.staticOperation(frame);
-              case 0x18 -> XorOperation.staticOperation(frame);
-              case 0x19 -> NotOperation.staticOperation(frame);
+              case 0x16 ->
+                  evmConfiguration.enableOptimizedOpcodes()
+                      ? AndOperationOptimized.staticOperation(frame)
+                      : AndOperation.staticOperation(frame);
+              case 0x17 ->
+                  evmConfiguration.enableOptimizedOpcodes()
+                      ? OrOperationOptimized.staticOperation(frame)
+                      : OrOperation.staticOperation(frame);
+              case 0x18 ->
+                  evmConfiguration.enableOptimizedOpcodes()
+                      ? XorOperationOptimized.staticOperation(frame)
+                      : XorOperation.staticOperation(frame);
+              case 0x19 ->
+                  evmConfiguration.enableOptimizedOpcodes()
+                      ? NotOperationOptimized.staticOperation(frame)
+                      : NotOperation.staticOperation(frame);
               case 0x1a -> ByteOperation.staticOperation(frame);
               case 0x1e ->
                   enableOsaka

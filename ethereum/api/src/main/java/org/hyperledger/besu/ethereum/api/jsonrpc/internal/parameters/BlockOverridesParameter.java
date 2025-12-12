@@ -18,6 +18,8 @@ import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.datatypes.parameters.UnsignedLongParameter;
+import org.hyperledger.besu.ethereum.core.json.HexStringDeserializer;
+import org.hyperledger.besu.ethereum.core.json.OptionalUnsignedLongDeserializer;
 import org.hyperledger.besu.plugin.data.BlockOverrides;
 
 import java.math.BigInteger;
@@ -25,7 +27,9 @@ import java.util.Optional;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
 
 public class BlockOverridesParameter extends BlockOverrides {
   /**
@@ -57,7 +61,8 @@ public class BlockOverridesParameter extends BlockOverrides {
       @JsonProperty("stateRoot") final Optional<Hash> stateRoot,
       @JsonProperty("difficulty") final Optional<BigInteger> difficulty,
       @JsonProperty("extraData") final Optional<Bytes> extraData,
-      @JsonProperty("mixHash") final Optional<String> mixHash) {
+      @JsonProperty("mixHash") final Optional<String> mixHash,
+      @JsonProperty("parentBeaconBlockRoot") final Optional<String> parentBeaconBlockRoot) {
     super(
         timestamp,
         blockNumber,
@@ -69,6 +74,31 @@ public class BlockOverridesParameter extends BlockOverrides {
         stateRoot,
         difficulty,
         extraData,
-        mixHash.isPresent() ? mixHash : prevRandao);
+        mixHash.isPresent() ? mixHash : prevRandao,
+        parentBeaconBlockRoot);
+  }
+
+  @Override
+  @JsonDeserialize(using = OptionalUnsignedLongDeserializer.class)
+  public Optional<Long> getTimestamp() {
+    return super.getTimestamp();
+  }
+
+  @Override
+  @JsonDeserialize(using = OptionalUnsignedLongDeserializer.class)
+  public Optional<Long> getBlockNumber() {
+    return super.getBlockNumber();
+  }
+
+  @Override
+  @JsonDeserialize(contentUsing = HexStringDeserializer.class)
+  public Optional<Bytes32> getMixHashOrPrevRandao() {
+    return super.getMixHashOrPrevRandao();
+  }
+
+  @Override
+  @JsonDeserialize(contentUsing = HexStringDeserializer.class)
+  public Optional<Bytes> getExtraData() {
+    return super.getExtraData();
   }
 }
