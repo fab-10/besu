@@ -27,6 +27,8 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcConfiguration;
 import org.hyperledger.besu.ethereum.api.jsonrpc.websocket.WebSocketConfiguration;
 import org.hyperledger.besu.ethereum.core.AddressHelpers;
 import org.hyperledger.besu.ethereum.core.MiningConfiguration;
+import org.hyperledger.besu.ethereum.eth.sync.SyncMode;
+import org.hyperledger.besu.ethereum.eth.sync.SynchronizerConfiguration;
 import org.hyperledger.besu.ethereum.permissioning.LocalPermissioningConfiguration;
 import org.hyperledger.besu.ethereum.permissioning.PermissioningConfiguration;
 import org.hyperledger.besu.ethereum.worldstate.DataStorageConfiguration;
@@ -90,7 +92,8 @@ public class BesuNodeFactory {
         config.getKeyPair(),
         config.isStrictTxReplayProtectionEnabled(),
         config.getEnvironment(),
-        config.storageImplementation());
+        config.storageImplementation(),
+        config.getSynchronizerConfiguration());
   }
 
   public BesuNode createArchiveNode(final String name) throws IOException {

@@ -66,7 +66,7 @@ public class TestLivenessCheckPlugin implements BesuPlugin, LivenessCheckProvide
     // Expose CLI options so ATs can pass flags to control behavior cross-process
     context
         .getService(PicoCLIOptions.class)
-        .ifPresent(pico -> pico.addPicoCLIOptions("test-health", this));
+        .ifPresent(pico -> pico.addPicoCLIOptions("health-liveness", this));
   }
 
   @Override

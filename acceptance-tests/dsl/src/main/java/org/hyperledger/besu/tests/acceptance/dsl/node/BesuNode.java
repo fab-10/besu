@@ -172,7 +172,8 @@ public class BesuNode implements NodeConfiguration, RunnableNode, AutoCloseable 
       final Optional<KeyPair> keyPair,
       final boolean isStrictTxReplayProtectionEnabled,
       final Map<String, String> environment,
-      final Optional<KeyValueStorageFactory> maybeStorageFactory)
+      final Optional<KeyValueStorageFactory> maybeStorageFactory,
+      final SynchronizerConfiguration synchronizerConfiguration)
       throws IOException {
     this.homeDirectory = dataPath.orElseGet(BesuNode::createTmpDataDirectory);
     this.isStrictTxReplayProtectionEnabled = isStrictTxReplayProtectionEnabled;
@@ -233,7 +234,7 @@ public class BesuNode implements NodeConfiguration, RunnableNode, AutoCloseable 
     this.staticNodes = staticNodes;
     this.isDnsEnabled = isDnsEnabled;
     this.environment = environment;
-    this.synchronizerConfiguration = SynchronizerConfiguration.builder().build(); // Default config
+    this.synchronizerConfiguration = synchronizerConfiguration;
     LOG.info("Created BesuNode {}", this);
   }
 

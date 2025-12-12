@@ -836,10 +836,9 @@ public class RunnerBuilder {
                   natService,
                   nonEngineMethods,
                   new HealthService(
-                      paramSource -> healthCheckService.isLive(name -> paramSource.getParam(name))),
+                      paramSource -> healthCheckService.isLive(paramSource::getParam)),
                   new HealthService(
-                      paramSource ->
-                          healthCheckService.isReady(name -> paramSource.getParam(name)))));
+                      paramSource -> healthCheckService.isReady(paramSource::getParam))));
     }
 
     final SubscriptionManager subscriptionManager =

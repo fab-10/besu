@@ -47,12 +47,13 @@ public class ReadinessCheckPlugin implements BesuPlugin, ReadinessCheckProvider 
   private static final int DEFAULT_MIN_PEERS = 1;
   private static final int DEFAULT_MAX_BLOCKS_BEHIND = 2;
 
-  /** Default constructor for ReadinessCheckPlugin. */
-  public ReadinessCheckPlugin() {}
-
   private HealthCheckService healthCheckService;
   private P2PService p2pService;
   private SynchronizationService synchronizationService;
+  private ServiceManager serviceManager;
+
+  /** Default constructor for ReadinessCheckPlugin. */
+  public ReadinessCheckPlugin() {}
 
   @Override
   public Optional<String> getName() {
@@ -60,26 +61,11 @@ public class ReadinessCheckPlugin implements BesuPlugin, ReadinessCheckProvider 
   }
 
   @Override
-  public void register(final ServiceManager context) {
-    // All required services must be present - fail fast if any are missing
-    this.p2pService =
-        context
-            .getService(P2PService.class)
-            .orElseThrow(
-                () ->
-                    new IllegalStateException(
-                        "P2PService is not available - this indicates a serious internal error"));
-
-    this.synchronizationService =
-        context
-            .getService(SynchronizationService.class)
-            .orElseThrow(
-                () ->
-                    new IllegalStateException(
-                        "SynchronizationService is not available - this indicates a serious internal error"));
+  public void register(final ServiceManager serviceManager) {
+    this.serviceManager = serviceManager;
 
     this.healthCheckService =
-        context
+        serviceManager
             .getService(HealthCheckService.class)
             .orElseThrow(
                 () ->
@@ -88,11 +74,28 @@ public class ReadinessCheckPlugin implements BesuPlugin, ReadinessCheckProvider 
 
     // Register the readiness check provider - all required services are present
     this.healthCheckService.registerReadinessCheckProvider(this);
-    LOG.info("ReadinessCheckPlugin registered successfully with all required services");
   }
 
   @Override
   public void start() {
+    // All required services must be present - fail fast if any are missing
+    this.p2pService =
+        serviceManager
+            .getService(P2PService.class)
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "P2PService is not available - this indicates a serious internal error"));
+
+    this.synchronizationService =
+        serviceManager
+            .getService(SynchronizationService.class)
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "SynchronizationService is not available - this indicates a serious internal error"));
+
+    LOG.info("ReadinessCheckPlugin registered successfully with all required services");
     // no-op
   }
 
@@ -131,7 +134,7 @@ public class ReadinessCheckPlugin implements BesuPlugin, ReadinessCheckProvider 
         Optional<Long> highestBlock = synchronizationService.getHighestBlock();
         Optional<Long> currentBlock = synchronizationService.getCurrentBlock();
 
-        LOG.debug(
+        LOG.info(
             "Sync check - maxBlocksBehind: {}, highestBlock: {}, currentBlock: {}",
             maxBlocksBehind,
             highestBlock,
@@ -139,24 +142,24 @@ public class ReadinessCheckPlugin implements BesuPlugin, ReadinessCheckProvider 
 
         if (highestBlock.isPresent() && currentBlock.isPresent()) {
           long blocksBehind = highestBlock.get() - currentBlock.get();
-          LOG.debug("Calculated blocksBehind: {}", blocksBehind);
+          LOG.info("Calculated blocksBehind: {}", blocksBehind);
 
           if (blocksBehind > maxBlocksBehind) {
-            LOG.debug(
+            LOG.info(
                 "Readiness check failed: {} blocks behind (max allowed: {})",
                 blocksBehind,
                 maxBlocksBehind);
             return false;
           }
-          LOG.debug(
+          LOG.info(
               "Sync status check passed: {} blocks behind (within limit: {})",
               blocksBehind,
               maxBlocksBehind);
         } else {
-          LOG.debug("Sync status information not available, assuming in sync");
+          LOG.info("Sync status information not available, assuming in sync");
         }
       } else {
-        LOG.debug("SynchronizationService unavailable; skipping sync status check");
+        LOG.info("SynchronizationService unavailable; skipping sync status check");
       }
 
       return true;

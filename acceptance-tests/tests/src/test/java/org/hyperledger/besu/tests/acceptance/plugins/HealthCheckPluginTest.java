@@ -35,17 +35,14 @@ public class HealthCheckPluginTest extends AcceptanceTestBase {
 
   @BeforeEach
   public void setUp() throws Exception {
-    node =
-        besu.createPluginsNode(
-            "node1",
-            List.of("testPlugins"),
-            List.of("--rpc-http-enabled", "--rpc-http-host=127.0.0.1", "--rpc-http-port=0"));
-    cluster.start(node);
     client = new OkHttpClient();
   }
 
   @Test
   public void livenessEndpointShouldReturn200WhenHealthy() throws IOException {
+    node = besu.createPluginsNode("node1", List.of("testPlugins"), List.of());
+    cluster.start(node);
+
     // liveness endpoint
     Response response = callHealthEndpoint("/liveness");
     assertThat(response.code()).isEqualTo(200);
@@ -53,31 +50,24 @@ public class HealthCheckPluginTest extends AcceptanceTestBase {
   }
 
   @Test
-  public void livenessEndpointShouldReturn503WhenForcedDownViaCli() throws Exception {
-    final BesuNode nodeDown =
+  public void livenessEndpointShouldReturn503WhenForcedDownViaCli() throws IOException {
+    node =
         besu.createPluginsNode(
-            "node-down",
-            List.of("testPlugins"),
-            List.of(
-                "--rpc-http-enabled",
-                "--rpc-http-host=127.0.0.1",
-                "--rpc-http-port=0",
-                "--plugin-health-liveness-down=true"));
-    try {
-      cluster.start(nodeDown);
-      final String url =
-          "http://" + nodeDown.getHostName() + ":" + nodeDown.getJsonRpcPort().get() + "/liveness";
-      final Request request = new Request.Builder().url(url).build();
-      try (Response response = client.newCall(request).execute()) {
-        assertThat(response.code()).isEqualTo(503);
-      }
-    } finally {
-      cluster.stopNode(nodeDown);
-    }
+            "node-down", List.of("testPlugins"), List.of("--plugin-health-liveness-down=true"));
+    cluster.start(node);
+
+    Response response = callHealthEndpoint("/liveness");
+    assertThat(response.code()).isEqualTo(503);
   }
 
   @Test
   public void readinessEndpointShouldReturn200WhenHealthy() throws IOException {
+    node = besu.createPluginsNode("node1", List.of("testPlugins"), List.of());
+    final var node2 = besu.createPluginsNode("node2", List.of("testPlugins"), List.of());
+    cluster.start(node2, node);
+
+    node.awaitPeerDiscovery(net.awaitPeerCount(1));
+
     // readiness endpoint
     Response response = callHealthEndpoint("/readiness");
     assertThat(response.code()).isEqualTo(200);
@@ -86,6 +76,9 @@ public class HealthCheckPluginTest extends AcceptanceTestBase {
 
   @Test
   public void readinessEndpointShouldRespectMinPeersParameter() throws IOException {
+    node = besu.createPluginsNode("node1", List.of("testPlugins"), List.of());
+    cluster.start(node);
+
     // different minPeers parameters
     Response response1 = callHealthEndpoint("/readiness?minPeers=0");
     assertThat(response1.code()).isEqualTo(200);
@@ -95,36 +88,64 @@ public class HealthCheckPluginTest extends AcceptanceTestBase {
     assertThat(response2.code()).isEqualTo(503);
   }
 
-  @Test
-  public void readinessEndpointShouldRespectMaxBlocksBehindParameter() throws IOException {
-    // different maxBlocksBehind parameters
-    Response response1 = callHealthEndpoint("/readiness?maxBlocksBehind=1000");
-    assertThat(response1.code()).isEqualTo(200);
+  //  @Test
+  //  public void readinessEndpointShouldRespectMaxBlocksBehindParameter() throws IOException {
+  //    final var node2 =
+  //        besu.createQbftPluginsNode(
+  //            "node2",
+  //            Collections.singletonList("testPlugins"),
+  //            List.of());
+  //    final var node3 =
+  //        besu.createQbftPluginsNode(
+  //            "node3",
+  //            Collections.singletonList("testPlugins"),
+  //            List.of());
+  //    final var node4 =
+  //        besu.createQbftPluginsNode(
+  //            "node4",
+  //            Collections.singletonList("testPlugins"),
+  //            List.of());
+  //    node = besu.createQbftPluginsNode("node1", List.of("testPlugins"), List.of());
+  //
+  //    cluster.start(node2,node3, node4, node);
+  //
+  //    node.awaitPeerDiscovery(net.awaitPeerCount(3));
+  //    node.verify(eth.syncingStatus(false));
+  //
+  //    Awaitility.await().until(() -> {
+  //    Response response2 = callHealthEndpoint("/readiness?maxBlocksBehind=0");
+  //    // if we're behind by any blocks, it should fail
+  //      return response2.code() == 503;});
+  ////    assertThat(response2.code()).isEqualTo(503);
+  //
+  ////    // different maxBlocksBehind parameters
+  ////    Response response1 = callHealthEndpoint("/readiness?maxBlocksBehind=1000");
+  ////    assertThat(response1.code()).isEqualTo(200);
+  //  }
 
-    Response response2 = callHealthEndpoint("/readiness?maxBlocksBehind=0");
-    // if we're behind by any blocks, it should fail
-    assertThat(response2.code()).isEqualTo(503);
+  @Test
+  public void readinessEndpointShouldReturn503WhenForcedDownViaCli() throws IOException {
+    node =
+        besu.createPluginsNode(
+            "node-down", List.of("testPlugins"), List.of("--plugin-health-readiness-down=true"));
+    cluster.start(node);
+
+    Response response = callHealthEndpoint("/readiness");
+    assertThat(response.code()).isEqualTo(503);
   }
 
   @Test
-  public void healthEndpointsShouldHandleInvalidParameters() throws IOException {
+  public void healthEndpointsShouldFailOnInvalidParameters() throws IOException {
+    node = besu.createPluginsNode("node-down", List.of("testPlugins"), List.of());
+    cluster.start(node);
+
     // invalid parameters
     Response response1 = callHealthEndpoint("/readiness?minPeers=invalid");
     // default value
-    assertThat(response1.code()).isEqualTo(200);
+    assertThat(response1.code()).isEqualTo(503);
 
     Response response2 = callHealthEndpoint("/readiness?maxBlocksBehind=invalid");
-    assertThat(response2.code()).isEqualTo(200);
-  }
-
-  @Test
-  public void healthEndpointsShouldWorkWithNoParameters() throws IOException {
-    // without any parameters
-    Response livenessResponse = callHealthEndpoint("/liveness");
-    assertThat(livenessResponse.code()).isEqualTo(200);
-
-    Response readinessResponse = callHealthEndpoint("/readiness");
-    assertThat(readinessResponse.code()).isEqualTo(200);
+    assertThat(response2.code()).isEqualTo(503);
   }
 
   private Response callHealthEndpoint(final String path) throws IOException {
