@@ -51,6 +51,7 @@ import org.hyperledger.besu.tests.acceptance.dsl.transaction.miner.MinerRequestF
 import org.hyperledger.besu.tests.acceptance.dsl.transaction.net.CustomRequestFactory;
 import org.hyperledger.besu.tests.acceptance.dsl.transaction.perm.PermissioningJsonRpcRequestFactory;
 import org.hyperledger.besu.tests.acceptance.dsl.transaction.txpool.TxPoolRequestFactory;
+import org.hyperledger.besu.util.BesuVersionUtils;
 
 import java.io.File;
 import java.io.FileInputStream;
@@ -220,7 +221,8 @@ public class BesuNode implements NodeConfiguration, RunnableNode, AutoCloseable 
           try {
             homeDirectory.resolve("plugins").toFile().mkdirs();
             copyResource(
-                pluginName + ".jar", homeDirectory.resolve("plugins/" + pluginName + ".jar"));
+                pluginName + "-" + BesuVersionUtils.shortVersion() + ".jar",
+                homeDirectory.resolve("plugins/" + pluginName + ".jar"));
             BesuNode.this.plugins.add(pluginName);
           } catch (final IOException e) {
             LOG.error("Could not find plugin \"{}\" in resources", pluginName);

@@ -674,7 +674,8 @@ public class BesuPluginContextImpl implements ServiceManager, PluginVersionsProv
     }
   }
 
-  record ArtifactDependency(String name, String group, String version, String classifier, String filename) {
+  record ArtifactDependency(
+      String name, String group, String version, String classifier, String filename) {
     boolean equalsByNameAndGroup(final ArtifactDependency other) {
       return Objects.equals(name, other.name) && Objects.equals(group, other.group);
     }

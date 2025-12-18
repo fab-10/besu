@@ -1,0 +1,17 @@
+plugins {
+    id 'net.consensys.besu-plugin-distribution' version '0.1.4'
+}
+
+group = 'org.hyperledger.besu.tests'
+version = besuVersion
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+
+dependencies {
+    // External dependencies
+    implementation 'org.slf4j:slf4j-api:2.0.16'
+}
