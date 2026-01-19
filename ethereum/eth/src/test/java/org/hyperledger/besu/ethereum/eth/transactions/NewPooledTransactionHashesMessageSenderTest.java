@@ -65,7 +65,9 @@ public class NewPooledTransactionHashesMessageSenderTest {
 
   @BeforeEach
   public void setUp() {
-    transactionTracker = new PeerTransactionTracker(TransactionPoolConfiguration.DEFAULT, ethPeers);
+    transactionTracker =
+        new PeerTransactionTracker(
+            TransactionPoolConfiguration.DEFAULT, ethPeers, ethContext.getScheduler());
     messageSender = new NewPooledTransactionHashesMessageSender(transactionTracker);
     final Transaction tx = mock(Transaction.class);
     pendingTransactions = mock(PendingTransactions.class);
@@ -80,11 +82,11 @@ public class NewPooledTransactionHashesMessageSenderTest {
   @Test
   public void shouldSendPendingTransactionsToEachPeer() throws Exception {
 
-    transactionTracker.addToPeerHashSendQueue(peer1, transaction1);
-    transactionTracker.addToPeerHashSendQueue(peer1, transaction2);
-    transactionTracker.addToPeerHashSendQueue(peer2, transaction3);
+    transactionTracker.addToPeerAnnouncementsSendQueue(peer1, transaction1);
+    transactionTracker.addToPeerAnnouncementsSendQueue(peer1, transaction2);
+    transactionTracker.addToPeerAnnouncementsSendQueue(peer2, transaction3);
 
-    List.of(peer1, peer2).forEach(messageSender::sendTransactionHashesToPeer);
+    List.of(peer1, peer2).forEach(messageSender::sendTransactionAnnouncementsToPeer);
 
     verify(peer1).send(transactionsMessageContaining(transaction1, transaction2));
     verify(peer2).send(transactionsMessageContaining(transaction3));
@@ -99,9 +101,9 @@ public class NewPooledTransactionHashesMessageSenderTest {
         generator.transactions(6000).stream().collect(Collectors.toSet());
 
     transactions.forEach(
-        transaction -> transactionTracker.addToPeerHashSendQueue(peer1, transaction));
+        transaction -> transactionTracker.addToPeerAnnouncementsSendQueue(peer1, transaction));
 
-    messageSender.sendTransactionHashesToPeer(peer1);
+    messageSender.sendTransactionAnnouncementsToPeer(peer1);
     final ArgumentCaptor<MessageData> messageDataArgumentCaptor =
         ArgumentCaptor.forClass(MessageData.class);
     verify(peer1, times(2)).send(messageDataArgumentCaptor.capture());

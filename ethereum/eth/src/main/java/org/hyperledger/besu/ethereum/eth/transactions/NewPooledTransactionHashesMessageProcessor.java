@@ -16,7 +16,6 @@ package org.hyperledger.besu.ethereum.eth.transactions;
 
 import static java.time.Instant.now;
 
-import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.task.BufferedGetPooledTransactionsFromPeerFetcher;
@@ -26,7 +25,6 @@ import org.hyperledger.besu.ethereum.rlp.RLPException;
 
 import java.time.Duration;
 import java.time.Instant;
-import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
 
@@ -40,8 +38,7 @@ public class NewPooledTransactionHashesMessageProcessor {
 
   static final String METRIC_LABEL = "new_pooled_transaction_hashes";
 
-  private final ConcurrentHashMap<EthPeer, BufferedGetPooledTransactionsFromPeerFetcher>
-      scheduledTasks;
+  private final ConcurrentHashMap<EthPeer, ScheduledFuture<?>> scheduledTasks;
 
   private final PeerTransactionTracker transactionTracker;
   private final TransactionPool transactionPool;
@@ -72,7 +69,7 @@ public class NewPooledTransactionHashesMessageProcessor {
     // Check if message is not expired.
     final var latency = Duration.between(queueAt, now());
     if (latency.compareTo(keepAlive) < 0) {
-      this.processNewPooledTransactionHashesMessage(peer, transactionsMessage);
+      processNewPooledTransactionHashesMessage(peer, transactionsMessage);
     } else {
       LOG.atTrace()
           .setMessage(
@@ -90,44 +87,37 @@ public class NewPooledTransactionHashesMessageProcessor {
   private void processNewPooledTransactionHashesMessage(
       final EthPeer peer, final NewPooledTransactionHashesMessage transactionsMessage) {
     try {
-      final List<Hash> incomingTransactionHashes = transactionsMessage.pendingTransactionHashes();
+      final var incomingTransactionHashes = transactionsMessage.pendingTransactionHashes();
+      final var freshAnnouncements =
+          transactionTracker.receivedTransactionAnnouncements(peer, incomingTransactionHashes);
+
+      metrics.incrementAlreadySeenTransactions(
+          METRIC_LABEL, incomingTransactionHashes.size() - freshAnnouncements.size());
 
       LOG.atTrace()
-          .setMessage("Received pooled transaction hashes message: peer={}, incoming hashes={}")
+          .setMessage(
+              "Received pooled transaction hashes message: peer={}, incoming hashes={}, fresh hashes={}")
           .addArgument(peer)
           .addArgument(incomingTransactionHashes)
+          .addArgument(freshAnnouncements)
           .log();
 
-      final BufferedGetPooledTransactionsFromPeerFetcher bufferedTask =
-          scheduledTasks.computeIfAbsent(
-              peer,
-              ethPeer -> {
-                final ScheduledFuture<?> scheduledFuture =
-                    ethContext
-                        .getScheduler()
-                        .scheduleFutureTaskWithFixedDelay(
-                            new FetcherCreatorTask(peer),
-                            transactionPoolConfiguration
-                                .getUnstable()
-                                .getEth65TrxAnnouncedBufferingPeriod(),
-                            transactionPoolConfiguration
-                                .getUnstable()
-                                .getEth65TrxAnnouncedBufferingPeriod());
-
-                return new BufferedGetPooledTransactionsFromPeerFetcher(
-                    ethContext,
-                    scheduledFuture,
-                    peer,
-                    transactionPool,
-                    transactionTracker,
-                    metrics,
-                    METRIC_LABEL);
-              });
-
-      bufferedTask.addHashes(
-          incomingTransactionHashes.stream()
-              .filter(hash -> transactionPool.getTransactionByHash(hash).isEmpty())
-              .toList());
+      scheduledTasks.computeIfAbsent(
+          peer,
+          ethPeer ->
+              ethContext
+                  .getScheduler()
+                  .scheduleFutureTaskWithFixedDelay(
+                      new FetcherCreatorTask(
+                          peer,
+                          new BufferedGetPooledTransactionsFromPeerFetcher(
+                              ethContext, peer, transactionPool, transactionTracker)),
+                      transactionPoolConfiguration
+                          .getUnstable()
+                          .getEth65TrxAnnouncedBufferingPeriod(),
+                      transactionPoolConfiguration
+                          .getUnstable()
+                          .getEth65TrxAnnouncedBufferingPeriod()));
     } catch (final RLPException ex) {
       if (peer != null) {
         LOG.debug(
@@ -140,20 +130,23 @@ public class NewPooledTransactionHashesMessageProcessor {
     }
   }
 
-  public class FetcherCreatorTask implements Runnable {
+  class FetcherCreatorTask implements Runnable {
     final EthPeer peer;
+    final BufferedGetPooledTransactionsFromPeerFetcher fetcher;
 
-    public FetcherCreatorTask(final EthPeer peer) {
+    public FetcherCreatorTask(
+        final EthPeer peer, final BufferedGetPooledTransactionsFromPeerFetcher fetcher) {
       this.peer = peer;
+      this.fetcher = fetcher;
     }
 
     @Override
     public void run() {
       if (peer != null) {
         if (peer.isDisconnected()) {
-          scheduledTasks.remove(peer).getScheduledFuture().cancel(true);
+          scheduledTasks.remove(peer).cancel(true);
         } else if (peer.hasAvailableRequestCapacity()) {
-          scheduledTasks.get(peer).requestTransactions();
+          ethContext.getScheduler().scheduleSyncWorkerTask(fetcher::requestTransactions);
         }
       }
     }

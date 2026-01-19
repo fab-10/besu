@@ -114,7 +114,7 @@ public class TransactionBroadcasterTest {
 
     sendTaskCapture.getValue().run();
 
-    verify(newPooledTransactionHashesMessageSender).sendTransactionHashesToPeer(ethPeer);
+    verify(newPooledTransactionHashesMessageSender).sendTransactionAnnouncementsToPeer(ethPeer);
     verifyNoInteractions(transactionsMessageSender);
   }
 
@@ -145,7 +145,7 @@ public class TransactionBroadcasterTest {
     sendTaskCapture.getAllValues().forEach(Runnable::run);
 
     verify(transactionsMessageSender).sendTransactionsToPeer(ethPeer);
-    verify(newPooledTransactionHashesMessageSender).sendTransactionHashesToPeer(ethPeer2);
+    verify(newPooledTransactionHashesMessageSender).sendTransactionAnnouncementsToPeer(ethPeer2);
   }
 
   @Test
@@ -167,7 +167,8 @@ public class TransactionBroadcasterTest {
     sendTaskCapture.getAllValues().forEach(Runnable::run);
 
     verify(transactionsMessageSender, times(2)).sendTransactionsToPeer(any(EthPeer.class));
-    verify(newPooledTransactionHashesMessageSender).sendTransactionHashesToPeer(any(EthPeer.class));
+    verify(newPooledTransactionHashesMessageSender)
+        .sendTransactionAnnouncementsToPeer(any(EthPeer.class));
   }
 
   @Test
@@ -200,7 +201,7 @@ public class TransactionBroadcasterTest {
     sendTaskCapture.getAllValues().forEach(Runnable::run);
 
     verify(newPooledTransactionHashesMessageSender, times(3))
-        .sendTransactionHashesToPeer(any(EthPeer.class));
+        .sendTransactionAnnouncementsToPeer(any(EthPeer.class));
     ArgumentCaptor<EthPeer> capPeerFullTransaction = ArgumentCaptor.forClass(EthPeer.class);
     verify(transactionsMessageSender, times(2))
         .sendTransactionsToPeer(capPeerFullTransaction.capture());
@@ -260,7 +261,7 @@ public class TransactionBroadcasterTest {
 
     ArgumentCaptor<Transaction> trackedTransactions = ArgumentCaptor.forClass(Transaction.class);
     verify(transactionTracker, times(transactions.size()))
-        .addToPeerHashSendQueue(eq(peer), trackedTransactions.capture());
+        .addToPeerAnnouncementsSendQueue(eq(peer), trackedTransactions.capture());
     assertThat(trackedTransactions.getAllValues())
         .containsExactlyInAnyOrderElementsOf(transactions);
   }

@@ -29,4 +29,6 @@ public interface RemovalReason {
    * @return true if no more tracking is needed
    */
   boolean stopTracking();
+
+  boolean stopBroadcasting();
 }

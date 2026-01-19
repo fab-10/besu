@@ -44,7 +44,8 @@ public class PeerTransactionTrackerTest {
   private final Transaction transaction2 = generator.transaction();
   private final Transaction transaction3 = generator.transaction();
   private final PeerTransactionTracker tracker =
-      new PeerTransactionTracker(TransactionPoolConfiguration.DEFAULT, ethPeers);
+      new PeerTransactionTracker(
+          TransactionPoolConfiguration.DEFAULT, ethPeers, ethContext.getScheduler());
   private final PeerTransactionTracker forgetfulTracker =
       new PeerTransactionTracker(
           ImmutableTransactionPoolConfiguration.builder()
@@ -53,7 +54,8 @@ public class PeerTransactionTrackerTest {
                       .peerTrackerForgetEvictedTxs(true)
                       .build())
               .build(),
-          ethPeers);
+          ethPeers,
+          ethContext.getScheduler());
   private final PeerTransactionTracker shortMemoryTracker =
       new PeerTransactionTracker(
           ImmutableTransactionPoolConfiguration.builder()
@@ -62,7 +64,8 @@ public class PeerTransactionTrackerTest {
                       .maxTrackedSeenTxsPerPeer(2)
                       .build())
               .build(),
-          ethPeers);
+          ethPeers,
+          ethContext.getScheduler());
 
   @Test
   public void shouldTrackTransactionsToSendToPeer() {

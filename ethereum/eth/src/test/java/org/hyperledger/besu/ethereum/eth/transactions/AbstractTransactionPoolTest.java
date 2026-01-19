@@ -492,7 +492,7 @@ public abstract class AbstractTransactionPoolTest extends AbstractTransactionPoo
     transactionPool.addTransactionViaApi(transaction0);
     transactionPool.handleConnect(peer);
     syncTaskCapture.getValue().run();
-    verify(newPooledTransactionHashesMessageSender).sendTransactionHashesToPeer(peer);
+    verify(newPooledTransactionHashesMessageSender).sendTransactionAnnouncementsToPeer(peer);
   }
 
   @Test
@@ -506,7 +506,7 @@ public abstract class AbstractTransactionPoolTest extends AbstractTransactionPoo
     RespondingEthPeer peer = EthProtocolManagerTestUtil.createPeer(ethProtocolManager);
 
     Set<Transaction> transactionsToSendToPeer =
-        peerTransactionTracker.claimTransactionHashesToSendToPeer(peer.getEthPeer());
+        peerTransactionTracker.claimTransactionAnnouncementToSendToPeer(peer.getEthPeer());
 
     assertThat(transactionsToSendToPeer).contains(transaction0, transaction1);
   }

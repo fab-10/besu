@@ -63,7 +63,8 @@ public class TransactionPoolFactory {
     final TransactionPoolMetrics metrics = new TransactionPoolMetrics(metricsSystem);
 
     final PeerTransactionTracker transactionTracker =
-        new PeerTransactionTracker(transactionPoolConfiguration, ethContext.getEthPeers());
+        new PeerTransactionTracker(
+            transactionPoolConfiguration, ethContext.getEthPeers(), ethContext.getScheduler());
     final TransactionsMessageSender transactionsMessageSender =
         new TransactionsMessageSender(
             transactionTracker, ethProtocolConfiguration.getMaxTransactionsMessageSize());
@@ -230,6 +231,7 @@ public class TransactionPoolFactory {
       final NewPooledTransactionHashesMessageHandler pooledTransactionsMessageHandler) {
     ethContext.getEthPeers().subscribeDisconnect(transactionTracker);
     protocolContext.getBlockchain().observeBlockAdded(transactionPool);
+    protocolContext.getBlockchain().observeBlockAdded(transactionTracker);
     ethContext
         .getEthMessages()
         .subscribe(EthProtocolMessages.TRANSACTIONS, transactionsMessageHandler);

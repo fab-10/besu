@@ -18,10 +18,11 @@ import static org.hyperledger.besu.ethereum.core.Transaction.toHashList;
 
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
-import org.hyperledger.besu.ethereum.eth.messages.LimitedTransactionsMessages;
+import org.hyperledger.besu.ethereum.eth.messages.LimitedTransactionsMessage;
 import org.hyperledger.besu.ethereum.p2p.rlpx.connections.PeerConnection.PeerNotConnected;
 
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -39,24 +40,58 @@ class TransactionsMessageSender {
   }
 
   void sendTransactionsToPeer(final EthPeer peer) {
-    final Set<Transaction> allTxToSend = transactionTracker.claimTransactionsToSendToPeer(peer);
-    while (!allTxToSend.isEmpty()) {
-      final LimitedTransactionsMessages limitedTransactionsMessages =
-          LimitedTransactionsMessages.createLimited(allTxToSend, maxTransactionsMessageSize);
-      final Set<Transaction> includedTransactions =
-          limitedTransactionsMessages.getIncludedTransactions();
-      allTxToSend.removeAll(limitedTransactionsMessages.getIncludedTransactions());
+    final List<Transaction> transactionsBatch = new ArrayList<>();
+    Transaction txToSend = transactionTracker.claimTransactionToSendToPeer(peer);
+    LimitedTransactionsMessage limitedTransactionsMessage =
+        new LimitedTransactionsMessage(maxTransactionsMessageSize);
+
+    while (txToSend != null) {
+
+      if (!transactionTracker.hasPeerSeenTransaction(peer, txToSend)
+          && !transactionTracker.hasSeenTransactionAnnouncement(peer, txToSend.getHash())) {
+
+        final var added = limitedTransactionsMessage.add(txToSend);
+
+        if (added) {
+          transactionTracker.markTransactionAsSeen(peer, txToSend);
+        } else {
+          // message is full, then send it and prepare the next batch
+          send(peer, transactionsBatch, limitedTransactionsMessage);
+
+          // prepare the next batch
+          transactionsBatch.clear();
+          limitedTransactionsMessage = new LimitedTransactionsMessage(maxTransactionsMessageSize);
+          limitedTransactionsMessage.add(txToSend);
+        }
+
+        transactionsBatch.add(txToSend);
+      }
+
+      txToSend = transactionTracker.claimTransactionToSendToPeer(peer);
+    }
+
+    if (!transactionsBatch.isEmpty()) {
+      send(peer, transactionsBatch, limitedTransactionsMessage);
+    }
+  }
+
+  private static void send(
+      final EthPeer peer,
+      final List<Transaction> includedTransactions,
+      final LimitedTransactionsMessage limitedTransactionsMessage) {
+    if (!includedTransactions.isEmpty()) {
       try {
-        peer.send(limitedTransactionsMessages.getTransactionsMessage());
         LOG.atTrace()
             .setMessage(
-                "Sent transactions to peer={}, all txs count={}, "
-                    + "this message txs count={},  this message hashes={}")
+                "Sent transactions to peer={}, this message txs count={},"
+                    + " this message hashes={}, estimated size {}")
             .addArgument(peer)
-            .addArgument(allTxToSend::size)
             .addArgument(includedTransactions::size)
             .addArgument(() -> toHashList(includedTransactions))
+            .addArgument(limitedTransactionsMessage::getEstimatedMessageSize)
             .log();
+
+        peer.send(limitedTransactionsMessage.getTransactionsMessage());
       } catch (final PeerNotConnected e) {
         LOG.atTrace()
             .setMessage(
@@ -64,7 +99,6 @@ class TransactionsMessageSender {
             .addArgument(peer)
             .addArgument(() -> toHashList(includedTransactions))
             .log();
-        return;
       } catch (final Exception e) {
         LOG.debug("Failed to send transactions to peer {}", peer, e);
       }

@@ -24,9 +24,9 @@ import org.hyperledger.besu.ethereum.eth.messages.NewPooledTransactionHashesMess
 import org.hyperledger.besu.ethereum.p2p.rlpx.connections.PeerConnection.PeerNotConnected;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 
+import java.util.ArrayList;
 import java.util.List;
 
-import com.google.common.collect.Iterables;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,32 +41,52 @@ class NewPooledTransactionHashesMessageSender {
     this.transactionTracker = transactionTracker;
   }
 
-  public void sendTransactionHashesToPeer(final EthPeer peer) {
+  public void sendTransactionAnnouncementsToPeer(final EthPeer peer) {
     final Capability capability = peer.getConnection().capability(EthProtocol.NAME);
-    for (final List<Transaction> txBatch :
-        Iterables.partition(
-            transactionTracker.claimTransactionHashesToSendToPeer(peer), MAX_TRANSACTIONS_HASHES)) {
-      final List<Hash> txHashes = toHashList(txBatch);
-      try {
+    final List<Transaction> txBatch = new ArrayList<>(MAX_TRANSACTIONS_HASHES);
+    Transaction announcementToSend;
+    while ((announcementToSend = transactionTracker.claimTransactionAnnouncementToSendToPeer(peer))
+        != null) {
+      if (txBatch.size() < MAX_TRANSACTIONS_HASHES) {
+        if (!transactionTracker.hasPeerSeenTransaction(peer, announcementToSend)) {
+          txBatch.add(announcementToSend);
+        }
+      } else {
+        // send current batch and exit loop if told so
+        if (!send(peer, txBatch, capability)) break;
 
-        LOG.atTrace()
-            .setMessage("Sending transaction hashes to peer={}, hashes={}")
-            .addArgument(peer)
-            .addArgument(txHashes)
-            .log();
-
-        final NewPooledTransactionHashesMessage message =
-            NewPooledTransactionHashesMessage.create(txBatch, capability);
-        peer.send(message);
-      } catch (final PeerNotConnected unused) {
-        LOG.atTrace()
-            .setMessage(
-                "Peer no more connected while sending transaction hashes: peer={}, message hashes={}")
-            .addArgument(peer)
-            .addArgument(txHashes)
-            .log();
-        break;
+        txBatch.clear();
       }
     }
+
+    if (!txBatch.isEmpty()) {
+      send(peer, txBatch, capability);
+    }
+  }
+
+  private boolean send(
+      final EthPeer peer, final List<Transaction> txBatch, final Capability capability) {
+    final List<Hash> txHashes = toHashList(txBatch);
+    transactionTracker.markTransactionAnnouncementsAsSeen(peer, txHashes);
+
+    try {
+      LOG.atTrace()
+          .setMessage("Sending transaction hashes to peer={}, hashes={}")
+          .addArgument(peer)
+          .addArgument(txHashes)
+          .log();
+
+      final var message = NewPooledTransactionHashesMessage.create(txBatch, capability);
+      peer.send(message);
+    } catch (final PeerNotConnected unused) {
+      LOG.atTrace()
+          .setMessage(
+              "Peer no more connected while sending transaction hashes: peer={}, message hashes={}")
+          .addArgument(peer)
+          .addArgument(txHashes)
+          .log();
+      return false;
+    }
+    return true;
   }
 }

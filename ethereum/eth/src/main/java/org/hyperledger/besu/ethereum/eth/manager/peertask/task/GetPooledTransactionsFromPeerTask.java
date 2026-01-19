@@ -26,15 +26,17 @@ import org.hyperledger.besu.ethereum.eth.messages.PooledTransactionsMessage;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.SubProtocol;
 
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.SequencedSet;
 import java.util.function.Predicate;
 
 public class GetPooledTransactionsFromPeerTask implements PeerTask<List<Transaction>> {
 
-  private final List<Hash> hashes;
+  private final SequencedSet<Hash> hashes;
 
   public GetPooledTransactionsFromPeerTask(final List<Hash> hashes) {
-    this.hashes = hashes.stream().distinct().toList();
+    this.hashes = new LinkedHashSet<>(hashes);
   }
 
   @Override
@@ -71,9 +73,5 @@ public class GetPooledTransactionsFromPeerTask implements PeerTask<List<Transact
       return PeerTaskValidationResponse.RESULTS_DO_NOT_MATCH_QUERY;
     }
     return PeerTaskValidationResponse.RESULTS_VALID_AND_GOOD;
-  }
-
-  public List<Hash> getHashes() {
-    return hashes;
   }
 }

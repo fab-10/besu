@@ -29,13 +29,13 @@ import java.util.stream.Stream;
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
 
-public class LimitedTransactionsMessagesTest {
+public class LimitedTransactionsMessageTest {
   private final BlockDataGenerator generator = new BlockDataGenerator();
   private final Set<Transaction> sampleTxs = generator.transactions(1);
   private final TransactionsMessage sampleTransactionMessages =
       TransactionsMessage.create(sampleTxs);
-  private final LimitedTransactionsMessages sampleLimitedTransactionsMessages =
-      new LimitedTransactionsMessages(sampleTransactionMessages, sampleTxs);
+  private final LimitedTransactionsMessage sampleLimitedTransactionsMessage =
+      new LimitedTransactionsMessage(sampleTransactionMessages, sampleTxs);
   private final int maxTransactionsMessageSize =
       EthProtocolConfiguration.DEFAULT.getMaxTransactionsMessageSize();
   private final int safeTxPayloadSize = maxTransactionsMessageSize / 2 + 1;
@@ -45,14 +45,14 @@ public class LimitedTransactionsMessagesTest {
     final Set<Transaction> transactions = generator.transactions(6000);
     final Set<Transaction> remainingTransactions = new HashSet<>(transactions);
 
-    final LimitedTransactionsMessages firstMessage =
-        LimitedTransactionsMessages.createLimited(
-            remainingTransactions, maxTransactionsMessageSize);
+    final LimitedTransactionsMessage firstMessage =
+        LimitedTransactionsMessage.createLimited(
+            remainingTransactions, maxTransactionsMessageSize, transactionTracker, peer);
     remainingTransactions.removeAll(firstMessage.getIncludedTransactions());
 
-    final LimitedTransactionsMessages secondMessage =
-        LimitedTransactionsMessages.createLimited(
-            remainingTransactions, maxTransactionsMessageSize);
+    final LimitedTransactionsMessage secondMessage =
+        LimitedTransactionsMessage.createLimited(
+            remainingTransactions, maxTransactionsMessageSize, transactionTracker, peer);
     remainingTransactions.removeAll(secondMessage.getIncludedTransactions());
 
     assertThat(remainingTransactions.size()).isEqualTo(0);
@@ -76,9 +76,9 @@ public class LimitedTransactionsMessagesTest {
     final Set<Transaction> remainingTransactions = new HashSet<>(transactions);
     final Set<Transaction> includedTransactions = new HashSet<>();
     while (!remainingTransactions.isEmpty()) {
-      final LimitedTransactionsMessages message =
-          LimitedTransactionsMessages.createLimited(
-              remainingTransactions, maxTransactionsMessageSize);
+      final LimitedTransactionsMessage message =
+          LimitedTransactionsMessage.createLimited(
+              remainingTransactions, maxTransactionsMessageSize, transactionTracker, peer);
       includedTransactions.addAll(message.getIncludedTransactions());
       assertThat(message.getIncludedTransactions().size()).isEqualTo(1);
       remainingTransactions.removeAll(message.getIncludedTransactions());
@@ -89,12 +89,12 @@ public class LimitedTransactionsMessagesTest {
 
   @Test
   public void getTransactionsMessage() {
-    assertThat(sampleLimitedTransactionsMessages.getTransactionsMessage())
+    assertThat(sampleLimitedTransactionsMessage.getTransactionsMessage())
         .isEqualTo(sampleTransactionMessages);
   }
 
   @Test
   public void getIncludedTransactions() {
-    assertThat(sampleLimitedTransactionsMessages.getIncludedTransactions()).isEqualTo(sampleTxs);
+    assertThat(sampleLimitedTransactionsMessage.getIncludedTransactions()).isEqualTo(sampleTxs);
   }
 }

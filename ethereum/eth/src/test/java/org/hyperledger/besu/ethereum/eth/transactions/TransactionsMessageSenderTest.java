@@ -50,7 +50,8 @@ public class TransactionsMessageSenderTest {
   private final Transaction transaction3 = generator.transaction();
 
   private final PeerTransactionTracker transactionTracker =
-      new PeerTransactionTracker(TransactionPoolConfiguration.DEFAULT, ethPeers);
+      new PeerTransactionTracker(
+          TransactionPoolConfiguration.DEFAULT, ethPeers, ethContext.getScheduler());
   private final TransactionsMessageSender messageSender =
       new TransactionsMessageSender(
           transactionTracker, EthProtocolConfiguration.DEFAULT.getMaxTransactionsMessageSize());
