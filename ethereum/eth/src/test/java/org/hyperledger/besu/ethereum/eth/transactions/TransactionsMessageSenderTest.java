@@ -27,9 +27,11 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.messages.EthProtocolMessages;
 import org.hyperledger.besu.ethereum.eth.messages.TransactionsMessage;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
+import org.hyperledger.besu.testutil.DeterministicEthScheduler;
 
 import java.util.List;
 import java.util.Set;
@@ -40,6 +42,7 @@ import org.mockito.ArgumentCaptor;
 
 public class TransactionsMessageSenderTest {
   private final EthPeers ethPeers = mock(EthPeers.class);
+  private final EthScheduler ethScheduler = new DeterministicEthScheduler();
 
   private final EthPeer peer1 = mock(EthPeer.class);
   private final EthPeer peer2 = mock(EthPeer.class);
@@ -50,17 +53,16 @@ public class TransactionsMessageSenderTest {
   private final Transaction transaction3 = generator.transaction();
 
   private final PeerTransactionTracker transactionTracker =
-      new PeerTransactionTracker(
-          TransactionPoolConfiguration.DEFAULT, ethPeers, ethContext.getScheduler());
+      new PeerTransactionTracker(TransactionPoolConfiguration.DEFAULT, ethPeers, ethScheduler);
   private final TransactionsMessageSender messageSender =
       new TransactionsMessageSender(
           transactionTracker, EthProtocolConfiguration.DEFAULT.getMaxTransactionsMessageSize());
 
   @Test
   public void shouldSendTransactionsToEachPeer() throws Exception {
-    transactionTracker.addToPeerSendQueue(peer1, transaction1);
-    transactionTracker.addToPeerSendQueue(peer1, transaction2);
-    transactionTracker.addToPeerSendQueue(peer2, transaction3);
+    transactionTracker.addToPeerSendQueue(peer1, List.of(transaction1));
+    transactionTracker.addToPeerSendQueue(peer1, List.of(transaction2));
+    transactionTracker.addToPeerSendQueue(peer2, List.of(transaction3));
 
     messageSender.sendTransactionsToPeer(peer1);
     messageSender.sendTransactionsToPeer(peer2);
@@ -74,7 +76,8 @@ public class TransactionsMessageSenderTest {
   public void shouldSendTransactionsInBatchesWithLimit() throws Exception {
     final Set<Transaction> transactions = generator.transactions(6000);
 
-    transactions.forEach(transaction -> transactionTracker.addToPeerSendQueue(peer1, transaction));
+    transactions.forEach(
+        transaction -> transactionTracker.addToPeerSendQueue(peer1, List.of(transaction)));
 
     messageSender.sendTransactionsToPeer(peer1);
 

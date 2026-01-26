@@ -246,23 +246,25 @@ public class TransactionBroadcasterTest {
         .collect(Collectors.toSet());
   }
 
+  @SuppressWarnings("unchecked")
   private void verifyTransactionAddedToPeerSendingQueue(
       final EthPeer peer, final Collection<Transaction> transactions) {
 
-    ArgumentCaptor<Transaction> trackedTransactions = ArgumentCaptor.forClass(Transaction.class);
+    ArgumentCaptor<List<Transaction>> trackedTransactions = ArgumentCaptor.forClass(List.class);
     verify(transactionTracker, times(transactions.size()))
         .addToPeerSendQueue(eq(peer), trackedTransactions.capture());
-    assertThat(trackedTransactions.getAllValues())
+    assertThat(trackedTransactions.getAllValues().stream().flatMap(List::stream).toList())
         .containsExactlyInAnyOrderElementsOf(transactions);
   }
 
+  @SuppressWarnings("unchecked")
   private void verifyTransactionAddedToPeerHashSendingQueue(
       final EthPeer peer, final Collection<Transaction> transactions) {
 
-    ArgumentCaptor<Transaction> trackedTransactions = ArgumentCaptor.forClass(Transaction.class);
+    ArgumentCaptor<List<Transaction>> trackedTransactions = ArgumentCaptor.forClass(List.class);
     verify(transactionTracker, times(transactions.size()))
         .addToPeerAnnouncementsSendQueue(eq(peer), trackedTransactions.capture());
-    assertThat(trackedTransactions.getAllValues())
+    assertThat(trackedTransactions.getAllValues().stream().flatMap(List::stream).toList())
         .containsExactlyInAnyOrderElementsOf(transactions);
   }
 

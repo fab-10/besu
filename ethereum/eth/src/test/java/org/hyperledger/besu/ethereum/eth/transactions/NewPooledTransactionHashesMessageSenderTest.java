@@ -31,10 +31,12 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.manager.MockPeerConnection;
 import org.hyperledger.besu.ethereum.eth.messages.EthProtocolMessages;
 import org.hyperledger.besu.ethereum.eth.messages.NewPooledTransactionHashesMessage;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
+import org.hyperledger.besu.testutil.DeterministicEthScheduler;
 
 import java.util.Arrays;
 import java.util.List;
@@ -49,6 +51,7 @@ import org.mockito.ArgumentCaptor;
 
 public class NewPooledTransactionHashesMessageSenderTest {
   private final EthPeers ethPeers = mock(EthPeers.class);
+  private final EthScheduler ethScheduler = new DeterministicEthScheduler();
 
   private final EthPeer peer1 = mock(EthPeer.class);
   private final EthPeer peer2 = mock(EthPeer.class);
@@ -66,8 +69,7 @@ public class NewPooledTransactionHashesMessageSenderTest {
   @BeforeEach
   public void setUp() {
     transactionTracker =
-        new PeerTransactionTracker(
-            TransactionPoolConfiguration.DEFAULT, ethPeers, ethContext.getScheduler());
+        new PeerTransactionTracker(TransactionPoolConfiguration.DEFAULT, ethPeers, ethScheduler);
     messageSender = new NewPooledTransactionHashesMessageSender(transactionTracker);
     final Transaction tx = mock(Transaction.class);
     pendingTransactions = mock(PendingTransactions.class);
@@ -82,9 +84,9 @@ public class NewPooledTransactionHashesMessageSenderTest {
   @Test
   public void shouldSendPendingTransactionsToEachPeer() throws Exception {
 
-    transactionTracker.addToPeerAnnouncementsSendQueue(peer1, transaction1);
-    transactionTracker.addToPeerAnnouncementsSendQueue(peer1, transaction2);
-    transactionTracker.addToPeerAnnouncementsSendQueue(peer2, transaction3);
+    transactionTracker.addToPeerAnnouncementsSendQueue(peer1, List.of(transaction1));
+    transactionTracker.addToPeerAnnouncementsSendQueue(peer1, List.of(transaction2));
+    transactionTracker.addToPeerAnnouncementsSendQueue(peer2, List.of(transaction3));
 
     List.of(peer1, peer2).forEach(messageSender::sendTransactionAnnouncementsToPeer);
 
@@ -101,7 +103,8 @@ public class NewPooledTransactionHashesMessageSenderTest {
         generator.transactions(6000).stream().collect(Collectors.toSet());
 
     transactions.forEach(
-        transaction -> transactionTracker.addToPeerAnnouncementsSendQueue(peer1, transaction));
+        transaction ->
+            transactionTracker.addToPeerAnnouncementsSendQueue(peer1, List.of(transaction)));
 
     messageSender.sendTransactionAnnouncementsToPeer(peer1);
     final ArgumentCaptor<MessageData> messageDataArgumentCaptor =

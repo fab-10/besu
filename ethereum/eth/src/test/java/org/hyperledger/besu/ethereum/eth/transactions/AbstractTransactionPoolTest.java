@@ -58,6 +58,7 @@ import org.hyperledger.besu.plugin.services.TransactionPoolValidatorService;
 import org.hyperledger.besu.util.number.Percentage;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -505,8 +506,12 @@ public abstract class AbstractTransactionPoolTest extends AbstractTransactionPoo
 
     RespondingEthPeer peer = EthProtocolManagerTestUtil.createPeer(ethProtocolManager);
 
-    Set<Transaction> transactionsToSendToPeer =
-        peerTransactionTracker.claimTransactionAnnouncementToSendToPeer(peer.getEthPeer());
+    Set<Transaction> transactionsToSendToPeer = new HashSet<>();
+    Transaction tx;
+    while ((tx = peerTransactionTracker.claimTransactionAnnouncementToSendToPeer(peer.getEthPeer()))
+        != null) {
+      transactionsToSendToPeer.add(tx);
+    }
 
     assertThat(transactionsToSendToPeer).contains(transaction0, transaction1);
   }

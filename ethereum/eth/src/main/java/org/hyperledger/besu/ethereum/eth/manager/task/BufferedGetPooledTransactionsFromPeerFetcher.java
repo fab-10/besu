@@ -28,13 +28,14 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 
 import java.util.List;
 
+import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class BufferedGetPooledTransactionsFromPeerFetcher {
   private static final Logger LOG =
       LoggerFactory.getLogger(BufferedGetPooledTransactionsFromPeerFetcher.class);
-  private static final int MAX_HASHES = 256;
+  @VisibleForTesting static final int MAX_HASHES = 256;
 
   private final TransactionPool transactionPool;
   private final PeerTransactionTracker transactionTracker;

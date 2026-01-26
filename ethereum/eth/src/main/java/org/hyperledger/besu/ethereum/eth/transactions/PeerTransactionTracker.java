@@ -227,7 +227,7 @@ public class PeerTransactionTracker
 
   public synchronized boolean hasSeenTransaction(final Hash txHash) {
     return recentlyConfirmedTransactions.contains(txHash)
-        && seenTransactions.values().stream().anyMatch(seen -> seen.contains(txHash));
+        || seenTransactions.values().stream().anyMatch(seen -> seen.contains(txHash));
   }
 
   public boolean hasPeerSeenTransaction(final EthPeer peer, final Transaction transaction) {

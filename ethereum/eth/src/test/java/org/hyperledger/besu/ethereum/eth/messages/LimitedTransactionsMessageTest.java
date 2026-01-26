@@ -20,6 +20,7 @@ import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
 
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -31,11 +32,6 @@ import org.junit.jupiter.api.Test;
 
 public class LimitedTransactionsMessageTest {
   private final BlockDataGenerator generator = new BlockDataGenerator();
-  private final Set<Transaction> sampleTxs = generator.transactions(1);
-  private final TransactionsMessage sampleTransactionMessages =
-      TransactionsMessage.create(sampleTxs);
-  private final LimitedTransactionsMessage sampleLimitedTransactionsMessage =
-      new LimitedTransactionsMessage(sampleTransactionMessages, sampleTxs);
   private final int maxTransactionsMessageSize =
       EthProtocolConfiguration.DEFAULT.getMaxTransactionsMessageSize();
   private final int safeTxPayloadSize = maxTransactionsMessageSize / 2 + 1;
@@ -43,26 +39,27 @@ public class LimitedTransactionsMessageTest {
   @Test
   public void createLimited() {
     final Set<Transaction> transactions = generator.transactions(6000);
-    final Set<Transaction> remainingTransactions = new HashSet<>(transactions);
+    final List<Transaction> remainingTransactions = new ArrayList<>(transactions);
+    final Set<Transaction> includedTransactions = new HashSet<>();
 
-    final LimitedTransactionsMessage firstMessage =
-        LimitedTransactionsMessage.createLimited(
-            remainingTransactions, maxTransactionsMessageSize, transactionTracker, peer);
-    remainingTransactions.removeAll(firstMessage.getIncludedTransactions());
+    while (!remainingTransactions.isEmpty()) {
+      final LimitedTransactionsMessage message =
+          new LimitedTransactionsMessage(maxTransactionsMessageSize);
 
-    final LimitedTransactionsMessage secondMessage =
-        LimitedTransactionsMessage.createLimited(
-            remainingTransactions, maxTransactionsMessageSize, transactionTracker, peer);
-    remainingTransactions.removeAll(secondMessage.getIncludedTransactions());
+      // Add transactions until the message is full
+      remainingTransactions.removeIf(
+          tx -> {
+            if (message.add(tx)) {
+              includedTransactions.add(tx);
+              return true;
+            }
+            return false;
+          });
+
+      assertThat(message.getEstimatedMessageSize()).isLessThanOrEqualTo(maxTransactionsMessageSize);
+    }
 
     assertThat(remainingTransactions.size()).isEqualTo(0);
-    List.of(firstMessage, secondMessage).stream()
-        .map(message -> message.getTransactionsMessage().getSize())
-        .forEach(messageSize -> assertThat(messageSize).isLessThan(maxTransactionsMessageSize));
-
-    final Set<Transaction> includedTransactions = new HashSet<>();
-    includedTransactions.addAll(firstMessage.getIncludedTransactions());
-    includedTransactions.addAll(secondMessage.getIncludedTransactions());
     assertThat(includedTransactions)
         .containsExactlyInAnyOrder(transactions.toArray(new Transaction[] {}));
   }
@@ -73,28 +70,77 @@ public class LimitedTransactionsMessageTest {
         Stream.generate(() -> generator.transaction(Bytes.wrap(new byte[safeTxPayloadSize])))
             .limit(3)
             .collect(Collectors.toUnmodifiableSet());
-    final Set<Transaction> remainingTransactions = new HashSet<>(transactions);
+    final List<Transaction> remainingTransactions = new ArrayList<>(transactions);
     final Set<Transaction> includedTransactions = new HashSet<>();
+
     while (!remainingTransactions.isEmpty()) {
       final LimitedTransactionsMessage message =
-          LimitedTransactionsMessage.createLimited(
-              remainingTransactions, maxTransactionsMessageSize, transactionTracker, peer);
-      includedTransactions.addAll(message.getIncludedTransactions());
-      assertThat(message.getIncludedTransactions().size()).isEqualTo(1);
-      remainingTransactions.removeAll(message.getIncludedTransactions());
+          new LimitedTransactionsMessage(maxTransactionsMessageSize);
+
+      // Add transactions until the message is full
+      remainingTransactions.removeIf(
+          tx -> {
+            if (message.add(tx)) {
+              includedTransactions.add(tx);
+              return true;
+            }
+            return false;
+          });
+
+      // Each transaction is just under half the limit, so only 1 should fit per message
+      assertThat(
+              (int)
+                  transactions.stream()
+                      .filter(
+                          tx ->
+                              includedTransactions.contains(tx)
+                                  && !remainingTransactions.contains(tx))
+                      .count())
+          .isGreaterThanOrEqualTo(1);
     }
     assertThat(includedTransactions)
         .containsExactlyInAnyOrder(transactions.toArray(new Transaction[] {}));
   }
 
   @Test
-  public void getTransactionsMessage() {
-    assertThat(sampleLimitedTransactionsMessage.getTransactionsMessage())
-        .isEqualTo(sampleTransactionMessages);
+  public void addTransactionReturnsFalseWhenMessageIsFull() {
+    final Transaction largeTransaction =
+        generator.transaction(Bytes.wrap(new byte[maxTransactionsMessageSize - 100]));
+    final Transaction smallTransaction = generator.transaction();
+
+    final LimitedTransactionsMessage message =
+        new LimitedTransactionsMessage(maxTransactionsMessageSize);
+
+    assertThat(message.add(largeTransaction)).isTrue();
+    assertThat(message.add(smallTransaction)).isFalse();
   }
 
   @Test
-  public void getIncludedTransactions() {
-    assertThat(sampleLimitedTransactionsMessage.getIncludedTransactions()).isEqualTo(sampleTxs);
+  public void getTransactionsMessageReturnsValidMessage() {
+    final Set<Transaction> transactions = generator.transactions(10);
+    final LimitedTransactionsMessage message =
+        new LimitedTransactionsMessage(maxTransactionsMessageSize);
+
+    transactions.forEach(message::add);
+
+    final TransactionsMessage transactionsMessage = message.getTransactionsMessage();
+    assertThat(transactionsMessage).isNotNull();
+    assertThat(transactionsMessage.transactions()).hasSameSizeAs(transactions);
+  }
+
+  @Test
+  public void estimatedMessageSizeIncreasesAsTransactionsAreAdded() {
+    final List<Transaction> transactions = new ArrayList<>(generator.transactions(5));
+    final LimitedTransactionsMessage message =
+        new LimitedTransactionsMessage(maxTransactionsMessageSize);
+
+    int previousSize = message.getEstimatedMessageSize();
+
+    for (Transaction tx : transactions) {
+      message.add(tx);
+      int currentSize = message.getEstimatedMessageSize();
+      assertThat(currentSize).isGreaterThan(previousSize);
+      previousSize = currentSize;
+    }
   }
 }

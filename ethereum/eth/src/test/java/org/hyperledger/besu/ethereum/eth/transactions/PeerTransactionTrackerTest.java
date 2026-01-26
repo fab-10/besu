@@ -26,9 +26,12 @@ import org.hyperledger.besu.ethereum.eth.manager.ChainState;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeerImmutableAttributes;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.manager.PeerReputation;
 import org.hyperledger.besu.ethereum.p2p.rlpx.connections.PeerConnection;
+import org.hyperledger.besu.testutil.DeterministicEthScheduler;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
 
@@ -37,6 +40,7 @@ import org.junit.jupiter.api.Test;
 
 public class PeerTransactionTrackerTest {
   private final EthPeers ethPeers = mock(EthPeers.class);
+  private final EthScheduler ethScheduler = new DeterministicEthScheduler();
   private final EthPeer ethPeer1 = mockPeer();
   private final EthPeer ethPeer2 = mockPeer();
   private final BlockDataGenerator generator = new BlockDataGenerator();
@@ -44,8 +48,7 @@ public class PeerTransactionTrackerTest {
   private final Transaction transaction2 = generator.transaction();
   private final Transaction transaction3 = generator.transaction();
   private final PeerTransactionTracker tracker =
-      new PeerTransactionTracker(
-          TransactionPoolConfiguration.DEFAULT, ethPeers, ethContext.getScheduler());
+      new PeerTransactionTracker(TransactionPoolConfiguration.DEFAULT, ethPeers, ethScheduler);
   private final PeerTransactionTracker forgetfulTracker =
       new PeerTransactionTracker(
           ImmutableTransactionPoolConfiguration.builder()
@@ -55,7 +58,7 @@ public class PeerTransactionTrackerTest {
                       .build())
               .build(),
           ethPeers,
-          ethContext.getScheduler());
+          ethScheduler);
   private final PeerTransactionTracker shortMemoryTracker =
       new PeerTransactionTracker(
           ImmutableTransactionPoolConfiguration.builder()
@@ -65,31 +68,31 @@ public class PeerTransactionTrackerTest {
                       .build())
               .build(),
           ethPeers,
-          ethContext.getScheduler());
+          ethScheduler);
 
   @Test
   public void shouldTrackTransactionsToSendToPeer() {
-    tracker.addToPeerSendQueue(ethPeer1, transaction1);
-    tracker.addToPeerSendQueue(ethPeer1, transaction2);
-    tracker.addToPeerSendQueue(ethPeer2, transaction3);
+    tracker.addToPeerSendQueue(ethPeer1, List.of(transaction1));
+    tracker.addToPeerSendQueue(ethPeer1, List.of(transaction2));
+    tracker.addToPeerSendQueue(ethPeer2, List.of(transaction3));
 
     assertThat(tracker.getEthPeersWithUnsentTransactions()).containsOnly(ethPeer1, ethPeer2);
-    assertThat(tracker.claimTransactionsToSendToPeer(ethPeer1))
+    assertThat(claimAllTransactionsToSend(tracker, ethPeer1))
         .containsOnly(transaction1, transaction2);
-    assertThat(tracker.claimTransactionsToSendToPeer(ethPeer2)).containsOnly(transaction3);
+    assertThat(claimAllTransactionsToSend(tracker, ethPeer2)).containsOnly(transaction3);
   }
 
   @Test
   public void shouldExcludeAlreadySeenTransactionsFromTransactionsToSend() {
     tracker.markTransactionsAsSeen(ethPeer1, ImmutableSet.of(transaction2));
 
-    tracker.addToPeerSendQueue(ethPeer1, transaction1);
-    tracker.addToPeerSendQueue(ethPeer1, transaction2);
-    tracker.addToPeerSendQueue(ethPeer2, transaction3);
+    tracker.addToPeerSendQueue(ethPeer1, List.of(transaction1));
+    tracker.addToPeerSendQueue(ethPeer1, List.of(transaction2));
+    tracker.addToPeerSendQueue(ethPeer2, List.of(transaction3));
 
     assertThat(tracker.getEthPeersWithUnsentTransactions()).containsOnly(ethPeer1, ethPeer2);
-    assertThat(tracker.claimTransactionsToSendToPeer(ethPeer1)).containsOnly(transaction1);
-    assertThat(tracker.claimTransactionsToSendToPeer(ethPeer2)).containsOnly(transaction3);
+    assertThat(claimAllTransactionsToSend(tracker, ethPeer1)).containsOnly(transaction1);
+    assertThat(claimAllTransactionsToSend(tracker, ethPeer2)).containsOnly(transaction3);
   }
 
   @Test
@@ -146,21 +149,21 @@ public class PeerTransactionTrackerTest {
   public void shouldExcludeAlreadySeenTransactionsAsACollectionFromTransactionsToSend() {
     tracker.markTransactionsAsSeen(ethPeer1, ImmutableSet.of(transaction1, transaction2));
 
-    tracker.addToPeerSendQueue(ethPeer1, transaction1);
-    tracker.addToPeerSendQueue(ethPeer1, transaction2);
-    tracker.addToPeerSendQueue(ethPeer2, transaction3);
+    tracker.addToPeerSendQueue(ethPeer1, List.of(transaction1));
+    tracker.addToPeerSendQueue(ethPeer1, List.of(transaction2));
+    tracker.addToPeerSendQueue(ethPeer2, List.of(transaction3));
 
     assertThat(tracker.getEthPeersWithUnsentTransactions()).containsOnly(ethPeer2);
-    assertThat(tracker.claimTransactionsToSendToPeer(ethPeer1)).isEmpty();
-    assertThat(tracker.claimTransactionsToSendToPeer(ethPeer2)).containsOnly(transaction3);
+    assertThat(claimAllTransactionsToSend(tracker, ethPeer1)).isEmpty();
+    assertThat(claimAllTransactionsToSend(tracker, ethPeer2)).containsOnly(transaction3);
   }
 
   @Test
   public void shouldClearDataWhenPeerDisconnects() {
     tracker.markTransactionsAsSeen(ethPeer1, ImmutableSet.of(transaction1));
 
-    tracker.addToPeerSendQueue(ethPeer1, transaction2);
-    tracker.addToPeerSendQueue(ethPeer2, transaction3);
+    tracker.addToPeerSendQueue(ethPeer1, List.of(transaction2));
+    tracker.addToPeerSendQueue(ethPeer2, List.of(transaction3));
 
     when(ethPeers.streamAllPeers())
         .thenReturn(Stream.of(ethPeer2).map(EthPeerImmutableAttributes::from));
@@ -169,11 +172,11 @@ public class PeerTransactionTrackerTest {
     assertThat(tracker.getEthPeersWithUnsentTransactions()).containsOnly(ethPeer2);
 
     // Should have cleared data that ethPeer1 has already seen transaction1
-    tracker.addToPeerSendQueue(ethPeer1, transaction1);
+    tracker.addToPeerSendQueue(ethPeer1, List.of(transaction1));
 
     assertThat(tracker.getEthPeersWithUnsentTransactions()).containsOnly(ethPeer1, ethPeer2);
-    assertThat(tracker.claimTransactionsToSendToPeer(ethPeer1)).containsOnly(transaction1);
-    assertThat(tracker.claimTransactionsToSendToPeer(ethPeer2)).containsOnly(transaction3);
+    assertThat(claimAllTransactionsToSend(tracker, ethPeer1)).containsOnly(transaction1);
+    assertThat(claimAllTransactionsToSend(tracker, ethPeer2)).containsOnly(transaction3);
   }
 
   @Test
@@ -217,7 +220,22 @@ public class PeerTransactionTrackerTest {
       public boolean stopTracking() {
         return stopTracking;
       }
+
+      @Override
+      public boolean stopBroadcasting() {
+        return false;
+      }
     };
+  }
+
+  private List<Transaction> claimAllTransactionsToSend(
+      final PeerTransactionTracker tracker, final EthPeer peer) {
+    final List<Transaction> result = new ArrayList<>();
+    Transaction tx;
+    while ((tx = tracker.claimTransactionToSendToPeer(peer)) != null) {
+      result.add(tx);
+    }
+    return result;
   }
 
   private EthPeer mockPeer() {
