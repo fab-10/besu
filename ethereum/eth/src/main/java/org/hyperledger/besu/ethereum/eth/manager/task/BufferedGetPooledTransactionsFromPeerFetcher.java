@@ -58,14 +58,14 @@ public class BufferedGetPooledTransactionsFromPeerFetcher {
     while (!(txHashesToRequest =
             transactionTracker.claimTransactionAnnouncementsToRequestFromPeer(peer, MAX_HASHES))
         .isEmpty()) {
-      final var hashes = txHashesToRequest;
       LOG.atTrace()
           .setMessage("Transaction hashes to request from peer={}, requesting hashes={}")
           .addArgument(peer)
-          .addArgument(hashes)
+          .addArgument(txHashesToRequest)
           .log();
 
-      final GetPooledTransactionsFromPeerTask task = new GetPooledTransactionsFromPeerTask(hashes);
+      final GetPooledTransactionsFromPeerTask task =
+          new GetPooledTransactionsFromPeerTask(txHashesToRequest);
 
       try {
         PeerTaskExecutorResult<List<Transaction>> taskResult =
@@ -77,17 +77,25 @@ public class BufferedGetPooledTransactionsFromPeerFetcher {
               .setMessage(
                   "Failed to retrieve transactions by hash from peer={}, requested hashes={}")
               .addArgument(peer)
-              .addArgument(hashes)
+              .addArgument(txHashesToRequest)
               .log();
         } else {
           final var retrievedTransactions = taskResult.result().get();
+          final var retrievedHashes = toHashList(retrievedTransactions);
+          transactionTracker.markTransactionsAsSeen(peer, retrievedHashes);
+
+          final var missedHashes =
+              txHashesToRequest.stream().filter(h -> !retrievedHashes.contains(h)).toList();
+          transactionTracker.missedTransactionAnnouncements(peer, missedHashes);
+
           LOG.atTrace()
               .setMessage(
                   "Got transactions requested by hash from peer={}, "
-                      + "requested hashes={}, retrieved hashes={}")
+                      + "requested hashes={}, retrieved hashes={}, missed hashes={}")
               .addArgument(peer)
-              .addArgument(hashes)
-              .addArgument(() -> toHashList(retrievedTransactions))
+              .addArgument(txHashesToRequest)
+              .addArgument(retrievedHashes)
+              .addArgument(missedHashes)
               .log();
 
           transactionPool.addRemoteTransactions(retrievedTransactions);
@@ -96,11 +104,11 @@ public class BufferedGetPooledTransactionsFromPeerFetcher {
         LOG.atTrace()
             .setMessage("Failed to retrieve transactions by hash from peer={}, requested hashes={}")
             .addArgument(peer)
-            .addArgument(hashes)
+            .addArgument(txHashesToRequest)
             .setCause(t)
             .log();
       } finally {
-        transactionTracker.retrievedTransactionAnnouncements(hashes);
+        transactionTracker.consumedTransactionAnnouncements(txHashesToRequest);
       }
     }
   }

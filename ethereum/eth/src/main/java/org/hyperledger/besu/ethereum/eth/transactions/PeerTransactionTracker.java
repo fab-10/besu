@@ -106,8 +106,7 @@ public class PeerTransactionTracker
   }
 
   public synchronized void markTransactionsAsSeen(
-      final EthPeer peer, final Collection<Transaction> transactions) {
-    final var seenHashes = toHashList(transactions);
+      final EthPeer peer, final Collection<Hash> seenHashes) {
     seenTransactions.computeIfAbsent(peer, key -> createSeenSet()).addAll(seenHashes);
     transactionAnnouncementsToRequest
         .values()
@@ -124,7 +123,8 @@ public class PeerTransactionTracker
   public synchronized void markTransactionAnnouncementsAsSeen(
       final EthPeer peer, final Collection<Hash> announcements) {
     seenAnnouncements.computeIfAbsent(peer, key -> createSeenSet()).addAll(announcements);
-    transactionAnnouncementsToRequest.values().forEach(hashes -> hashes.removeAll(announcements));
+    // do not clean transactionAnnouncementsToRequest to allow for retries with other peers
+    //transactionAnnouncementsToRequest.values().forEach(hashes -> hashes.removeAll(announcements));
   }
 
   public synchronized void addToPeerSendQueue(
@@ -179,11 +179,26 @@ public class PeerTransactionTracker
           inProgressAnnouncements.add(hash);
           itAnnouncements.remove();
         }
+        // if announcement not in progress, then keep in the queue, since it could be
+        // tried later if the current in progress retrieval should fail
       }
       return returnAnnouncements;
     } else {
       return emptyList();
     }
+  }
+
+  public synchronized void missedTransactionAnnouncements(
+      final EthPeer peer, final List<Hash> missedHashes) {
+    final var transactionAnnouncements = transactionAnnouncementsToRequest.get(peer);
+
+    if (transactionAnnouncements != null && !transactionAnnouncements.isEmpty()) {
+      missedHashes.forEach(transactionAnnouncements::remove);
+    }
+  }
+
+  public synchronized void consumedTransactionAnnouncements(final List<Hash> requestedHashes) {
+    requestedHashes.forEach(inProgressAnnouncements::remove);
   }
 
   public synchronized Collection<Hash> receivedTransactionAnnouncements(
@@ -206,10 +221,6 @@ public class PeerTransactionTracker
     return freshAnnouncements;
   }
 
-  public synchronized void retrievedTransactionAnnouncements(final List<Hash> retrievedHashes) {
-    retrievedHashes.forEach(inProgressAnnouncements::remove);
-  }
-
   public synchronized Collection<Transaction> receivedTransactions(
       final EthPeer peer, final List<Transaction> incomingTransactions) {
     final var freshTransactions = new ArrayList<Transaction>(incomingTransactions.size());
@@ -220,7 +231,7 @@ public class PeerTransactionTracker
       }
     }
 
-    markTransactionsAsSeen(peer, incomingTransactions);
+    markTransactionsAsSeen(peer, toHashList(incomingTransactions));
 
     return freshTransactions;
   }
@@ -245,6 +256,19 @@ public class PeerTransactionTracker
   public synchronized boolean hasSeenTransactionAnnouncement(
       final EthPeer peer, final Hash txHash) {
     if (recentlyConfirmedTransactions.contains(txHash)) {
+      return true;
+    }
+    final var seenAnnouncementsForPeer = seenAnnouncements.get(peer);
+    return seenAnnouncementsForPeer != null && seenAnnouncementsForPeer.contains(txHash);
+  }
+
+  public synchronized boolean hasSeenTransactionOrAnnouncement(
+      final EthPeer peer, final Hash txHash) {
+    if (recentlyConfirmedTransactions.contains(txHash)) {
+      return true;
+    }
+    final Set<Hash> seenTransactionsForPeer = seenTransactions.get(peer);
+    if(seenTransactionsForPeer != null && seenTransactionsForPeer.contains(txHash)) {
       return true;
     }
     final var seenAnnouncementsForPeer = seenAnnouncements.get(peer);
