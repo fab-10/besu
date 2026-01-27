@@ -23,6 +23,7 @@ import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetPooledTransactionsFromPeerTask;
+import org.hyperledger.besu.ethereum.eth.transactions.DuplicateBroadcastFinder;
 import org.hyperledger.besu.ethereum.eth.transactions.PeerTransactionTracker;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
@@ -91,6 +92,7 @@ public class BufferedGetPooledTransactionsFromPeerFetcher {
           .getScheduler()
           .scheduleServiceTask(
               () -> {
+                DuplicateBroadcastFinder.getPooledTransactionsFromPeer(task.getHashes());
                 PeerTaskExecutorResult<List<Transaction>> taskResult =
                     ethContext.getPeerTaskExecutor().executeAgainstPeer(task, peer);
                 if (taskResult.responseCode() != PeerTaskExecutorResponseCode.SUCCESS
