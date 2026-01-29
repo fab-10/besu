@@ -921,7 +921,11 @@ public final class EthProtocolManagerTest {
         blockHashes.add(header.getHash());
       }
       final MessageData messageData =
-          GetReceiptsMessage.create(blockHashes).wrapMessageData(BigInteger.ONE);
+          GetReceiptsMessage.create(blockHashes, 1).wrapMessageData(BigInteger.ONE);
+
+      final var umd = messageData.unwrapMessageData();
+      GetReceiptsMessage.readFrom(umd.getValue());
+      System.out.println(umd);
 
       // Define handler to validate response
       final PeerSendHandler onSend =

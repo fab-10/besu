@@ -96,13 +96,21 @@ class EthServer {
                 maxMessageSize));
     ethMessages.registerResponseConstructor(
         EthProtocolMessages.GET_RECEIPTS,
-        (peer, messageData, capability) ->
-            constructGetReceiptsResponse(
+        (peer, messageData, capability) -> {
+          if (EthProtocol.ETH70.equals(capability)) {
+            return constructGetReceiptsPaginatedResponse(
                 blockchain,
                 messageData,
                 ethereumWireProtocolConfiguration.getMaxGetReceipts(),
-                maxMessageSize,
-                capability));
+                maxMessageSize);
+          }
+          return constructGetReceiptsResponse(
+              blockchain,
+              messageData,
+              ethereumWireProtocolConfiguration.getMaxGetReceipts(),
+              maxMessageSize,
+              capability);
+        });
     ethMessages.registerResponseConstructor(
         EthProtocolMessages.GET_NODE_DATA,
         (peer, messageData, capability) ->
@@ -226,18 +234,18 @@ class EthServer {
       final int maxMessageSize,
       final Capability cap) {
     final GetReceiptsMessage getReceipts = GetReceiptsMessage.readFrom(message);
-    final Iterable<Hash> hashes = getReceipts.hashes();
+    final Iterable<Hash> blockHashes = getReceipts.blockHashes();
 
     int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;
     final BytesValueRLPOutput rlp = new BytesValueRLPOutput();
     rlp.startList();
     int count = 0;
-    for (final Hash hash : hashes) {
+    for (final Hash blockHash : blockHashes) {
       if (count >= requestLimit) {
         break;
       }
       count++;
-      final Optional<List<TransactionReceipt>> maybeReceipts = blockchain.getTxReceipts(hash);
+      final Optional<List<TransactionReceipt>> maybeReceipts = blockchain.getTxReceipts(blockHash);
       if (maybeReceipts.isEmpty()) {
         continue;
       }
@@ -263,6 +271,81 @@ class EthServer {
     rlp.endList();
 
     return ReceiptsMessage.createUnsafe(rlp.encoded());
+  }
+
+  static MessageData constructGetReceiptsPaginatedResponse(
+      final Blockchain blockchain,
+      final MessageData message,
+      final int requestLimit,
+      final int maxMessageSize) {
+    final GetReceiptsMessage getReceipts = GetReceiptsMessage.readFrom(message);
+    final List<Hash> requestedBlockHashes = getReceipts.blockHashes();
+    final List<Hash> blockHashes;
+    if (requestedBlockHashes.size() > requestLimit) {
+      LOG.atDebug()
+          .setMessage(
+              "Requested receipts for {} blocks, more than allowed max number of {}, ignoring extra blocks")
+          .addArgument(requestedBlockHashes::size)
+          .addArgument(requestLimit)
+          .log();
+      blockHashes = requestedBlockHashes.subList(0, requestLimit);
+    } else {
+      blockHashes = requestedBlockHashes;
+    }
+
+    final var blockReceiptsRLPs = new ArrayList<BytesValueRLPOutput>(blockHashes.size());
+
+    int skipBefore = getReceipts.firstBlockReceiptIndex();
+    int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;
+    boolean lastBlockIncomplete = false;
+
+    for (final Hash blockHash : blockHashes) {
+      final Optional<List<TransactionReceipt>> maybeReceipts = blockchain.getTxReceipts(blockHash);
+      if (maybeReceipts.isEmpty()) {
+        continue;
+      }
+
+      final var blockReceipts = maybeReceipts.get();
+      final List<TransactionReceipt> requestedReceipts;
+      if (skipBefore > 0) {
+        requestedReceipts = blockReceipts.subList(skipBefore, blockReceipts.size());
+        skipBefore = 0;
+      } else {
+        requestedReceipts = blockReceipts;
+      }
+
+      final BytesValueRLPOutput encodedBlockReceipts = new BytesValueRLPOutput();
+      encodedBlockReceipts.startList();
+
+      TransactionReceiptEncodingConfiguration encodingConfiguration =
+          TransactionReceiptEncodingConfiguration.ETH69_RECEIPT_CONFIGURATION;
+
+      for (final TransactionReceipt receipt : requestedReceipts) {
+        final BytesValueRLPOutput encodedReceipt = new BytesValueRLPOutput();
+        TransactionReceiptEncoder.writeTo(receipt, encodedReceipt, encodingConfiguration);
+        if (responseSizeEstimate + encodedReceipt.encodedSize() + RLP.MAX_PREFIX_SIZE
+            > maxMessageSize) {
+          lastBlockIncomplete = true;
+          break;
+        }
+        responseSizeEstimate += encodedReceipt.encodedSize();
+        encodedBlockReceipts.writeRaw(encodedReceipt.encoded());
+      }
+
+      encodedBlockReceipts.endList();
+      blockReceiptsRLPs.add(encodedBlockReceipts);
+      if (lastBlockIncomplete) {
+        break;
+      }
+    }
+
+    final BytesValueRLPOutput rlp = new BytesValueRLPOutput();
+    rlp.writeUnsignedByte(lastBlockIncomplete ? 1 : 0);
+    rlp.startList();
+    blockReceiptsRLPs.forEach(r -> rlp.writeRaw(r.encoded()));
+    rlp.endList();
+
+    return ReceiptsMessage.createUnsafe(rlp.encoded(), lastBlockIncomplete);
   }
 
   static MessageData constructGetPooledTransactionsResponse(

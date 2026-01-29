@@ -54,7 +54,7 @@ public class GetHeadersFromPeerTaskTest {
   public void testGetRequestMessageForHash() {
     GetHeadersFromPeerTask task =
         new GetHeadersFromPeerTask(Hash.ZERO, 0, 1, 0, Direction.FORWARD, null);
-    MessageData requestMessageData = task.getRequestMessage();
+    MessageData requestMessageData = task.getRequestMessage(peer.getAgreedCapabilities());
     Assertions.assertEquals(
         "0xe4a00000000000000000000000000000000000000000000000000000000000000000018080",
         requestMessageData.getData().toHexString());
@@ -63,7 +63,7 @@ public class GetHeadersFromPeerTaskTest {
   @Test
   public void testGetRequestMessageForBlockNumber() {
     GetHeadersFromPeerTask task = new GetHeadersFromPeerTask(123, 1, 0, Direction.FORWARD, null);
-    MessageData requestMessageData = task.getRequestMessage();
+    MessageData requestMessageData = task.getRequestMessage(peer.getAgreedCapabilities());
     Assertions.assertEquals("0xc47b018080", requestMessageData.getData().toHexString());
   }
 
@@ -71,7 +71,7 @@ public class GetHeadersFromPeerTaskTest {
   public void testGetRequestMessageForHashWhenBlockNumberAlsoProvided() {
     GetHeadersFromPeerTask task =
         new GetHeadersFromPeerTask(Hash.ZERO, 123, 1, 0, Direction.FORWARD, null);
-    MessageData requestMessageData = task.getRequestMessage();
+    MessageData requestMessageData = task.getRequestMessage(peer.getAgreedCapabilities());
     Assertions.assertEquals(
         "0xe4a00000000000000000000000000000000000000000000000000000000000000000018080",
         requestMessageData.getData().toHexString());

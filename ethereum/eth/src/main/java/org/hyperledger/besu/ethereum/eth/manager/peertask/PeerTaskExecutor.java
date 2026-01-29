@@ -126,7 +126,7 @@ public class PeerTaskExecutor {
               inflightRequestGauge.labels(inflightRequests::get, taskClassName);
               return inflightRequests;
             });
-    MessageData requestMessageData = peerTask.getRequestMessage();
+    MessageData requestMessageData = peerTask.getRequestMessage(peer.getAgreedCapabilities());
     SubProtocol peerTaskSubProtocol = peerTask.getSubProtocol();
     PeerTaskExecutorResult<T> executorResult;
     int retriesRemaining = peerTask.getRetriesWithSamePeer();

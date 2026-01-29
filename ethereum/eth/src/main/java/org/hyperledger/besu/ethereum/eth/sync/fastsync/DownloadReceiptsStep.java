@@ -44,6 +44,11 @@ public class DownloadReceiptsStep extends AbstractDownloadReceiptsStep<Block, Bl
   }
 
   @Override
+  int getTransactionCount(final Block block) {
+    return block.getBody().getTransactions().size();
+  }
+
+  @Override
   List<BlockWithReceipts> combineBlocksAndReceipts(
       final List<Block> blocks, final Map<BlockHeader, List<TransactionReceipt>> receiptsByHeader) {
     return blocks.stream()

@@ -80,11 +80,11 @@ public class GetReceiptsFromPeerTaskTest {
     GetReceiptsFromPeerTask task =
         new GetReceiptsFromPeerTask(List.of(blockHeader1, blockHeader2, blockHeader3), null);
 
-    MessageData messageData = task.getRequestMessage();
+    MessageData messageData = task.getRequestMessage(peer.getAgreedCapabilities());
     GetReceiptsMessage getReceiptsMessage = GetReceiptsMessage.readFrom(messageData);
 
     Assertions.assertEquals(EthProtocolMessages.GET_RECEIPTS, getReceiptsMessage.getCode());
-    Iterable<Hash> hashesInMessage = getReceiptsMessage.hashes();
+    Iterable<Hash> hashesInMessage = getReceiptsMessage.blockHashes();
     List<Hash> expectedHashes =
         List.of(
             Hash.fromHexString(StringUtils.repeat("00", 31) + "11"),

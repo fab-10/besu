@@ -27,11 +27,13 @@ import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetBodiesFromPeer
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetHeadersFromPeerTask;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetHeadersFromPeerTask.Direction;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetReceiptsFromPeerTask;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetReceiptsFromPeerTask.Request;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetReceiptsFromPeerTask.Response;
 import org.hyperledger.besu.ethereum.eth.sync.fastsync.checkpoint.Checkpoint;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
@@ -84,26 +86,34 @@ public class CheckpointDownloadBlockStep {
   }
 
   private Optional<BlockWithReceipts> downloadReceipts(final Block block) {
-    GetReceiptsFromPeerTask task =
-        new GetReceiptsFromPeerTask(List.of(block.getHeader()), protocolSchedule);
-    PeerTaskExecutorResult<Map<BlockHeader, List<TransactionReceipt>>> executorResult =
-        ethContext.getPeerTaskExecutor().execute(task);
+    final var blockPartialReceipts = new ArrayList<TransactionReceipt>();
+    final var receiptsRequest =
+        List.of(
+            new GetReceiptsFromPeerTask.BlockHeaderAndReceiptCount(
+                block.getHeader(), block.getBody().getTransactions().size()));
 
-    if (executorResult.responseCode() == PeerTaskExecutorResponseCode.SUCCESS) {
-      List<TransactionReceipt> transactionReceipts =
-          executorResult
-              .result()
-              .map((map) -> map.get(block.getHeader()))
-              .orElseThrow(
-                  () -> new IllegalStateException("PeerTask response code was success, but empty"));
-      if (block.getBody().getTransactions().size() != transactionReceipts.size()) {
-        throw new IllegalStateException(
-            "PeerTask response code was success, but incorrect number of receipts returned");
+    do {
+      final var request = new Request(receiptsRequest, blockPartialReceipts);
+
+      final var task = new GetReceiptsFromPeerTask(request, protocolSchedule);
+
+      final PeerTaskExecutorResult<Response> executorResult =
+          ethContext.getPeerTaskExecutor().execute(task);
+
+      if (executorResult.responseCode() == PeerTaskExecutorResponseCode.SUCCESS) {
+        final Response taskResult = executorResult.result().get();
+
+        final var receivedReceipts = taskResult.blocksReceipts().getFirst();
+
+        blockPartialReceipts.clear();
+        if (taskResult.lastBlockIncomplete()) {
+          blockPartialReceipts.addAll(receivedReceipts);
+        } else {
+          return Optional.of(new BlockWithReceipts(block, receivedReceipts));
+        }
+      } else {
+        return Optional.empty();
       }
-      BlockWithReceipts blockWithReceipts = new BlockWithReceipts(block, transactionReceipts);
-      return Optional.of(blockWithReceipts);
-    } else {
-      return Optional.empty();
-    }
+    } while (true);
   }
 }

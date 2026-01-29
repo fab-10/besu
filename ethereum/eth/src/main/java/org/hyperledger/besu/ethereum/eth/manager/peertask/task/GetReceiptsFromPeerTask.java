@@ -14,8 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 
-import static java.util.Collections.emptyList;
-
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
@@ -29,49 +27,60 @@ import org.hyperledger.besu.ethereum.eth.messages.GetReceiptsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.ReceiptsMessage;
 import org.hyperledger.besu.ethereum.mainnet.BodyValidation;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.SubProtocol;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
+import java.util.Set;
 import java.util.function.Predicate;
 
-public class GetReceiptsFromPeerTask
-    implements PeerTask<Map<BlockHeader, List<TransactionReceipt>>> {
+import com.google.common.annotations.VisibleForTesting;
 
-  private final Collection<BlockHeader> blockHeaders;
+public class GetReceiptsFromPeerTask implements PeerTask<GetReceiptsFromPeerTask.Response> {
+
+  private final Request request;
   private final ProtocolSchedule protocolSchedule;
-  private final Map<BlockHeader, List<TransactionReceipt>> receiptsByBlockHeader = new HashMap<>();
-  private final Map<Hash, List<BlockHeader>> headersByReceiptsRoot = new HashMap<>();
   private final long requiredBlockchainHeight;
 
-  public GetReceiptsFromPeerTask(
-      final Collection<BlockHeader> blockHeaders, final ProtocolSchedule protocolSchedule) {
-    this.blockHeaders = new ArrayList<>(blockHeaders);
+  public record BlockHeaderAndReceiptCount(BlockHeader blockHeader, int receiptCount) {}
+
+  public record Request(
+      List<BlockHeaderAndReceiptCount> blockHeaderAndReceiptCounts,
+      List<TransactionReceipt> firstBlockPartialReceipts) {
+    public boolean isEmpty() {
+      return blockHeaderAndReceiptCounts.isEmpty();
+    }
+
+    public int size() {
+      return blockHeaderAndReceiptCounts.size();
+    }
+
+    public int firstBlockReceiptIndex() {
+      return firstBlockPartialReceipts.size();
+    }
+  }
+
+  public record Response(
+      List<List<TransactionReceipt>> blocksReceipts, boolean lastBlockIncomplete) {
+    public boolean isEmpty() {
+      return blocksReceipts.isEmpty();
+    }
+
+    public int size() {
+      return blocksReceipts.size();
+    }
+  }
+
+  public GetReceiptsFromPeerTask(final Request request, final ProtocolSchedule protocolSchedule) {
+    this.request = request;
     this.protocolSchedule = protocolSchedule;
 
-    // pre-fill any headers with an empty receipts root into the result map
-    this.blockHeaders.stream()
-        .filter(header -> header.getReceiptsRoot().equals(Hash.EMPTY_TRIE_HASH))
-        .forEach(header -> receiptsByBlockHeader.put(header, emptyList()));
-    this.blockHeaders.removeAll(receiptsByBlockHeader.keySet());
-
-    // group headers by their receipts root hash to reduce total number of receipts hashes requested
-    // for
-    this.blockHeaders.forEach(
-        header ->
-            headersByReceiptsRoot
-                .computeIfAbsent(header.getReceiptsRoot(), key -> new ArrayList<>())
-                .add(header));
-
-    // calculate the minimum required blockchain height a peer will need to be able to fulfil this
-    // request
     requiredBlockchainHeight =
-        this.blockHeaders.stream()
+        this.request.blockHeaderAndReceiptCounts.stream()
+            .map(BlockHeaderAndReceiptCount::blockHeader)
             .mapToLong(BlockHeader::getNumber)
             .max()
             .orElse(BlockHeader.GENESIS_BLOCK_NUMBER);
@@ -83,50 +92,42 @@ public class GetReceiptsFromPeerTask
   }
 
   @Override
-  public MessageData getRequestMessage() {
-    // Since we have to match up the data by receipt root, we only need to request receipts
+  public MessageData getRequestMessage(final Set<Capability> agreedCapabilities) {
+    // Since we have to match up the data by receipt root, we only need to request blocksReceipts
     // for one of the headers with each unique receipt root.
     final List<Hash> blockHashes =
-        headersByReceiptsRoot.values().stream()
-            .map(headers -> headers.getFirst().getHash())
+        request.blockHeaderAndReceiptCounts.stream()
+            .map(BlockHeaderAndReceiptCount::blockHeader)
+            .map(BlockHeader::getHash)
             .toList();
-    return GetReceiptsMessage.create(blockHashes);
+    return agreedCapabilities.stream().anyMatch(EthProtocol::isEth70Compatible)
+        ? GetReceiptsMessage.create(blockHashes, request.firstBlockReceiptIndex())
+        : GetReceiptsMessage.create(blockHashes);
   }
 
   @Override
-  public Map<BlockHeader, List<TransactionReceipt>> processResponse(final MessageData messageData)
+  public Response processResponse(final MessageData messageData)
       throws InvalidPeerTaskResponseException, MalformedRlpFromPeerException {
     if (messageData == null) {
       throw new InvalidPeerTaskResponseException();
     }
     final ReceiptsMessage receiptsMessage = ReceiptsMessage.readFrom(messageData);
-    final List<List<TransactionReceipt>> receiptsByBlock;
     try {
-      receiptsByBlock = receiptsMessage.receipts();
+      final var returnReceipts = receiptsMessage.receipts();
+      // complete the first block if needed
+      if (request.firstBlockReceiptIndex() > 0) {
+        // at least few receipts for the first block must be returned
+        if (returnReceipts.isEmpty()) {
+          throw new InvalidPeerTaskResponseException("No receipts returned");
+        }
+        // prepend the already fetched partial list of receipts to the first block result
+        returnReceipts.get(0).addAll(0, request.firstBlockPartialReceipts);
+      }
+      return new Response(returnReceipts, receiptsMessage.lastBlockIncomplete());
     } catch (RLPException e) {
       // indicates a malformed or unexpected RLP result from the peer
       throw new MalformedRlpFromPeerException(e, messageData.getData());
     }
-    // take a copy of the pre-filled receiptsByBlockHeader, to ensure idempotency of subsequent
-    // calls to processResponse
-    final Map<BlockHeader, List<TransactionReceipt>> receiptsByHeader =
-        new HashMap<>(receiptsByBlockHeader);
-    if (!blockHeaders.isEmpty()) {
-      if (receiptsByBlock.isEmpty() || receiptsByBlock.size() > blockHeaders.size()) {
-        throw new InvalidPeerTaskResponseException();
-      }
-
-      for (final List<TransactionReceipt> receiptsInBlock : receiptsByBlock) {
-        final List<BlockHeader> blockHeaders =
-            headersByReceiptsRoot.get(BodyValidation.receiptsRoot(receiptsInBlock));
-        if (blockHeaders == null) {
-          // Contains receipts that we didn't request, so mustn't be the response we're looking for.
-          throw new InvalidPeerTaskResponseException();
-        }
-        blockHeaders.forEach(header -> receiptsByHeader.put(header, receiptsInBlock));
-      }
-    }
-    return receiptsByHeader;
   }
 
   @Override
@@ -137,16 +138,45 @@ public class GetReceiptsFromPeerTask
   }
 
   @Override
-  public PeerTaskValidationResponse validateResult(
-      final Map<BlockHeader, List<TransactionReceipt>> result) {
-    if (result.isEmpty()) {
-      return PeerTaskValidationResponse.NO_RESULTS_RETURNED;
+  public PeerTaskValidationResponse validateResult(final Response result) {
+    if (!request.isEmpty()) {
+      if (result.isEmpty()) {
+        return PeerTaskValidationResponse.NO_RESULTS_RETURNED;
+      }
+
+      if (result.size() > request.size()) {
+        return PeerTaskValidationResponse.TOO_MANY_RESULTS_RETURNED;
+      }
+
+      for (int i = 0; i < result.size(); i++) {
+        final var requestedReceipts = request.blockHeaderAndReceiptCounts.get(i);
+        final var receivedReceiptsForBlock = result.blocksReceipts.get(i);
+
+        // verify that the receipts count is within bounds for every received block
+        if (receivedReceiptsForBlock.size() > requestedReceipts.receiptCount) {
+          return PeerTaskValidationResponse.TOO_MANY_RESULTS_RETURNED;
+        }
+
+        // do not verify receipts root if last block is incomplete
+        if (i < result.size() - 1 || !result.lastBlockIncomplete) {
+          // ensure the calculated receipts root matches the one in the requested block header
+          if (!requestedReceipts
+              .blockHeader
+              .getReceiptsRoot()
+              .equals(BodyValidation.receiptsRoot(receivedReceiptsForBlock))) {
+            return PeerTaskValidationResponse.RESULTS_DO_NOT_MATCH_QUERY;
+          }
+        }
+      }
     }
 
     return PeerTaskValidationResponse.RESULTS_VALID_AND_GOOD;
   }
 
+  @VisibleForTesting
   public Collection<BlockHeader> getBlockHeaders() {
-    return blockHeaders;
+    return request.blockHeaderAndReceiptCounts.stream()
+        .map(BlockHeaderAndReceiptCount::blockHeader)
+        .toList();
   }
 }

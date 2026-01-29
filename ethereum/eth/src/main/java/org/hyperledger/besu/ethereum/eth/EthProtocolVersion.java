@@ -28,6 +28,7 @@ public class EthProtocolVersion {
   public static final int V66 = 66;
   public static final int V68 = 68;
   public static final int V69 = 69;
+  public static final int V70 = 70;
 
   /** eth/66 */
   private static final List<Integer> eth66Messages =
@@ -94,15 +95,11 @@ public class EthProtocolVersion {
    * @return a list containing the codes of supported messages
    */
   public static List<Integer> getSupportedMessages(final int protocolVersion) {
-    switch (protocolVersion) {
-      case EthProtocolVersion.V66:
-        return eth66Messages;
-      case EthProtocolVersion.V68:
-        return eth68Messages;
-      case EthProtocolVersion.V69:
-        return eth69Messages;
-      default:
-        return Collections.emptyList();
-    }
+    return switch (protocolVersion) {
+      case EthProtocolVersion.V66 -> eth66Messages;
+      case EthProtocolVersion.V68 -> eth68Messages;
+      case EthProtocolVersion.V69, EthProtocolVersion.V70 -> eth69Messages;
+      default -> Collections.emptyList();
+    };
   }
 }

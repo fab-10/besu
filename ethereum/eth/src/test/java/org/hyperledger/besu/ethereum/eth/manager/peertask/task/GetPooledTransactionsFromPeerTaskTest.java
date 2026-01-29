@@ -36,7 +36,7 @@ public class GetPooledTransactionsFromPeerTaskTest {
     List<Hash> hashes = List.of(Hash.EMPTY);
     GetPooledTransactionsFromPeerTask task = new GetPooledTransactionsFromPeerTask(hashes);
 
-    MessageData result = task.getRequestMessage();
+    MessageData result = task.getRequestMessage(peer.getAgreedCapabilities());
 
     Assertions.assertEquals(
         "0xe1a0c5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470",

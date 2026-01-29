@@ -70,7 +70,8 @@ public class PeerTaskExecutorTest {
 
     Object responseObject = new Object();
 
-    Mockito.when(peerTask.getRequestMessage()).thenReturn(requestMessageData);
+    Mockito.when(peerTask.getRequestMessage(peer.getAgreedCapabilities()))
+        .thenReturn(requestMessageData);
     Mockito.when(peerTask.getRetriesWithSamePeer()).thenReturn(0);
     Mockito.when(peerTask.getSubProtocol()).thenReturn(subprotocol);
     Mockito.when(subprotocol.getName()).thenReturn("subprotocol");
@@ -101,7 +102,8 @@ public class PeerTaskExecutorTest {
 
     Object responseObject = new Object();
 
-    Mockito.when(peerTask.getRequestMessage()).thenReturn(requestMessageData);
+    Mockito.when(peerTask.getRequestMessage(peer.getAgreedCapabilities()))
+        .thenReturn(requestMessageData);
     Mockito.when(peerTask.getRetriesWithSamePeer()).thenReturn(0);
     Mockito.when(peerTask.getSubProtocol()).thenReturn(subprotocol);
     Mockito.when(subprotocol.getName()).thenReturn("subprotocol");
@@ -131,7 +133,8 @@ public class PeerTaskExecutorTest {
           InvalidPeerTaskResponseException,
           MalformedRlpFromPeerException {
 
-    Mockito.when(peerTask.getRequestMessage()).thenReturn(requestMessageData);
+    Mockito.when(peerTask.getRequestMessage(peer.getAgreedCapabilities()))
+        .thenReturn(requestMessageData);
     Mockito.when(peerTask.getRetriesWithSamePeer()).thenReturn(0);
     Mockito.when(peerTask.getSubProtocol()).thenReturn(subprotocol);
     Mockito.when(subprotocol.getName()).thenReturn("subprotocol");
@@ -161,7 +164,8 @@ public class PeerTaskExecutorTest {
 
     Object responseObject = new Object();
 
-    Mockito.when(peerTask.getRequestMessage()).thenReturn(requestMessageData);
+    Mockito.when(peerTask.getRequestMessage(peer.getAgreedCapabilities()))
+        .thenReturn(requestMessageData);
     Mockito.when(peerTask.getRetriesWithSamePeer()).thenReturn(0);
     Mockito.when(peerTask.getSubProtocol()).thenReturn(subprotocol);
     Mockito.when(subprotocol.getName()).thenReturn("subprotocol");
@@ -190,7 +194,8 @@ public class PeerTaskExecutorTest {
     int requestMessageDataCode = 123;
     String protocolName = "snap";
 
-    Mockito.when(peerTask.getRequestMessage()).thenReturn(requestMessageData);
+    Mockito.when(peerTask.getRequestMessage(peer.getAgreedCapabilities()))
+        .thenReturn(requestMessageData);
     Mockito.when(peerTask.getRetriesWithSamePeer()).thenReturn(2);
 
     Mockito.when(peerTask.getSubProtocol()).thenReturn(subprotocol);
@@ -221,7 +226,8 @@ public class PeerTaskExecutorTest {
           InterruptedException,
           TimeoutException {
 
-    Mockito.when(peerTask.getRequestMessage()).thenReturn(requestMessageData);
+    Mockito.when(peerTask.getRequestMessage(peer.getAgreedCapabilities()))
+        .thenReturn(requestMessageData);
     Mockito.when(peerTask.getRetriesWithSamePeer()).thenReturn(0);
     Mockito.when(peerTask.getSubProtocol()).thenReturn(subprotocol);
     Mockito.when(subprotocol.getName()).thenReturn("subprotocol");
@@ -244,7 +250,8 @@ public class PeerTaskExecutorTest {
     int requestMessageDataCode = 123;
     String protocolName = "snap";
 
-    Mockito.when(peerTask.getRequestMessage()).thenReturn(requestMessageData);
+    Mockito.when(peerTask.getRequestMessage(peer.getAgreedCapabilities()))
+        .thenReturn(requestMessageData);
     Mockito.when(peerTask.getRetriesWithSamePeer()).thenReturn(0);
     Mockito.when(peerTask.getSubProtocol()).thenReturn(subprotocol);
     Mockito.when(subprotocol.getName()).thenReturn(protocolName);
@@ -270,7 +277,8 @@ public class PeerTaskExecutorTest {
           InvalidPeerTaskResponseException,
           MalformedRlpFromPeerException {
 
-    Mockito.when(peerTask.getRequestMessage()).thenReturn(requestMessageData);
+    Mockito.when(peerTask.getRequestMessage(peer.getAgreedCapabilities()))
+        .thenReturn(requestMessageData);
     Mockito.when(peerTask.getRetriesWithSamePeer()).thenReturn(0);
     Mockito.when(peerTask.getSubProtocol()).thenReturn(subprotocol);
     Mockito.when(subprotocol.getName()).thenReturn("subprotocol");
@@ -302,7 +310,8 @@ public class PeerTaskExecutorTest {
     Mockito.when(peerSelector.getPeer(Mockito.any(Predicate.class)))
         .thenReturn(Optional.of(ethPeer));
 
-    Mockito.when(peerTask.getRequestMessage()).thenReturn(requestMessageData);
+    Mockito.when(peerTask.getRequestMessage(peer.getAgreedCapabilities()))
+        .thenReturn(requestMessageData);
     Mockito.when(peerTask.getRetriesWithOtherPeer()).thenReturn(0);
     Mockito.when(peerTask.getRetriesWithSamePeer()).thenReturn(0);
     Mockito.when(peerTask.getSubProtocol()).thenReturn(subprotocol);
@@ -341,7 +350,8 @@ public class PeerTaskExecutorTest {
         .thenReturn(Optional.of(ethPeer))
         .thenReturn(Optional.of(peer2));
 
-    Mockito.when(peerTask.getRequestMessage()).thenReturn(requestMessageData);
+    Mockito.when(peerTask.getRequestMessage(peer.getAgreedCapabilities()))
+        .thenReturn(requestMessageData);
     Mockito.when(peerTask.getRetriesWithOtherPeer()).thenReturn(2);
     Mockito.when(peerTask.getRetriesWithSamePeer()).thenReturn(0);
     Mockito.when(peerTask.getSubProtocol()).thenReturn(subprotocol);

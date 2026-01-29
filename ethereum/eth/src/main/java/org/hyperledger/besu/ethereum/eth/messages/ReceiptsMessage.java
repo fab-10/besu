@@ -26,11 +26,16 @@ import org.hyperledger.besu.ethereum.rlp.RLPInput;
 
 import java.util.ArrayList;
 import java.util.List;
+import javax.annotation.concurrent.NotThreadSafe;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.tuweni.bytes.Bytes;
 
+@NotThreadSafe
 public final class ReceiptsMessage extends AbstractMessageData {
+  private List<List<TransactionReceipt>> receiptsByBlock;
+  private boolean lastBlockIncomplete;
+  private boolean deserialized = false;
 
   public static ReceiptsMessage readFrom(final MessageData message) {
     if (message instanceof ReceiptsMessage) {
@@ -41,7 +46,7 @@ public final class ReceiptsMessage extends AbstractMessageData {
       throw new IllegalArgumentException(
           String.format("Message has code %d and thus is not a ReceiptsMessage.", code));
     }
-    return new ReceiptsMessage(message.getData());
+    return new ReceiptsMessage(message.getData(), null, false);
   }
 
   @VisibleForTesting
@@ -57,7 +62,7 @@ public final class ReceiptsMessage extends AbstractMessageData {
           tmp.endList();
         });
     tmp.endList();
-    return new ReceiptsMessage(tmp.encoded());
+    return new ReceiptsMessage(tmp.encoded(), receipts, false);
   }
 
   /**
@@ -68,11 +73,20 @@ public final class ReceiptsMessage extends AbstractMessageData {
    * @return A new ReceiptsMessage
    */
   public static ReceiptsMessage createUnsafe(final Bytes data) {
-    return new ReceiptsMessage(data);
+    return new ReceiptsMessage(data, null, false);
   }
 
-  private ReceiptsMessage(final Bytes data) {
+  public static ReceiptsMessage createUnsafe(final Bytes data, final boolean lastBlockIncomplete) {
+    return new ReceiptsMessage(data, null, lastBlockIncomplete);
+  }
+
+  private ReceiptsMessage(
+      final Bytes data,
+      final List<List<TransactionReceipt>> receipts,
+      final boolean lastBlockIncomplete) {
     super(data);
+    this.receiptsByBlock = receipts;
+    this.lastBlockIncomplete = lastBlockIncomplete;
   }
 
   @Override
@@ -81,9 +95,24 @@ public final class ReceiptsMessage extends AbstractMessageData {
   }
 
   public List<List<TransactionReceipt>> receipts() {
+    if (!deserialized) {
+      deserialize(getData());
+    }
+    return receiptsByBlock;
+  }
+
+  public boolean lastBlockIncomplete() {
+    if (!deserialized) {
+      deserialize(getData());
+    }
+    return lastBlockIncomplete;
+  }
+
+  private void deserialize(final Bytes data) {
     final RLPInput input = new BytesValueRLPInput(data, false);
-    input.enterList();
-    final List<List<TransactionReceipt>> receipts = new ArrayList<>();
+    this.lastBlockIncomplete = input.nextIsList() && input.readUnsignedByte() == 1;
+
+    final List<List<TransactionReceipt>> receipts = new ArrayList<>(input.enterList());
     while (input.nextIsList()) {
       final int setSize = input.enterList();
       final List<TransactionReceipt> receiptSet = new ArrayList<>(setSize);
@@ -94,6 +123,7 @@ public final class ReceiptsMessage extends AbstractMessageData {
       receipts.add(receiptSet);
     }
     input.leaveList();
-    return receipts;
+    this.receiptsByBlock = receipts;
+    this.deserialized = true;
   }
 }

@@ -51,6 +51,11 @@ public class DownloadSyncReceiptsStep
   }
 
   @Override
+  int getTransactionCount(final SyncBlock syncBlock) {
+    return syncBlock.getBody().getTransactionCount();
+  }
+
+  @Override
   List<SyncBlockWithReceipts> combineBlocksAndReceipts(
       final List<SyncBlock> blocks,
       final Map<BlockHeader, List<TransactionReceipt>> receiptsByHeader) {

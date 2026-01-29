@@ -90,7 +90,7 @@ public class GetBodiesFromPeerTaskTest {
         new GetBodiesFromPeerTask(
             List.of(mockBlockHeader(1), mockBlockHeader(2), mockBlockHeader(3)), protocolSchedule);
 
-    MessageData messageData = task.getRequestMessage();
+    MessageData messageData = task.getRequestMessage(peer.getAgreedCapabilities());
     GetBlockBodiesMessage getBlockBodiesMessage = GetBlockBodiesMessage.readFrom(messageData);
 
     Assertions.assertEquals(EthProtocolMessages.GET_BLOCK_BODIES, getBlockBodiesMessage.getCode());

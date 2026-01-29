@@ -22,11 +22,13 @@ import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 import org.hyperledger.besu.ethereum.rlp.RLPInput;
 
 import java.util.ArrayList;
-import java.util.Collection;
+import java.util.List;
 
 import org.apache.tuweni.bytes.Bytes;
 
 public final class GetReceiptsMessage extends AbstractMessageData {
+  private List<Hash> blockHashes;
+  private int firstBlockReceiptIndex;
 
   public static GetReceiptsMessage readFrom(final MessageData message) {
     if (message instanceof GetReceiptsMessage) {
@@ -40,16 +42,32 @@ public final class GetReceiptsMessage extends AbstractMessageData {
     return new GetReceiptsMessage(message.getData());
   }
 
-  public static GetReceiptsMessage create(final Iterable<Hash> hashes) {
+  public static GetReceiptsMessage create(final List<Hash> blockHashes) {
+    return create(blockHashes, -1);
+  }
+
+  public static GetReceiptsMessage create(
+      final List<Hash> blockHashes, final int firstBlockReceiptIndex) {
     final BytesValueRLPOutput tmp = new BytesValueRLPOutput();
+    if (firstBlockReceiptIndex >= 0) {
+      tmp.writeIntScalar(firstBlockReceiptIndex);
+    }
     tmp.startList();
-    hashes.forEach(hash -> tmp.writeBytes(hash.getBytes()));
+    blockHashes.forEach(hash -> tmp.writeBytes(hash.getBytes()));
     tmp.endList();
-    return new GetReceiptsMessage(tmp.encoded());
+    return new GetReceiptsMessage(tmp.encoded(), blockHashes, firstBlockReceiptIndex);
   }
 
   private GetReceiptsMessage(final Bytes data) {
     super(data);
+    deserialize(data);
+  }
+
+  private GetReceiptsMessage(
+      final Bytes data, final List<Hash> blockHashes, final int firstBlockReceiptIndex) {
+    super(data);
+    this.blockHashes = blockHashes;
+    this.firstBlockReceiptIndex = firstBlockReceiptIndex;
   }
 
   @Override
@@ -57,14 +75,23 @@ public final class GetReceiptsMessage extends AbstractMessageData {
     return EthProtocolMessages.GET_RECEIPTS;
   }
 
-  public Iterable<Hash> hashes() {
+  public List<Hash> blockHashes() {
+    return blockHashes;
+  }
+
+  public int firstBlockReceiptIndex() {
+    return firstBlockReceiptIndex;
+  }
+
+  private void deserialize(final Bytes data) {
     final RLPInput input = new BytesValueRLPInput(data, false);
-    input.enterList();
-    final Collection<Hash> hashes = new ArrayList<>();
+
+    this.firstBlockReceiptIndex = input.nextIsList() ? -1 : input.readIntScalar();
+
+    this.blockHashes = new ArrayList<>(input.enterList());
     while (!input.isEndOfCurrentList()) {
-      hashes.add(Hash.wrap(input.readBytes32()));
+      blockHashes.add(Hash.wrap(input.readBytes32()));
     }
     input.leaveList();
-    return hashes;
   }
 }
