@@ -692,25 +692,25 @@ public class DefaultBlockchain implements MutableBlockchain {
   }
 
   @Override
-  public void unsafeImportSyncBodiesAndReceipts(
-      final List<SyncBlockWithReceipts> blocksAndReceipts, final boolean indexTransactions) {
+  public void unsafeImportSyncBodyAndReceipts(
+      final SyncBlockWithReceipts blockAndReceipts,
+      final boolean indexTransactions,
+      final Optional<Difficulty> maybeTotalDifficulty) {
     final BlockchainStorage.Updater updater = blockchainStorage.updater();
-    for (final SyncBlockWithReceipts blockAndReceipts : blocksAndReceipts) {
-      final SyncBlock block = blockAndReceipts.getBlock();
-      final BlockHeader header = block.getHeader();
-      final Hash blockHash = header.getHash();
-      final SyncBlockBody body = block.getBody();
-      updater.putBlockHash(header.getNumber(), blockHash);
-      updater.putSyncBlockBody(blockHash, body);
-      updater.putSyncTransactionReceipts(blockHash, blockAndReceipts.getReceipts());
-      this.totalDifficulty = calculateTotalDifficultyForSyncing(header);
-      updater.putTotalDifficulty(blockHash, totalDifficulty);
-      this.chainHeader = header;
-      if (indexTransactions) {
-        final List<Hash> listOfTxHashes =
-            body.getEncodedTransactions().stream().map(Hash::hash).toList();
-        indexTransactionsForBlock(updater, blockHash, listOfTxHashes);
-      }
+    final SyncBlock block = blockAndReceipts.getBlock();
+    final BlockHeader header = block.getHeader();
+    final Hash blockHash = header.getHash();
+    final SyncBlockBody body = block.getBody();
+    updater.putBlockHash(header.getNumber(), blockHash);
+    updater.putSyncBlockBody(blockHash, body);
+    updater.putSyncTransactionReceipts(blockHash, blockAndReceipts.getReceipts());
+    this.totalDifficulty = maybeTotalDifficulty.orElseGet(() -> calculateTotalDifficultyForSyncing(header));
+    updater.putTotalDifficulty(blockHash, totalDifficulty);
+    this.chainHeader = header;
+    if (indexTransactions) {
+      final List<Hash> listOfTxHashes =
+          body.getEncodedTransactions().stream().map(Hash::hash).toList();
+      indexTransactionsForBlock(updater, blockHash, listOfTxHashes);
     }
     updater.setChainHead(chainHeader.getBlockHash());
     updater.commit();

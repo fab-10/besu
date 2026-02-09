@@ -22,6 +22,7 @@ import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.sync.state.SyncState;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -63,9 +64,12 @@ public class ImportSyncBlocksStep implements Consumer<List<SyncBlockWithReceipts
   @Override
   public void accept(final List<SyncBlockWithReceipts> blocksWithReceipts) {
     final long startTime = System.nanoTime();
-    protocolContext
-        .getBlockchain()
-        .unsafeImportSyncBodiesAndReceipts(blocksWithReceipts, transactionIndexingEnabled);
+    blocksWithReceipts.forEach(
+        blockWithReceipts ->
+            protocolContext
+                .getBlockchain()
+                .unsafeImportSyncBodyAndReceipts(
+                    blockWithReceipts, transactionIndexingEnabled, Optional.empty()));
     if (logStartBlock.isEmpty()) {
       logStartBlock = OptionalLong.of(blocksWithReceipts.getFirst().getNumber());
     }

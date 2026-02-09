@@ -15,13 +15,13 @@
 package org.hyperledger.besu.ethereum.eth.sync.checkpointsync;
 
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
-import org.hyperledger.besu.ethereum.core.BlockWithReceipts;
+import org.hyperledger.besu.ethereum.core.SyncBlockWithReceipts;
 import org.hyperledger.besu.ethereum.eth.sync.fastsync.checkpoint.Checkpoint;
 
 import java.util.Optional;
 import java.util.function.Consumer;
 
-public class CheckpointBlockImportStep implements Consumer<Optional<BlockWithReceipts>> {
+public class CheckpointBlockImportStep implements Consumer<Optional<SyncBlockWithReceipts>> {
 
   private final CheckpointSource checkpointSource;
   private final Checkpoint checkpoint;
@@ -37,12 +37,12 @@ public class CheckpointBlockImportStep implements Consumer<Optional<BlockWithRec
   }
 
   @Override
-  public void accept(final Optional<BlockWithReceipts> maybeBlock) {
+  public void accept(final Optional<SyncBlockWithReceipts> maybeBlock) {
     maybeBlock.ifPresent(
         block -> {
-          blockchain.unsafeImportBlock(
-              block.getBlock(),
-              block.getReceipts(),
+          blockchain.unsafeImportSyncBodyAndReceipts(
+              block,
+              true,
               block.getHash().equals(checkpoint.blockHash())
                   ? Optional.of(checkpoint.totalDifficulty())
                   : Optional.empty());

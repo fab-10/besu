@@ -14,7 +14,9 @@
  */
 package org.hyperledger.besu.ethereum.eth.sync.checkpointsync;
 
+import static java.util.Collections.emptyList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hyperledger.besu.ethereum.eth.sync.Utils.blockToSyncBlock;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -23,7 +25,8 @@ import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockBody;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
-import org.hyperledger.besu.ethereum.core.BlockWithReceipts;
+import org.hyperledger.besu.ethereum.core.Difficulty;
+import org.hyperledger.besu.ethereum.core.SyncBlockWithReceipts;
 import org.hyperledger.besu.ethereum.eth.sync.fastsync.checkpoint.Checkpoint;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.storage.keyvalue.KeyValueStoragePrefixedKeyBlockchainStorage;
@@ -31,8 +34,6 @@ import org.hyperledger.besu.ethereum.storage.keyvalue.VariablesKeyValueStorage;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.services.kvstore.InMemoryKeyValueStorage;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -66,7 +67,8 @@ public class CheckPointBlockImportStepTest {
     when(checkPointSource.hasNext()).thenReturn(true);
     assertThat(blockchainStorage.getBlockHash(1)).isEmpty();
     final Block block = generateBlock(1);
-    checkPointHeaderImportStep.accept(Optional.of(new BlockWithReceipts(block, new ArrayList<>())));
+    checkPointHeaderImportStep.accept(
+        Optional.of(new SyncBlockWithReceipts(blockToSyncBlock(block), emptyList())));
     assertThat(blockchainStorage.getBlockHash(1)).isPresent();
   }
 
@@ -75,12 +77,18 @@ public class CheckPointBlockImportStepTest {
     when(checkPointSource.hasNext()).thenReturn(false);
     final Block block = generateBlock(2);
     when(checkPointSource.getCheckpoint()).thenReturn(block.getHeader());
-    checkPointHeaderImportStep.accept(Optional.of(new BlockWithReceipts(block, new ArrayList<>())));
+    checkPointHeaderImportStep.accept(
+        Optional.of(new SyncBlockWithReceipts(blockToSyncBlock(block), emptyList())));
     assertThat(blockchainStorage.getBlockHash(2)).isPresent();
   }
 
   private Block generateBlock(final int blockNumber) {
-    final BlockBody body = new BlockBody(Collections.emptyList(), Collections.emptyList());
-    return new Block(new BlockHeaderTestFixture().number(blockNumber).buildHeader(), body);
+    final BlockBody body = new BlockBody(emptyList(), emptyList());
+    return new Block(
+        new BlockHeaderTestFixture()
+            .difficulty(Difficulty.of(blockNumber))
+            .number(blockNumber)
+            .buildHeader(),
+        body);
   }
 }
