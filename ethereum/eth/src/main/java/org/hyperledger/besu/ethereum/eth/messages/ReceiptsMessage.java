@@ -125,7 +125,7 @@ public final class ReceiptsMessage extends AbstractMessageData {
 
   private void deserialize(final Bytes data) {
     final RLPInput input = new BytesValueRLPInput(data, false);
-    this.lastBlockIncomplete = input.nextIsList() && input.readUnsignedByte() == 1;
+    this.lastBlockIncomplete = !input.nextIsList() && input.readUnsignedByte() == 1;
 
     final List<List<TransactionReceipt>> receipts = new ArrayList<>(input.enterList());
     while (input.nextIsList()) {
