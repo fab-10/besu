@@ -32,17 +32,20 @@ import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetHeadersFromPee
 import org.hyperledger.besu.ethereum.eth.messages.BlockHeadersMessage;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.p2p.rlpx.connections.PeerConnection;
+import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.plugin.services.storage.DataStorageFormat;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Set;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 public class GetHeadersFromPeerTaskTest {
+  private static final Set<Capability> AGREED_CAPABILITIES = Set.of(EthProtocol.LATEST);
 
   @Test
   public void testGetSubProtocol() {
@@ -54,7 +57,7 @@ public class GetHeadersFromPeerTaskTest {
   public void testGetRequestMessageForHash() {
     GetHeadersFromPeerTask task =
         new GetHeadersFromPeerTask(Hash.ZERO, 0, 1, 0, Direction.FORWARD, null);
-    MessageData requestMessageData = task.getRequestMessage(peer.getAgreedCapabilities());
+    MessageData requestMessageData = task.getRequestMessage(AGREED_CAPABILITIES);
     Assertions.assertEquals(
         "0xe4a00000000000000000000000000000000000000000000000000000000000000000018080",
         requestMessageData.getData().toHexString());
@@ -63,7 +66,7 @@ public class GetHeadersFromPeerTaskTest {
   @Test
   public void testGetRequestMessageForBlockNumber() {
     GetHeadersFromPeerTask task = new GetHeadersFromPeerTask(123, 1, 0, Direction.FORWARD, null);
-    MessageData requestMessageData = task.getRequestMessage(peer.getAgreedCapabilities());
+    MessageData requestMessageData = task.getRequestMessage(AGREED_CAPABILITIES);
     Assertions.assertEquals("0xc47b018080", requestMessageData.getData().toHexString());
   }
 
@@ -71,7 +74,7 @@ public class GetHeadersFromPeerTaskTest {
   public void testGetRequestMessageForHashWhenBlockNumberAlsoProvided() {
     GetHeadersFromPeerTask task =
         new GetHeadersFromPeerTask(Hash.ZERO, 123, 1, 0, Direction.FORWARD, null);
-    MessageData requestMessageData = task.getRequestMessage(peer.getAgreedCapabilities());
+    MessageData requestMessageData = task.getRequestMessage(AGREED_CAPABILITIES);
     Assertions.assertEquals(
         "0xe4a00000000000000000000000000000000000000000000000000000000000000000018080",
         requestMessageData.getData().toHexString());

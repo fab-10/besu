@@ -23,12 +23,12 @@ import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.InvalidPeerTaskResponseException;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.BlockHeaderAndReceiptCount;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Request;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetBodiesFromPeerTask;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetHeadersFromPeerTask;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetHeadersFromPeerTask.Direction;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetReceiptsFromPeerTask;
-import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetReceiptsFromPeerTask.Request;
-import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetReceiptsFromPeerTask.Response;
 import org.hyperledger.besu.ethereum.eth.sync.fastsync.checkpoint.Checkpoint;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
@@ -89,19 +89,18 @@ public class CheckpointDownloadBlockStep {
     final var blockPartialReceipts = new ArrayList<TransactionReceipt>();
     final var receiptsRequest =
         List.of(
-            new GetReceiptsFromPeerTask.BlockHeaderAndReceiptCount(
+            new BlockHeaderAndReceiptCount(
                 block.getHeader(), block.getBody().getTransactions().size()));
 
     do {
-      final var request = new Request(receiptsRequest, blockPartialReceipts);
+      final var request = new Request<>(receiptsRequest, blockPartialReceipts);
 
       final var task = new GetReceiptsFromPeerTask(request, protocolSchedule);
 
-      final PeerTaskExecutorResult<Response> executorResult =
-          ethContext.getPeerTaskExecutor().execute(task);
+      final var executorResult = ethContext.getPeerTaskExecutor().execute(task);
 
       if (executorResult.responseCode() == PeerTaskExecutorResponseCode.SUCCESS) {
-        final Response taskResult = executorResult.result().get();
+        final var taskResult = executorResult.result().get();
 
         final var receivedReceipts = taskResult.blocksReceipts().getFirst();
 

@@ -29,20 +29,23 @@ import org.hyperledger.besu.ethereum.eth.manager.PeerReputation;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.InvalidPeerTaskResponseException;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.MalformedRlpFromPeerException;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskValidationResponse;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.BlockHeaderAndReceiptCount;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Request;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Response;
 import org.hyperledger.besu.ethereum.eth.messages.EthProtocolMessages;
 import org.hyperledger.besu.ethereum.eth.messages.GetReceiptsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.ReceiptsMessage;
 import org.hyperledger.besu.ethereum.mainnet.BodyValidation;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.p2p.rlpx.connections.PeerConnection;
+import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Assertions;
@@ -50,10 +53,12 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 public class GetReceiptsFromPeerTaskTest {
+  private static final Set<Capability> AGREED_CAPABILITIES = Set.of(EthProtocol.LATEST);
 
   @Test
   public void testGetSubProtocol() {
-    GetReceiptsFromPeerTask task = new GetReceiptsFromPeerTask(Collections.emptyList(), null);
+    GetReceiptsFromPeerTask task =
+        new GetReceiptsFromPeerTask(new Request<>(List.of(), List.of()), null);
     Assertions.assertEquals(EthProtocol.get(), task.getSubProtocol());
   }
 
@@ -78,9 +83,16 @@ public class GetReceiptsFromPeerTaskTest {
         .thenReturn(BodyValidation.receiptsRoot(List.of(receiptForBlock3)));
 
     GetReceiptsFromPeerTask task =
-        new GetReceiptsFromPeerTask(List.of(blockHeader1, blockHeader2, blockHeader3), null);
+        new GetReceiptsFromPeerTask(
+            new Request<>(
+                List.of(
+                    new BlockHeaderAndReceiptCount(blockHeader1, 1),
+                    new BlockHeaderAndReceiptCount(blockHeader2, 1),
+                    new BlockHeaderAndReceiptCount(blockHeader3, 1)),
+                List.of()),
+            null);
 
-    MessageData messageData = task.getRequestMessage(peer.getAgreedCapabilities());
+    MessageData messageData = task.getRequestMessage(AGREED_CAPABILITIES);
     GetReceiptsMessage getReceiptsMessage = GetReceiptsMessage.readFrom(messageData);
 
     Assertions.assertEquals(EthProtocolMessages.GET_RECEIPTS, getReceiptsMessage.getCode());
@@ -100,7 +112,8 @@ public class GetReceiptsFromPeerTaskTest {
 
   @Test
   public void testParseResponseWithNullResponseMessage() {
-    GetReceiptsFromPeerTask task = new GetReceiptsFromPeerTask(Collections.emptyList(), null);
+    GetReceiptsFromPeerTask task =
+        new GetReceiptsFromPeerTask(new Request<>(List.of(), List.of()), null);
     Assertions.assertThrows(
         InvalidPeerTaskResponseException.class, () -> task.processResponse(null));
   }
@@ -125,7 +138,14 @@ public class GetReceiptsFromPeerTaskTest {
     Mockito.when(blockHeader3.getReceiptsRoot())
         .thenReturn(BodyValidation.receiptsRoot(List.of(receiptForBlock3)));
     GetReceiptsFromPeerTask task =
-        new GetReceiptsFromPeerTask(List.of(blockHeader1, blockHeader2, blockHeader3), null);
+        new GetReceiptsFromPeerTask(
+            new Request<>(
+                List.of(
+                    new BlockHeaderAndReceiptCount(blockHeader1, 1),
+                    new BlockHeaderAndReceiptCount(blockHeader2, 1),
+                    new BlockHeaderAndReceiptCount(blockHeader3, 1)),
+                List.of()),
+            null);
     ReceiptsMessage receiptsMessage =
         ReceiptsMessage.create(
             List.of(
@@ -166,7 +186,14 @@ public class GetReceiptsFromPeerTaskTest {
 
     GetReceiptsFromPeerTask task =
         new GetReceiptsFromPeerTask(
-            List.of(blockHeader1, blockHeader2, blockHeader3, blockHeader4), null);
+            new Request<>(
+                List.of(
+                    new BlockHeaderAndReceiptCount(blockHeader1, 1),
+                    new BlockHeaderAndReceiptCount(blockHeader2, 1),
+                    new BlockHeaderAndReceiptCount(blockHeader3, 1),
+                    new BlockHeaderAndReceiptCount(blockHeader4, 0)),
+                List.of()),
+            null);
 
     ReceiptsMessage receiptsMessage =
         ReceiptsMessage.create(
@@ -174,13 +201,13 @@ public class GetReceiptsFromPeerTaskTest {
                 List.of(receiptForBlock1), List.of(receiptForBlock2), List.of(receiptForBlock3)),
             TransactionReceiptEncodingConfiguration.DEFAULT_NETWORK_CONFIGURATION);
 
-    Map<BlockHeader, List<TransactionReceipt>> resultMap = task.processResponse(receiptsMessage);
+    var resultMap = task.processResponse(receiptsMessage);
 
     Assertions.assertEquals(4, resultMap.size());
-    Assertions.assertEquals(Collections.emptyList(), resultMap.get(blockHeader4));
-    Assertions.assertEquals(List.of(receiptForBlock1), resultMap.get(blockHeader1));
-    Assertions.assertEquals(List.of(receiptForBlock2), resultMap.get(blockHeader2));
-    Assertions.assertEquals(List.of(receiptForBlock3), resultMap.get(blockHeader3));
+    Assertions.assertEquals(List.of(receiptForBlock1), resultMap.blocksReceipts().get(0));
+    Assertions.assertEquals(List.of(receiptForBlock2), resultMap.blocksReceipts().get(1));
+    Assertions.assertEquals(List.of(receiptForBlock3), resultMap.blocksReceipts().get(2));
+    Assertions.assertEquals(Collections.emptyList(), resultMap.blocksReceipts().get(3));
   }
 
   @Test
@@ -189,17 +216,20 @@ public class GetReceiptsFromPeerTaskTest {
     BlockHeader blockHeader1 = mockBlockHeader(1);
     Mockito.when(blockHeader1.getReceiptsRoot()).thenReturn(Hash.EMPTY_TRIE_HASH);
 
-    GetReceiptsFromPeerTask task = new GetReceiptsFromPeerTask(List.of(blockHeader1), null);
+    GetReceiptsFromPeerTask task =
+        new GetReceiptsFromPeerTask(
+            new Request<>(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 0)), List.of()),
+            null);
 
     ReceiptsMessage receiptsMessage =
         ReceiptsMessage.create(
             Collections.emptyList(),
             TransactionReceiptEncodingConfiguration.DEFAULT_NETWORK_CONFIGURATION);
 
-    Map<BlockHeader, List<TransactionReceipt>> resultMap = task.processResponse(receiptsMessage);
+    var resultMap = task.processResponse(receiptsMessage);
 
     Assertions.assertEquals(1, resultMap.size());
-    Assertions.assertEquals(Collections.emptyList(), resultMap.get(blockHeader1));
+    Assertions.assertEquals(Collections.emptyList(), resultMap.blocksReceipts().getFirst());
   }
 
   @Test
@@ -227,7 +257,13 @@ public class GetReceiptsFromPeerTaskTest {
 
     GetReceiptsFromPeerTask task =
         new GetReceiptsFromPeerTask(
-            List.of(blockHeader1, blockHeader2, blockHeader3), protocolSchedule);
+            new Request<>(
+                List.of(
+                    new BlockHeaderAndReceiptCount(blockHeader1, 1),
+                    new BlockHeaderAndReceiptCount(blockHeader2, 1),
+                    new BlockHeaderAndReceiptCount(blockHeader3, 1)),
+                List.of()),
+            protocolSchedule);
 
     EthPeer failForShortChainHeight = mockPeer(1);
     EthPeer successfulCandidate = mockPeer(5);
@@ -241,22 +277,26 @@ public class GetReceiptsFromPeerTaskTest {
 
   @Test
   public void testValidateResultForPartialSuccess() {
-    GetReceiptsFromPeerTask task = new GetReceiptsFromPeerTask(Collections.emptyList(), null);
+    GetReceiptsFromPeerTask task =
+        new GetReceiptsFromPeerTask(new Request<>(List.of(), List.of()), null);
 
     Assertions.assertEquals(
         PeerTaskValidationResponse.NO_RESULTS_RETURNED,
-        task.validateResult(Collections.emptyMap()));
+        task.validateResult(new Response<>(List.of(), false)));
   }
 
   @Test
   public void testValidateResultForFullSuccess() {
-    GetReceiptsFromPeerTask task = new GetReceiptsFromPeerTask(Collections.emptyList(), null);
-
-    Map<BlockHeader, List<TransactionReceipt>> map = new HashMap<>();
-    map.put(mockBlockHeader(1), null);
+    GetReceiptsFromPeerTask task =
+        new GetReceiptsFromPeerTask(new Request<>(List.of(), List.of()), null);
+    //
+    //    Map<BlockHeader, List<TransactionReceipt>> map = new HashMap<>();
+    //    map.put(mockBlockHeader(1), null);
 
     Assertions.assertEquals(
-        PeerTaskValidationResponse.RESULTS_VALID_AND_GOOD, task.validateResult(map));
+        PeerTaskValidationResponse.RESULTS_VALID_AND_GOOD,
+        task.validateResult(
+            new Response<>(List.of(List.of(mock(TransactionReceipt.class))), false)));
   }
 
   private BlockHeader mockBlockHeader(final long blockNumber) {
