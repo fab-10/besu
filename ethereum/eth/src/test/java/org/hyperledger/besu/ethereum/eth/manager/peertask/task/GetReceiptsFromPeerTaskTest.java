@@ -14,6 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -43,21 +44,25 @@ import org.hyperledger.besu.ethereum.p2p.rlpx.connections.PeerConnection;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
 public class GetReceiptsFromPeerTaskTest {
-  private static final Set<Capability> AGREED_CAPABILITIES = Set.of(EthProtocol.LATEST);
+  private static final Set<Capability> AGREED_CAPABILITIES_ETH69 = Set.of(EthProtocol.ETH69);
+  private static final Set<Capability> AGREED_CAPABILITIES_LATEST = Set.of(EthProtocol.LATEST);
   private static ProtocolSchedule protocolSchedule;
 
   @BeforeAll
@@ -76,13 +81,43 @@ public class GetReceiptsFromPeerTaskTest {
     Assertions.assertEquals(EthProtocol.get(), task.getSubProtocol());
   }
 
-  @Test
-  public void testGetRequestMessage() {
+  @ParameterizedTest
+  @MethodSource("testGetRequestMessage")
+  public void testGetRequestMessage(
+      final List<BlockHeaderAndReceiptCount> headerAndReceiptCounts,
+      final Set<Capability> capabilities,
+      final Optional<List<TransactionReceipt>> maybeFirstBlockPartialReceipts) {
+    GetReceiptsFromPeerTask task =
+        new GetReceiptsFromPeerTask(
+            new Request<>(headerAndReceiptCounts, maybeFirstBlockPartialReceipts.orElse(List.of())),
+            protocolSchedule);
+
+    MessageData messageData = task.getRequestMessage(capabilities);
+    GetReceiptsMessage getReceiptsMessage = GetReceiptsMessage.readFrom(messageData);
+
+    Assertions.assertEquals(EthProtocolMessages.GET_RECEIPTS, getReceiptsMessage.getCode());
+
+    List<Hash> hashesInMessage = getReceiptsMessage.blockHashes();
+    List<Hash> expectedHashes =
+        headerAndReceiptCounts.stream()
+            .map(BlockHeaderAndReceiptCount::blockHeader)
+            .map(BlockHeader::getHash)
+            .toList();
+
+    assertThat(expectedHashes).containsExactlyElementsOf(hashesInMessage);
+
+    assertThat(getReceiptsMessage.firstBlockReceiptIndex())
+        .isEqualTo(maybeFirstBlockPartialReceipts.map(List::size).orElse(-1));
+  }
+
+  private static Stream<Arguments> testGetRequestMessage() {
     BlockHeader blockHeader1 = mockBlockHeader(1);
-    TransactionReceipt receiptForBlock1 =
+    TransactionReceipt receiptForBlock1a =
         new TransactionReceipt(1, 123, Collections.emptyList(), Optional.empty());
+    TransactionReceipt receiptForBlock1b =
+        new TransactionReceipt(1, 321, Collections.emptyList(), Optional.empty());
     Mockito.when(blockHeader1.getReceiptsRoot())
-        .thenReturn(BodyValidation.receiptsRoot(List.of(receiptForBlock1)));
+        .thenReturn(BodyValidation.receiptsRoot(List.of(receiptForBlock1a, receiptForBlock1b)));
 
     BlockHeader blockHeader2 = mockBlockHeader(2);
     TransactionReceipt receiptForBlock2 =
@@ -96,32 +131,15 @@ public class GetReceiptsFromPeerTaskTest {
     Mockito.when(blockHeader3.getReceiptsRoot())
         .thenReturn(BodyValidation.receiptsRoot(List.of(receiptForBlock3)));
 
-    GetReceiptsFromPeerTask task =
-        new GetReceiptsFromPeerTask(
-            new Request<>(
-                List.of(
-                    new BlockHeaderAndReceiptCount(blockHeader1, 1),
-                    new BlockHeaderAndReceiptCount(blockHeader2, 1),
-                    new BlockHeaderAndReceiptCount(blockHeader3, 1)),
-                List.of()),
-            protocolSchedule);
-
-    MessageData messageData = task.getRequestMessage(AGREED_CAPABILITIES);
-    GetReceiptsMessage getReceiptsMessage = GetReceiptsMessage.readFrom(messageData);
-
-    Assertions.assertEquals(EthProtocolMessages.GET_RECEIPTS, getReceiptsMessage.getCode());
-    Iterable<Hash> hashesInMessage = getReceiptsMessage.blockHashes();
-    List<Hash> expectedHashes =
+    final var headers =
         List.of(
-            Hash.fromHexString(StringUtils.repeat("00", 31) + "11"),
-            Hash.fromHexString(StringUtils.repeat("00", 31) + "21"),
-            Hash.fromHexString(StringUtils.repeat("00", 31) + "31"));
-    List<Hash> actualHashes = new ArrayList<>();
-    hashesInMessage.forEach(actualHashes::add);
+            new BlockHeaderAndReceiptCount(blockHeader1, 2),
+            new BlockHeaderAndReceiptCount(blockHeader2, 1),
+            new BlockHeaderAndReceiptCount(blockHeader3, 1));
 
-    Assertions.assertEquals(3, actualHashes.size());
-    Assertions.assertEquals(
-        expectedHashes.stream().sorted().toList(), actualHashes.stream().sorted().toList());
+    return Stream.of(
+        Arguments.of(headers, AGREED_CAPABILITIES_ETH69, Optional.empty()),
+        Arguments.of(headers, AGREED_CAPABILITIES_LATEST, Optional.of(List.of(receiptForBlock1a))));
   }
 
   @Test
@@ -317,7 +335,7 @@ public class GetReceiptsFromPeerTaskTest {
             new Response<>(List.of(List.of(mock(TransactionReceipt.class))), false)));
   }
 
-  private BlockHeader mockBlockHeader(final long blockNumber) {
+  private static BlockHeader mockBlockHeader(final long blockNumber) {
     BlockHeader blockHeader = Mockito.mock(BlockHeader.class);
     Mockito.when(blockHeader.getNumber()).thenReturn(blockNumber);
     // second to last hex digit indicates the blockNumber, last hex digit indicates the usage of the
