@@ -33,7 +33,6 @@ import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -64,37 +63,6 @@ public class DownloadSyncReceiptsStep
     this.syncTransactionReceiptEncoder = syncTransactionReceiptEncoder;
   }
 
-  //  public CompletableFuture<List<BWR>> apply2(final List<B> blocks) {
-  //    final List<BlockHeader> headers =
-  // blocks.stream().map(this::getBlockHeader).collect(toList());
-  //    final List<BlockHeader> originalBlockHeaders =
-  //        LOG.isTraceEnabled() ? List.copyOf(headers) : null;
-  //    return ethScheduler
-  //        .scheduleServiceTask(
-  //            () -> {
-  //              Map<BlockHeader, List<TR>> receiptsByBlockHeader = new HashMap<>();
-  //              while (!headers.isEmpty()) {
-  //                Map<BlockHeader, List<TR>> receipts = getReceipts(headers);
-  //                headers.removeAll(receipts.keySet());
-  //                for (BlockHeader blockHeader : receipts.keySet()) {
-  //                  receiptsByBlockHeader.put(blockHeader, receipts.get(blockHeader));
-  //                }
-  //              }
-  //              if (LOG.isTraceEnabled()) {
-  //                for (BlockHeader blockHeader : originalBlockHeaders) {
-  //                  final List<TR> transactionReceipts = receiptsByBlockHeader.get(blockHeader);
-  //                  LOG.atTrace()
-  //                      .setMessage("{} receipts received for header {}")
-  //                      .addArgument(transactionReceipts == null ? 0 : transactionReceipts.size())
-  //                      .addArgument(blockHeader.getBlockHash())
-  //                      .log();
-  //                }
-  //              }
-  //              return CompletableFuture.completedFuture(receiptsByBlockHeader);
-  //            })
-  //        .thenApply((receipts) -> combineBlocksAndReceipts(blocks, receipts));
-  //  }
-
   @Override
   public CompletableFuture<List<SyncBlockWithReceipts>> apply(final List<SyncBlock> blocks) {
     return ethScheduler
@@ -121,7 +89,6 @@ public class DownloadSyncReceiptsStep
     while (itEmptyBlocks.hasNext()) {
       final var blockHeader = itEmptyBlocks.next().blockHeader();
       if (blockHeader.getReceiptsRoot().getBytes().equals(Hash.EMPTY_TRIE_HASH.getBytes())) {
-        getReceipts.put(blockHeader, Collections.emptyList());
         itEmptyBlocks.remove();
       }
     }
@@ -131,7 +98,7 @@ public class DownloadSyncReceiptsStep
     do {
       final var task =
           new GetSyncReceiptsFromPeerTask(
-              new Request<>(receiptRequests, firstBlockPartialReceipts),
+              new Request(receiptRequests, firstBlockPartialReceipts.size()),
               protocolSchedule,
               syncTransactionReceiptEncoder);
       final var getReceiptsResult = peerTaskExecutor.execute(task);
@@ -142,20 +109,29 @@ public class DownloadSyncReceiptsStep
 
         final var blocksReceipts = taskResult.blocksReceipts();
 
-        firstBlockPartialReceipts.clear();
-        final int completeBlockSize;
+        final int completedBlockSize;
         if (taskResult.lastBlockIncomplete()) {
-          completeBlockSize = blocksReceipts.size() - 1;
+          completedBlockSize = blocksReceipts.size() - 1;
           firstBlockPartialReceipts.addAll(blocksReceipts.getLast());
         } else {
-          completeBlockSize = blocksReceipts.size();
+          completedBlockSize = blocksReceipts.size();
         }
 
-        final var resolvedRequests = receiptRequests.subList(0, completeBlockSize);
+        final var resolvedRequests = receiptRequests.subList(0, completedBlockSize);
 
         for (int i = 0; i < resolvedRequests.size(); i++) {
           final var requestBlockHeader = receiptRequests.get(i).blockHeader();
-          final var blockReceipts = blocksReceipts.get(i);
+          final var blockReturnedReceipts = blocksReceipts.get(i);
+          final List<SyncTransactionReceipt> blockReceipts;
+          if (i == 0 && !firstBlockPartialReceipts.isEmpty()) {
+            blockReceipts =
+                new ArrayList<>(firstBlockPartialReceipts.size() + blockReturnedReceipts.size());
+            blockReceipts.addAll(firstBlockPartialReceipts);
+            blockReceipts.addAll(blockReturnedReceipts);
+            firstBlockPartialReceipts.clear();
+          } else {
+            blockReceipts = blocksReceipts.get(i);
+          }
           getReceipts.put(requestBlockHeader, blockReceipts);
         }
 
@@ -203,32 +179,4 @@ public class DownloadSyncReceiptsStep
             })
         .toList();
   }
-  //
-  //  abstract BlockHeader getBlockHeader(final B b);
-  //
-  //  abstract int getTransactionCount(final B b);
-  //
-  //  abstract List<BWR> combineBlocksAndReceipts(
-  //      final List<B> blocks, final Map<BlockHeader, List<TR>> receiptsByHeader);
-  //
-  //  /**
-  //   * Retrieves transaction receipts for as many of the supplied headers as possible. Repeat
-  // calls
-  //   * may be made after removing headers no longer needing transaction receipts.
-  //   *
-  //   * @param headers A list of headers to retrieve transaction receipts for
-  //   * @return transaction receipts for as many of the supplied headers as possible
-  //   */
-  //  Map<BlockHeader, List<SyncTransactionReceipt>> getReceipts(final List<BlockHeader> headers) {
-  //    GetSyncReceiptsFromPeerTask task =
-  //        new GetSyncReceiptsFromPeerTask(headers, protocolSchedule,
-  // syncTransactionReceiptEncoder);
-  //    PeerTaskExecutorResult<Map<BlockHeader, List<SyncTransactionReceipt>>> getReceiptsResult =
-  //        peerTaskExecutor.execute(task);
-  //    if (getReceiptsResult.responseCode() == PeerTaskExecutorResponseCode.SUCCESS
-  //        && getReceiptsResult.result().isPresent()) {
-  //      return getReceiptsResult.result().get();
-  //    }
-  //    return Collections.emptyMap();
-  //  }
 }

@@ -93,7 +93,7 @@ public class CheckpointDownloadBlockStep {
                 block.getHeader(), block.getBody().getTransactions().size()));
 
     do {
-      final var request = new Request<>(receiptsRequest, blockPartialReceipts);
+      final var request = new Request(receiptsRequest, blockPartialReceipts.size());
 
       final var task = new GetReceiptsFromPeerTask(request, protocolSchedule);
 
@@ -104,7 +104,6 @@ public class CheckpointDownloadBlockStep {
 
         final var receivedReceipts = taskResult.blocksReceipts().getFirst();
 
-        blockPartialReceipts.clear();
         if (taskResult.lastBlockIncomplete()) {
           blockPartialReceipts.addAll(receivedReceipts);
         } else {

@@ -23,21 +23,11 @@ import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
 import org.hyperledger.besu.ethereum.core.SyncBlock;
-import org.hyperledger.besu.ethereum.core.SyncBlockBody;
 import org.hyperledger.besu.ethereum.core.SyncBlockWithReceipts;
-import org.hyperledger.besu.ethereum.core.SyncTransactionReceipt;
-import org.hyperledger.besu.ethereum.core.TransactionReceipt;
-import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncoder;
-import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncodingConfiguration;
+import org.hyperledger.besu.ethereum.eth.core.Utils;
 import org.hyperledger.besu.ethereum.eth.sync.state.SyncState;
-import org.hyperledger.besu.ethereum.mainnet.DefaultProtocolSchedule;
-import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
-import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 
-import java.math.BigInteger;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -66,14 +56,14 @@ public class ImportSyncBlocksStepTest {
   @Test
   public void shouldImportBlocks() {
     final List<Block> realBlocks = gen.blockSequence(5);
-    final List<SyncBlock> blocks = blockToSyncBlock(realBlocks);
+    final List<SyncBlock> blocks = Utils.blocksToSyncBlocks(realBlocks);
     final List<SyncBlockWithReceipts> blocksWithReceipts =
         blocks.stream()
             .map(
                 block ->
                     new SyncBlockWithReceipts(
                         block,
-                        receiptsToSyncReceipts(
+                        Utils.receiptsToSyncReceipts(
                             gen.receipts(realBlocks.get(blocks.indexOf(block))))))
             .collect(toList());
 
@@ -81,32 +71,5 @@ public class ImportSyncBlocksStepTest {
 
     verify(blockchain).unsafeImportSyncBodiesAndReceipts(blocksWithReceipts, false);
     verify(syncState).setSyncProgress(0L, blocksWithReceipts.getLast().getNumber(), 10L);
-  }
-
-  private List<SyncBlock> blockToSyncBlock(final List<Block> blocks) {
-    final ArrayList<SyncBlock> syncBlocks = new ArrayList<>(blocks.size());
-    for (final Block block : blocks) {
-      BytesValueRLPOutput rlpOutput = new BytesValueRLPOutput();
-      block.getBody().writeWrappedBodyTo(rlpOutput);
-      final BytesValueRLPInput input = new BytesValueRLPInput(rlpOutput.encoded(), false);
-      final SyncBlockBody syncBlockBody =
-          SyncBlockBody.readWrappedBodyFrom(
-              input, false, new DefaultProtocolSchedule(Optional.of(BigInteger.ONE)));
-      syncBlocks.add(new SyncBlock(block.getHeader(), syncBlockBody));
-    }
-    return syncBlocks;
-  }
-
-  private List<SyncTransactionReceipt> receiptsToSyncReceipts(
-      final List<TransactionReceipt> receipts) {
-    return receipts.stream()
-        .map(
-            receipt -> {
-              BytesValueRLPOutput rlpOutput = new BytesValueRLPOutput();
-              TransactionReceiptEncoder.writeTo(
-                  receipt, rlpOutput, TransactionReceiptEncodingConfiguration.DEFAULT);
-              return new SyncTransactionReceipt(rlpOutput.encoded());
-            })
-        .collect(toList());
   }
 }

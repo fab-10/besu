@@ -39,13 +39,13 @@ import com.google.common.annotations.VisibleForTesting;
 
 public abstract class AbstractGetReceiptsFromPeerTask<TR>
     implements PeerTask<AbstractGetReceiptsFromPeerTask.Response<TR>> {
-  protected final Request<TR> request;
+  protected final Request request;
   protected final ProtocolSchedule protocolSchedule;
   private final long requiredBlockchainHeight;
   private final boolean isPoS;
 
   protected AbstractGetReceiptsFromPeerTask(
-      final Request<TR> request, final ProtocolSchedule protocolSchedule) {
+      final Request request, final ProtocolSchedule protocolSchedule) {
     this.request = request;
     this.protocolSchedule = protocolSchedule;
 
@@ -89,18 +89,18 @@ public abstract class AbstractGetReceiptsFromPeerTask<TR>
     }
     final ReceiptsMessage receiptsMessage = ReceiptsMessage.readFrom(messageData);
     try {
-      final var returnReceipts = getMessageReceipts(receiptsMessage);
-      // complete the first block if needed
-      if (request.firstBlockReceiptIndex() > 0) {
-        // at least few receipts for the first block must be returned
-        if (returnReceipts.isEmpty()) {
-          throw new InvalidPeerTaskResponseException("No receipts returned");
-        }
-        // prepend the already fetched partial list of receipts to the first block result
-        returnReceipts.getFirst().addAll(0, request.firstBlockPartialReceipts());
-      }
-      // return new Response(returnReceipts, receiptsMessage.lastBlockIncomplete());
-      return newResponse(returnReceipts, receiptsMessage.lastBlockIncomplete());
+      //      final var returnReceipts = getMessageReceipts(receiptsMessage);
+      //      // complete the first block if needed
+      //      if (request.firstBlockReceiptIndex() > 0) {
+      //        // at least few receipts for the first block must be returned
+      //        if (returnReceipts.isEmpty()) {
+      //          throw new InvalidPeerTaskResponseException("No receipts returned");
+      //        }
+      //        // prepend the already fetched partial list of receipts to the first block result
+      //        returnReceipts.getFirst().addAll(0, request.firstBlockPartialReceipts());
+      //      }
+      return newResponse(
+          getMessageReceipts(receiptsMessage), receiptsMessage.lastBlockIncomplete());
     } catch (RLPException e) {
       // indicates a malformed or unexpected RLP result from the peer
       throw new MalformedRlpFromPeerException(e, messageData.getData());
@@ -138,12 +138,6 @@ public abstract class AbstractGetReceiptsFromPeerTask<TR>
           if (!receiptsRootMatches(requestedReceipts.blockHeader(), receivedReceiptsForBlock)) {
             return PeerTaskValidationResponse.RESULTS_DO_NOT_MATCH_QUERY;
           }
-          //          if (!requestedReceipts
-          //              .blockHeader()
-          //              .getReceiptsRoot()
-          //              .equals(BodyValidation.receiptsRoot(receivedReceiptsForBlock))) {
-          //            return PeerTaskValidationResponse.RESULTS_DO_NOT_MATCH_QUERY;
-          //          }
         }
       }
     }
@@ -163,19 +157,14 @@ public abstract class AbstractGetReceiptsFromPeerTask<TR>
 
   public record BlockHeaderAndReceiptCount(BlockHeader blockHeader, int receiptCount) {}
 
-  public record Request<TR>(
-      List<BlockHeaderAndReceiptCount> blockHeaderAndReceiptCounts,
-      List<TR> firstBlockPartialReceipts) {
+  public record Request(
+      List<BlockHeaderAndReceiptCount> blockHeaderAndReceiptCounts, int firstBlockReceiptIndex) {
     public boolean isEmpty() {
       return blockHeaderAndReceiptCounts.isEmpty();
     }
 
     public int size() {
       return blockHeaderAndReceiptCounts.size();
-    }
-
-    public int firstBlockReceiptIndex() {
-      return firstBlockPartialReceipts.size();
     }
   }
 

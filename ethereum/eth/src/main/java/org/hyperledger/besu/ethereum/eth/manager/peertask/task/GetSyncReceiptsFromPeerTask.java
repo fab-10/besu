@@ -31,7 +31,7 @@ public class GetSyncReceiptsFromPeerTask
   private final SyncTransactionReceiptEncoder syncTransactionReceiptEncoder;
 
   public GetSyncReceiptsFromPeerTask(
-      final Request<SyncTransactionReceipt> request,
+      final Request request,
       final ProtocolSchedule protocolSchedule,
       final SyncTransactionReceiptEncoder syncTransactionReceiptEncoder) {
     super(request, protocolSchedule);

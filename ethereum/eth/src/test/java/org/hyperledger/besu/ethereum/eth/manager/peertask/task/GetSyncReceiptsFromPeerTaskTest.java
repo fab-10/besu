@@ -14,20 +14,26 @@
  */
 package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 
+import org.hyperledger.besu.ethereum.core.SyncTransactionReceipt;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
+import org.hyperledger.besu.ethereum.core.encoding.receipt.SyncTransactionReceiptEncoder;
+import org.hyperledger.besu.ethereum.eth.core.Utils;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Request;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.ethereum.rlp.SimpleNoCopyRlpEncoder;
 
-public class GetReceiptsFromPeerTaskTest
-    extends AbstractGetReceiptsFromPeerTaskTest<TransactionReceipt, GetReceiptsFromPeerTask> {
+public class GetSyncReceiptsFromPeerTaskTest
+    extends AbstractGetReceiptsFromPeerTaskTest<
+        SyncTransactionReceipt, GetSyncReceiptsFromPeerTask> {
   @Override
-  protected GetReceiptsFromPeerTask createTask(
+  protected GetSyncReceiptsFromPeerTask createTask(
       final Request request, final ProtocolSchedule protocolSchedule) {
-    return new GetReceiptsFromPeerTask(request, protocolSchedule);
+    return new GetSyncReceiptsFromPeerTask(
+        request, protocolSchedule, new SyncTransactionReceiptEncoder(new SimpleNoCopyRlpEncoder()));
   }
 
   @Override
-  protected TransactionReceipt toResponseReceipt(final TransactionReceipt receipt) {
-    return receipt;
+  protected SyncTransactionReceipt toResponseReceipt(final TransactionReceipt receipt) {
+    return Utils.receiptToSyncReceipt(receipt);
   }
 }
