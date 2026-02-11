@@ -755,14 +755,7 @@ public class DefaultBlockchain implements MutableBlockchain {
       final Difficulty parentTotalDifficulty =
           blockchainStorage
               .getTotalDifficulty(blockHeader.getParentHash())
-              .orElseThrow(
-                  () ->
-                      new IllegalStateException(
-                          "Blockchain is missing total difficulty data for block "
-                              + (blockHeader.getNumber() - 1)
-                              + ", block hash "
-                              + blockHeader.getParentHash()
-                              + "."));
+              .orElse(Difficulty.ZERO);
       difficultyForSyncing = parentTotalDifficulty.add(blockHeader.getDifficulty());
     } else {
       difficultyForSyncing = difficultyForSyncing.add(blockHeader.getDifficulty());
