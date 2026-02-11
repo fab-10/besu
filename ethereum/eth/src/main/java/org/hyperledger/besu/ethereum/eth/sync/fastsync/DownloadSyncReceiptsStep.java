@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.eth.sync.fastsync;
 
 import static java.util.Collections.emptyList;
+import static java.util.stream.Collectors.toCollection;
 
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -26,7 +27,7 @@ import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutor;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode;
-import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.BlockHeaderAndReceiptCount;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Request;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetSyncReceiptsFromPeerTask;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
@@ -38,7 +39,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
-import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,19 +66,19 @@ public class DownloadSyncReceiptsStep
   @Override
   public CompletableFuture<List<SyncBlockWithReceipts>> apply(final List<SyncBlock> blocks) {
     return ethScheduler
-        .scheduleServiceTask(() -> getReceiptsWithPeerTaskSystem(blocks))
+        .scheduleServiceTask(() -> getReceipts(blocks))
         .thenApply((receipts) -> combineBlocksAndReceipts(blocks, receipts));
   }
 
-  private CompletableFuture<Map<BlockHeader, List<SyncTransactionReceipt>>>
-      getReceiptsWithPeerTaskSystem(final List<SyncBlock> blocks) {
+  private CompletableFuture<Map<BlockHeader, List<SyncTransactionReceipt>>> getReceipts(
+      final List<SyncBlock> blocks) {
     final var receiptRequests =
         blocks.stream()
             .map(
                 b ->
-                    new AbstractGetReceiptsFromPeerTask.BlockHeaderAndReceiptCount(
+                    new BlockHeaderAndReceiptCount(
                         b.getHeader(), b.getBody().getTransactionCount()))
-            .collect(Collectors.toCollection(ArrayList::new));
+            .collect(toCollection(ArrayList::new));
 
     final Map<BlockHeader, List<SyncTransactionReceipt>> getReceipts =
         HashMap.newHashMap(receiptRequests.size());
