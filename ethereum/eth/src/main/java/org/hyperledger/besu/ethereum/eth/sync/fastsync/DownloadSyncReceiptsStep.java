@@ -98,7 +98,7 @@ public class DownloadSyncReceiptsStep
     do {
       final var task =
           new GetSyncReceiptsFromPeerTask(
-              new Request(receiptRequests, firstBlockPartialReceipts.size()),
+              new Request<>(receiptRequests, firstBlockPartialReceipts),
               protocolSchedule,
               syncTransactionReceiptEncoder);
       final var getReceiptsResult = peerTaskExecutor.execute(task);
@@ -110,6 +110,7 @@ public class DownloadSyncReceiptsStep
         final var blocksReceipts = taskResult.blocksReceipts();
 
         final int completedBlockSize;
+        firstBlockPartialReceipts.clear();
         if (taskResult.lastBlockIncomplete()) {
           completedBlockSize = blocksReceipts.size() - 1;
           firstBlockPartialReceipts.addAll(blocksReceipts.getLast());
@@ -121,17 +122,7 @@ public class DownloadSyncReceiptsStep
 
         for (int i = 0; i < resolvedRequests.size(); i++) {
           final var requestBlockHeader = receiptRequests.get(i).blockHeader();
-          final var blockReturnedReceipts = blocksReceipts.get(i);
-          final List<SyncTransactionReceipt> blockReceipts;
-          if (i == 0 && !firstBlockPartialReceipts.isEmpty()) {
-            blockReceipts =
-                new ArrayList<>(firstBlockPartialReceipts.size() + blockReturnedReceipts.size());
-            blockReceipts.addAll(firstBlockPartialReceipts);
-            blockReceipts.addAll(blockReturnedReceipts);
-            firstBlockPartialReceipts.clear();
-          } else {
-            blockReceipts = blocksReceipts.get(i);
-          }
+          final List<SyncTransactionReceipt> blockReceipts = blocksReceipts.get(i);
           getReceipts.put(requestBlockHeader, blockReceipts);
         }
 

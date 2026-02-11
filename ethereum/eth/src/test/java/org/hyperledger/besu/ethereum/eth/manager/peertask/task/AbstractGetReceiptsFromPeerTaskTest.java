@@ -55,7 +55,6 @@ import java.util.stream.Stream;
 import org.apache.commons.lang3.StringUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -79,13 +78,15 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
   }
 
   protected abstract TASK createTask(
-      final Request request, final ProtocolSchedule protocolSchedule);
+      final Request<TR> request, final ProtocolSchedule protocolSchedule);
 
   protected abstract TR toResponseReceipt(final TransactionReceipt receipt);
 
+  protected abstract int receiptsComparator(final List<TR> receipts1, final List<TR> receipts2);
+
   @Test
   public void testGetSubProtocol() {
-    final var task = createTask(new Request(List.of(), 0), protocolSchedule);
+    final var task = createTask(new Request<>(List.of(), List.of()), protocolSchedule);
     Assertions.assertEquals(EthProtocol.get(), task.getSubProtocol());
   }
 
@@ -97,8 +98,7 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
       final Optional<List<TR>> maybeFirstBlockPartialReceipts) {
     final var task =
         createTask(
-            new Request(
-                headerAndReceiptCounts, maybeFirstBlockPartialReceipts.map(List::size).orElse(0)),
+            new Request<>(headerAndReceiptCounts, maybeFirstBlockPartialReceipts.orElse(List.of())),
             protocolSchedule);
 
     MessageData messageData = task.getRequestMessage(capabilities);
@@ -153,7 +153,7 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
 
   @Test
   public void testParseResponseWithNullResponseMessage() {
-    final var task = createTask(new Request(List.of(), 0), protocolSchedule);
+    final var task = createTask(new Request<>(List.of(), List.of()), protocolSchedule);
     Assertions.assertThrows(
         InvalidPeerTaskResponseException.class, () -> task.processResponse(null));
   }
@@ -184,13 +184,13 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
 
     final var task =
         createTask(
-            new Request(
+            new Request<>(
                 List.of(
                     new BlockHeaderAndReceiptCount(blockHeader1, 1),
                     new BlockHeaderAndReceiptCount(blockHeader2, 1),
                     new BlockHeaderAndReceiptCount(blockHeader3, 1),
                     new BlockHeaderAndReceiptCount(blockHeader4, 0)),
-                0),
+                List.of()),
             protocolSchedule);
 
     ReceiptsMessage receiptsMessage =
@@ -205,34 +205,12 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
     final var response = task.processResponse(receiptsMessage);
 
     assertThat(response.blocksReceipts())
+        .usingElementComparator(this::receiptsComparator)
         .containsExactly(
             List.of(toResponseReceipt(receiptForBlock1)),
             List.of(toResponseReceipt(receiptForBlock2)),
             List.of(toResponseReceipt(receiptForBlock3)),
             Collections.emptyList());
-  }
-
-  @Test
-  @Disabled("ToDo moved to DownloadSyncReceiptsStep")
-  public void testParseResponseForOnlyPrefilledEmptyTrieReceiptsRoots()
-      throws InvalidPeerTaskResponseException, MalformedRlpFromPeerException {
-    BlockHeader blockHeader1 = mockBlockHeader(1);
-    Mockito.when(blockHeader1.getReceiptsRoot()).thenReturn(Hash.EMPTY_TRIE_HASH);
-
-    GetReceiptsFromPeerTask task =
-        new GetReceiptsFromPeerTask(
-            new Request(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 0)), 0),
-            protocolSchedule);
-
-    ReceiptsMessage receiptsMessage =
-        ReceiptsMessage.create(
-            Collections.emptyList(),
-            TransactionReceiptEncodingConfiguration.DEFAULT_NETWORK_CONFIGURATION);
-
-    var resultMap = task.processResponse(receiptsMessage);
-
-    Assertions.assertEquals(1, resultMap.size());
-    Assertions.assertEquals(Collections.emptyList(), resultMap.blocksReceipts().getFirst());
   }
 
   @ParameterizedTest
@@ -255,11 +233,11 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
 
     final var task =
         createTask(
-            new Request(
+            new Request<>(
                 List.of(
                     new BlockHeaderAndReceiptCount(blockHeader1, 1),
                     new BlockHeaderAndReceiptCount(blockHeader2, 1)),
-                0),
+                List.of()),
             protocolSchedule);
 
     EthPeer failForShortChainHeight = mockPeer(1);
@@ -274,22 +252,25 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
   }
 
   static List<Arguments> validateResultFailsWhenNoResultAreReturned() {
+    TransactionReceipt receipt =
+        new TransactionReceipt(1, 123, Collections.emptyList(), Optional.empty());
     return List.of(
-        Arguments.of(0, false),
-        Arguments.of(0, true),
-        Arguments.of(1, false),
-        Arguments.of(1, true));
+        Arguments.of(List.of(), false),
+        Arguments.of(List.of(), true),
+        Arguments.of(List.of(receipt), false),
+        Arguments.of(List.of(receipt), true));
   }
 
   @ParameterizedTest
   @MethodSource("validateResultFailsWhenNoResultAreReturned")
   public void validateResultFailsWhenNoResultAreReturned(
-      final int firstBlockReceiptIndex, final boolean lastBlockIncomplete) {
+      final List<TransactionReceipt> firstBlockPartialReceipts, final boolean lastBlockIncomplete) {
     BlockHeader blockHeader1 = mockBlockHeader(1);
     final var task =
         createTask(
-            new Request(
-                List.of(new BlockHeaderAndReceiptCount(blockHeader1, 1)), firstBlockReceiptIndex),
+            new Request<>(
+                List.of(new BlockHeaderAndReceiptCount(blockHeader1, 1)),
+                firstBlockPartialReceipts.stream().map(this::toResponseReceipt).toList()),
             protocolSchedule);
 
     Assertions.assertEquals(
@@ -307,7 +288,7 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
 
     final var task =
         createTask(
-            new Request(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 1)), 0),
+            new Request<>(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 1)), List.of()),
             protocolSchedule);
 
     Assertions.assertEquals(
@@ -337,12 +318,12 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
         .thenReturn(BodyValidation.receiptsRoot(List.of(receiptForBlock3)));
     final var task =
         createTask(
-            new Request(
+            new Request<>(
                 List.of(
                     new BlockHeaderAndReceiptCount(blockHeader1, 1),
                     new BlockHeaderAndReceiptCount(blockHeader2, 1),
                     new BlockHeaderAndReceiptCount(blockHeader3, 1)),
-                0),
+                List.of()),
             protocolSchedule);
     var response =
         new Response<>(
@@ -373,7 +354,7 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
 
     final var task =
         createTask(
-            new Request(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 1)), 0),
+            new Request<>(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 1)), List.of()),
             protocolSchedule);
 
     Assertions.assertEquals(
@@ -399,7 +380,7 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
 
     final var task =
         createTask(
-            new Request(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 1)), 0),
+            new Request<>(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 1)), List.of()),
             protocolSchedule);
 
     Assertions.assertEquals(
@@ -420,7 +401,7 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
 
     final var task =
         createTask(
-            new Request(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 2)), 0),
+            new Request<>(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 2)), List.of()),
             protocolSchedule);
 
     Assertions.assertEquals(
@@ -441,7 +422,9 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
 
     final var task =
         createTask(
-            new Request(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 2)), 1),
+            new Request<>(
+                List.of(new BlockHeaderAndReceiptCount(blockHeader1, 2)),
+                List.of(toResponseReceipt(receipt1ForBlock1))),
             protocolSchedule);
 
     Assertions.assertEquals(
@@ -471,7 +454,9 @@ public abstract class AbstractGetReceiptsFromPeerTaskTest<
 
     final var task =
         createTask(
-            new Request(List.of(new BlockHeaderAndReceiptCount(blockHeader1, 3)), 1),
+            new Request<>(
+                List.of(new BlockHeaderAndReceiptCount(blockHeader1, 3)),
+                List.of(toResponseReceipt(receipt1ForBlock1))),
             protocolSchedule);
 
     Assertions.assertEquals(

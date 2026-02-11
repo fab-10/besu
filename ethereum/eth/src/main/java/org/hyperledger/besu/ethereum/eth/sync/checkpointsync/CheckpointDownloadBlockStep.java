@@ -93,7 +93,7 @@ public class CheckpointDownloadBlockStep {
                 block.getHeader(), block.getBody().getTransactions().size()));
 
     do {
-      final var request = new Request(receiptsRequest, blockPartialReceipts.size());
+      final var request = new Request<>(receiptsRequest, blockPartialReceipts);
 
       final var task = new GetReceiptsFromPeerTask(request, protocolSchedule);
 

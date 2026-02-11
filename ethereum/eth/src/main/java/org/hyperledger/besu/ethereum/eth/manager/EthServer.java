@@ -317,12 +317,12 @@ class EthServer {
       final BytesValueRLPOutput encodedBlockReceipts = new BytesValueRLPOutput();
       encodedBlockReceipts.startList();
 
-      TransactionReceiptEncodingConfiguration encodingConfiguration =
-          TransactionReceiptEncodingConfiguration.ETH69_RECEIPT_CONFIGURATION;
-
       for (final TransactionReceipt receipt : requestedReceipts) {
         final BytesValueRLPOutput encodedReceipt = new BytesValueRLPOutput();
-        TransactionReceiptEncoder.writeTo(receipt, encodedReceipt, encodingConfiguration);
+        TransactionReceiptEncoder.writeTo(
+            receipt,
+            encodedReceipt,
+            TransactionReceiptEncodingConfiguration.ETH69_RECEIPT_CONFIGURATION);
         if (responseSizeEstimate + encodedReceipt.encodedSize() + RLP.MAX_PREFIX_SIZE
             > maxMessageSize) {
           lastBlockIncomplete = true;
@@ -340,7 +340,7 @@ class EthServer {
     }
 
     final BytesValueRLPOutput rlp = new BytesValueRLPOutput();
-    rlp.writeUnsignedByte(lastBlockIncomplete ? 1 : 0);
+    rlp.writeLongScalar(lastBlockIncomplete ? 1 : 0);
     rlp.startList();
     blockReceiptsRLPs.forEach(r -> rlp.writeRaw(r.encoded()));
     rlp.endList();

@@ -18,6 +18,7 @@ import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncodingConfiguration.ETH69_RECEIPT_CONFIGURATION;
 import static org.hyperledger.besu.ethereum.eth.core.Utils.blocksToSyncBlocks;
 import static org.hyperledger.besu.ethereum.eth.core.Utils.receiptsToSyncReceipts;
 import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.SUCCESS;
@@ -35,7 +36,6 @@ import org.hyperledger.besu.ethereum.core.SyncBlock;
 import org.hyperledger.besu.ethereum.core.SyncBlockWithReceipts;
 import org.hyperledger.besu.ethereum.core.SyncTransactionReceipt;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.SyncTransactionReceiptEncoder;
-import org.hyperledger.besu.ethereum.eth.core.Utils;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutor;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult;
@@ -88,7 +88,10 @@ public class DownloadSyncReceiptsStepTest {
     final List<Block> blockWithTxs = gen.blockSequence(3).subList(1, 3);
 
     final var returnedReceiptsByBlock =
-        blockWithTxs.stream().map(gen::receipts).map(Utils::receiptsToSyncReceipts).toList();
+        blockWithTxs.stream()
+            .map(gen::receipts)
+            .map(rs -> receiptsToSyncReceipts(rs, ETH69_RECEIPT_CONFIGURATION))
+            .toList();
     final var syncBlocks = blocksToSyncBlocks(blockWithTxs);
 
     // Mock the peer task executor to return receipts for both blocks
@@ -132,8 +135,8 @@ public class DownloadSyncReceiptsStepTest {
     // we must not request receipt for block2, so only return receipts for the 2 blocks with txs
     final var returnedReceiptsByBlock =
         List.of(
-            receiptsToSyncReceipts(gen.receipts(block1_withTxs)),
-            receiptsToSyncReceipts(gen.receipts(block3_withTxs)));
+            receiptsToSyncReceipts(gen.receipts(block1_withTxs), ETH69_RECEIPT_CONFIGURATION),
+            receiptsToSyncReceipts(gen.receipts(block3_withTxs), ETH69_RECEIPT_CONFIGURATION));
 
     final var syncBlocks = blocksToSyncBlocks(blocks);
 
@@ -176,22 +179,26 @@ public class DownloadSyncReceiptsStepTest {
     final List<SyncBlock> syncBlocks = blocksToSyncBlocks(blocks);
 
     final var returnedReceiptsByBlock =
-        blocks.stream().map(gen::receipts).map(Utils::receiptsToSyncReceipts).toList();
+        blocks.stream()
+            .map(gen::receipts)
+            .map(rs -> receiptsToSyncReceipts(rs, ETH69_RECEIPT_CONFIGURATION))
+            .toList();
 
     // First call returns partial receipts for first block
     final List<SyncTransactionReceipt> firstBlockReceipts = returnedReceiptsByBlock.getFirst();
     final List<SyncTransactionReceipt> secondBlockReceipts = returnedReceiptsByBlock.get(1);
     final List<SyncTransactionReceipt> partialReceipts =
         firstBlockReceipts.subList(0, firstBlockReceipts.size() / 2);
-    final List<SyncTransactionReceipt> remainingReceipts =
-        firstBlockReceipts.subList(firstBlockReceipts.size() / 2, firstBlockReceipts.size());
 
     final var firstResult = new Response<>(List.of(partialReceipts), true);
     final var firstExecutorResult =
         new PeerTaskExecutorResult<>(Optional.of(firstResult), SUCCESS, emptyList());
 
-    // Second call returns remaining receipts and second block
-    final var secondResult = new Response<>(List.of(remainingReceipts, secondBlockReceipts), false);
+    // Second call returns combined receipts (partial + remaining) for first block and second block
+    // Note: processResponse in AbstractGetReceiptsFromPeerTask combines firstBlockPartialReceipts
+    // with newly received receipts, so the result contains the full receipt list
+    final var secondResult =
+        new Response<>(List.of(firstBlockReceipts, secondBlockReceipts), false);
     final var secondExecutorResult =
         new PeerTaskExecutorResult<>(Optional.of(secondResult), SUCCESS, emptyList());
 
@@ -224,12 +231,14 @@ public class DownloadSyncReceiptsStepTest {
 
     final List<SyncBlock> syncBlocks = blocksToSyncBlocks(List.of(block));
 
-    final var returnedReceipts = receiptsToSyncReceipts(gen.receipts(block));
+    final var returnedReceipts =
+        receiptsToSyncReceipts(gen.receipts(block), ETH69_RECEIPT_CONFIGURATION);
 
     // Receipts for the block are split in three responses
+    // Note: processResponse combines partial receipts, so each result contains cumulative receipts
     final List<SyncTransactionReceipt> firstCallReturnedReceipts = returnedReceipts.subList(0, 1);
-    final List<SyncTransactionReceipt> secondCallReturnedReceipts = returnedReceipts.subList(1, 2);
-    final List<SyncTransactionReceipt> thirdCallReturnedReceipts = returnedReceipts.subList(2, 3);
+    final List<SyncTransactionReceipt> secondCallReturnedReceipts = returnedReceipts.subList(0, 2);
+    final List<SyncTransactionReceipt> thirdCallReturnedReceipts = returnedReceipts.subList(0, 3);
 
     final var firstResult = new Response<>(List.of(firstCallReturnedReceipts), true);
     final var firstExecutorResult =
@@ -267,7 +276,10 @@ public class DownloadSyncReceiptsStepTest {
     final List<SyncBlock> syncBlocks = blocksToSyncBlocks(blocks);
 
     final var returnedReceiptsByBlock =
-        blocks.stream().map(gen::receipts).map(Utils::receiptsToSyncReceipts).toList();
+        blocks.stream()
+            .map(gen::receipts)
+            .map(rs -> receiptsToSyncReceipts(rs, ETH69_RECEIPT_CONFIGURATION))
+            .toList();
 
     // First call returns first block
     final var firstResult = new Response<>(List.of(returnedReceiptsByBlock.get(0)), false);
@@ -314,7 +326,8 @@ public class DownloadSyncReceiptsStepTest {
 
     final Map<BlockHeader, List<SyncTransactionReceipt>> receiptsByHeader = new HashMap<>();
 
-    final List<SyncTransactionReceipt> allReceipts = receiptsToSyncReceipts(gen.receipts(block));
+    final List<SyncTransactionReceipt> allReceipts =
+        receiptsToSyncReceipts(gen.receipts(block), ETH69_RECEIPT_CONFIGURATION);
 
     // Add fewer receipts than transactions
     receiptsByHeader.put(

@@ -17,12 +17,10 @@ package org.hyperledger.besu.ethereum.core;
 import org.hyperledger.besu.datatypes.LogsBloomFilter;
 
 import java.util.List;
-import java.util.Objects;
 
 import org.apache.tuweni.bytes.Bytes;
 
 public class SyncTransactionReceipt {
-
   private final Bytes rlpBytes;
   private final boolean isFormattedForRootCalculation;
   private Bytes transactionTypeCode;
@@ -90,51 +88,5 @@ public class SyncTransactionReceipt {
     cumulativeGasUsed = null;
     bloomFilter = null;
     logs = null;
-  }
-
-  @Override
-  public final boolean equals(final Object o) {
-    if (!(o instanceof final SyncTransactionReceipt that)) return false;
-
-    return isFormattedForRootCalculation == that.isFormattedForRootCalculation
-        && rlpBytes.equals(that.rlpBytes)
-        && Objects.equals(transactionTypeCode, that.transactionTypeCode)
-        && Objects.equals(statusOrStateRoot, that.statusOrStateRoot)
-        && Objects.equals(cumulativeGasUsed, that.cumulativeGasUsed)
-        && Objects.equals(bloomFilter, that.bloomFilter)
-        && Objects.equals(logs, that.logs);
-  }
-
-  @Override
-  public int hashCode() {
-    if (isFormattedForRootCalculation) {
-      return rlpBytes.hashCode();
-    }
-    int result = Objects.hashCode(transactionTypeCode);
-    result = 31 * result + Objects.hashCode(statusOrStateRoot);
-    result = 31 * result + Objects.hashCode(cumulativeGasUsed);
-    result = 31 * result + Objects.hashCode(bloomFilter);
-    result = 31 * result + Objects.hashCode(logs);
-    return result;
-  }
-
-  @Override
-  public String toString() {
-    return "SyncTransactionReceipt{"
-        + "rlpBytes="
-        + rlpBytes
-        + ", isFormattedForRootCalculation="
-        + isFormattedForRootCalculation
-        + ", transactionTypeCode="
-        + transactionTypeCode
-        + ", statusOrStateRoot="
-        + statusOrStateRoot
-        + ", cumulativeGasUsed="
-        + cumulativeGasUsed
-        + ", bloomFilter="
-        + bloomFilter
-        + ", logs="
-        + logs
-        + '}';
   }
 }

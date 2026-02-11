@@ -24,7 +24,8 @@ import java.util.List;
 
 public class GetReceiptsFromPeerTask extends AbstractGetReceiptsFromPeerTask<TransactionReceipt> {
 
-  public GetReceiptsFromPeerTask(final Request request, final ProtocolSchedule protocolSchedule) {
+  public GetReceiptsFromPeerTask(
+      final Request<TransactionReceipt> request, final ProtocolSchedule protocolSchedule) {
     super(request, protocolSchedule);
   }
 

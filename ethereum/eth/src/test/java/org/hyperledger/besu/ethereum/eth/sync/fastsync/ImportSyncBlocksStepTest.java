@@ -15,6 +15,8 @@
 package org.hyperledger.besu.ethereum.eth.sync.fastsync;
 
 import static java.util.stream.Collectors.toList;
+import static org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncodingConfiguration.ETH69_RECEIPT_CONFIGURATION;
+import static org.hyperledger.besu.ethereum.eth.core.Utils.receiptsToSyncReceipts;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -63,8 +65,9 @@ public class ImportSyncBlocksStepTest {
                 block ->
                     new SyncBlockWithReceipts(
                         block,
-                        Utils.receiptsToSyncReceipts(
-                            gen.receipts(realBlocks.get(blocks.indexOf(block))))))
+                        receiptsToSyncReceipts(
+                            gen.receipts(realBlocks.get(blocks.indexOf(block))),
+                            ETH69_RECEIPT_CONFIGURATION)))
             .collect(toList());
 
     importSyncBlocksStep.accept(blocksWithReceipts);

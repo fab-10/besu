@@ -19,29 +19,37 @@ import org.hyperledger.besu.ethereum.core.SyncBlock;
 import org.hyperledger.besu.ethereum.core.SyncBlockBody;
 import org.hyperledger.besu.ethereum.core.SyncTransactionReceipt;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
+import org.hyperledger.besu.ethereum.core.encoding.receipt.SyncTransactionReceiptEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncodingConfiguration;
 import org.hyperledger.besu.ethereum.mainnet.DefaultProtocolSchedule;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
+import org.hyperledger.besu.ethereum.rlp.SimpleNoCopyRlpEncoder;
 
 import java.math.BigInteger;
 import java.util.List;
 import java.util.Optional;
 
 public class Utils {
+  private static final SyncTransactionReceiptEncoder SYNC_RECEIPT_ENCODER =
+      new SyncTransactionReceiptEncoder(new SimpleNoCopyRlpEncoder());
 
-  public static SyncTransactionReceipt receiptToSyncReceipt(final TransactionReceipt receipt) {
+  public static SyncTransactionReceipt receiptToSyncReceipt(
+      final TransactionReceipt receipt,
+      final TransactionReceiptEncodingConfiguration receiptEncodingConfiguration) {
     BytesValueRLPOutput rlpOutput = new BytesValueRLPOutput();
-    TransactionReceiptEncoder.writeTo(
-        receipt, rlpOutput, TransactionReceiptEncodingConfiguration.DEFAULT);
+    TransactionReceiptEncoder.writeTo(receipt, rlpOutput, receiptEncodingConfiguration);
     return new SyncTransactionReceipt(rlpOutput.encoded());
   }
 
   public static List<SyncTransactionReceipt> receiptsToSyncReceipts(
-      final List<TransactionReceipt> receipts) {
+      final List<TransactionReceipt> receipts,
+      final TransactionReceiptEncodingConfiguration receiptEncodingConfiguration) {
 
-    return receipts.stream().map(Utils::receiptToSyncReceipt).toList();
+    return receipts.stream()
+        .map(receipt -> Utils.receiptToSyncReceipt(receipt, receiptEncodingConfiguration))
+        .toList();
   }
 
   public static SyncBlock blockToSyncBlock(final Block block) {
@@ -56,5 +64,26 @@ public class Utils {
 
   public static List<SyncBlock> blocksToSyncBlocks(final List<Block> blocks) {
     return blocks.stream().map(Utils::blockToSyncBlock).toList();
+  }
+
+  public static int compareSyncReceipts(
+      final SyncTransactionReceipt receipt1, final SyncTransactionReceipt receipt2) {
+    if (receipt1.isFormattedForRootCalculation()) {
+      if (receipt2.isFormattedForRootCalculation()) {
+        return receipt1.getRlpBytes().compareTo(receipt2.getRlpBytes());
+      }
+      return receipt1
+          .getRlpBytes()
+          .compareTo(SYNC_RECEIPT_ENCODER.encodeForRootCalculation(receipt2));
+    } else {
+      if (receipt2.isFormattedForRootCalculation()) {
+        return SYNC_RECEIPT_ENCODER
+            .encodeForRootCalculation(receipt1)
+            .compareTo(receipt2.getRlpBytes());
+      }
+      return SYNC_RECEIPT_ENCODER
+          .encodeForRootCalculation(receipt1)
+          .compareTo(SYNC_RECEIPT_ENCODER.encodeForRootCalculation(receipt2));
+    }
   }
 }

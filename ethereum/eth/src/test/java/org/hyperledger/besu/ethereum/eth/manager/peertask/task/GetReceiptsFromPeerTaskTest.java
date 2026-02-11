@@ -18,16 +18,33 @@ import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Request;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
+import java.util.List;
+
 public class GetReceiptsFromPeerTaskTest
     extends AbstractGetReceiptsFromPeerTaskTest<TransactionReceipt, GetReceiptsFromPeerTask> {
   @Override
   protected GetReceiptsFromPeerTask createTask(
-      final Request request, final ProtocolSchedule protocolSchedule) {
+      final Request<TransactionReceipt> request, final ProtocolSchedule protocolSchedule) {
     return new GetReceiptsFromPeerTask(request, protocolSchedule);
   }
 
   @Override
   protected TransactionReceipt toResponseReceipt(final TransactionReceipt receipt) {
     return receipt;
+  }
+
+  @Override
+  protected int receiptsComparator(
+      final List<TransactionReceipt> receipts1, final List<TransactionReceipt> receipts2) {
+    if (receipts1.size() != receipts2.size()) {
+      return receipts1.size() - receipts2.size();
+    }
+    for (int i = 0; i < receipts1.size(); i++) {
+      if (!receipts1.get(i).equals(receipts2.get(i))) {
+        // quick tiebreak since we are not interested in the order here
+        return receipts1.hashCode() - receipts2.hashCode();
+      }
+    }
+    return 0;
   }
 }

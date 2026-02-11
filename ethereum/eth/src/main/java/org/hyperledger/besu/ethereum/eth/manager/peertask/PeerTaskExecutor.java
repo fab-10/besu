@@ -158,7 +158,10 @@ public class PeerTaskExecutor {
           peerTask.postProcessResult(executorResult);
         } else {
           LOG.debug(
-              "Invalid response found for {} from peer {}", taskClassName, peer.getLoggableId());
+              "Invalid response {} found for {} from peer {}",
+              validationResponse,
+              taskClassName,
+              peer.getLoggableId());
           if (validationResponse.recordUselessResponse()) {
             peer.recordUselessResponse(taskClassName);
           }
@@ -213,7 +216,8 @@ public class PeerTaskExecutor {
                 List.of(peer));
       }
       LOG.debug(
-          "Executed peer task against {}, response code {}, retries remaining {}",
+          "Executed peer task {} against {}, response code {}, retries remaining {}",
+          taskClassName,
           peer.getLoggableId(),
           executorResult.responseCode(),
           retriesRemaining);

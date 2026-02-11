@@ -753,9 +753,7 @@ public class DefaultBlockchain implements MutableBlockchain {
       difficultyForSyncing = blockHeader.getDifficulty();
     } else if (difficultyForSyncing.equals(Difficulty.ZERO)) {
       final Difficulty parentTotalDifficulty =
-          blockchainStorage
-              .getTotalDifficulty(blockHeader.getParentHash())
-              .orElse(Difficulty.ZERO);
+          blockchainStorage.getTotalDifficulty(blockHeader.getParentHash()).orElse(Difficulty.ZERO);
       difficultyForSyncing = parentTotalDifficulty.add(blockHeader.getDifficulty());
     } else {
       difficultyForSyncing = difficultyForSyncing.add(blockHeader.getDifficulty());

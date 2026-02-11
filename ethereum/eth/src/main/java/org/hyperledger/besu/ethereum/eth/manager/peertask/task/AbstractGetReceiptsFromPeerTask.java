@@ -30,6 +30,7 @@ import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.SubProtocol;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -39,13 +40,13 @@ import com.google.common.annotations.VisibleForTesting;
 
 public abstract class AbstractGetReceiptsFromPeerTask<TR>
     implements PeerTask<AbstractGetReceiptsFromPeerTask.Response<TR>> {
-  protected final Request request;
+  protected final Request<TR> request;
   protected final ProtocolSchedule protocolSchedule;
   private final long requiredBlockchainHeight;
   private final boolean isPoS;
 
   protected AbstractGetReceiptsFromPeerTask(
-      final Request request, final ProtocolSchedule protocolSchedule) {
+      final Request<TR> request, final ProtocolSchedule protocolSchedule) {
     this.request = request;
     this.protocolSchedule = protocolSchedule;
 
@@ -67,7 +68,7 @@ public abstract class AbstractGetReceiptsFromPeerTask<TR>
             .map(BlockHeader::getHash)
             .toList();
     return agreedCapabilities.stream().anyMatch(EthProtocol::isEth70Compatible)
-        ? GetReceiptsMessage.create(blockHashes, request.firstBlockReceiptIndex())
+        ? GetReceiptsMessage.create(blockHashes, request.firstBlockPartialReceipts().size())
         : GetReceiptsMessage.create(blockHashes);
   }
 
@@ -89,18 +90,24 @@ public abstract class AbstractGetReceiptsFromPeerTask<TR>
     }
     final ReceiptsMessage receiptsMessage = ReceiptsMessage.readFrom(messageData);
     try {
-      //      final var returnReceipts = getMessageReceipts(receiptsMessage);
-      //      // complete the first block if needed
-      //      if (request.firstBlockReceiptIndex() > 0) {
-      //        // at least few receipts for the first block must be returned
-      //        if (returnReceipts.isEmpty()) {
-      //          throw new InvalidPeerTaskResponseException("No receipts returned");
-      //        }
-      //        // prepend the already fetched partial list of receipts to the first block result
-      //        returnReceipts.getFirst().addAll(0, request.firstBlockPartialReceipts());
-      //      }
-      return newResponse(
-          getMessageReceipts(receiptsMessage), receiptsMessage.lastBlockIncomplete());
+      final List<List<TR>> receivedReceiptsByBlock = getMessageReceipts(receiptsMessage);
+      if (!request.firstBlockPartialReceipts.isEmpty()) {
+        // add new receipts to the already present ones
+        final List<TR> cumulativeReceiptsForFirstBlock =
+            new ArrayList<>(
+                request.firstBlockPartialReceipts.size()
+                    + receivedReceiptsByBlock.getFirst().size());
+        cumulativeReceiptsForFirstBlock.addAll(request.firstBlockPartialReceipts);
+        cumulativeReceiptsForFirstBlock.addAll(receivedReceiptsByBlock.getFirst());
+        final List<List<TR>> cumulativeReceiptsByBlock =
+            new ArrayList<>(receivedReceiptsByBlock.size());
+        cumulativeReceiptsByBlock.add(cumulativeReceiptsForFirstBlock);
+        cumulativeReceiptsByBlock.addAll(
+            receivedReceiptsByBlock.subList(1, receivedReceiptsByBlock.size()));
+        return newResponse(cumulativeReceiptsByBlock, receiptsMessage.lastBlockIncomplete());
+      }
+
+      return newResponse(receivedReceiptsByBlock, receiptsMessage.lastBlockIncomplete());
     } catch (RLPException e) {
       // indicates a malformed or unexpected RLP result from the peer
       throw new MalformedRlpFromPeerException(e, messageData.getData());
@@ -157,8 +164,9 @@ public abstract class AbstractGetReceiptsFromPeerTask<TR>
 
   public record BlockHeaderAndReceiptCount(BlockHeader blockHeader, int receiptCount) {}
 
-  public record Request(
-      List<BlockHeaderAndReceiptCount> blockHeaderAndReceiptCounts, int firstBlockReceiptIndex) {
+  public record Request<TR>(
+      List<BlockHeaderAndReceiptCount> blockHeaderAndReceiptCounts,
+      List<TR> firstBlockPartialReceipts) {
     public boolean isEmpty() {
       return blockHeaderAndReceiptCounts.isEmpty();
     }
