@@ -32,6 +32,7 @@ public class NetworkingOptions implements CLIOptions<NetworkingConfiguration> {
       "--Xp2p-initiate-connections-frequency";
   private final String CHECK_MAINTAINED_CONNECTIONS_FREQUENCY_FLAG =
       "--Xp2p-check-maintained-connections-frequency";
+  private final String P2P_PEER_TASK_TIMEOUT = "--Xp2p-peer-task-timeout";
   private final String DNS_DISCOVERY_SERVER_OVERRIDE_FLAG = "--Xp2p-dns-discovery-server";
   private final String DISCOVERY_PROTOCOL_V5_ENABLED = "--Xv5-discovery-enabled";
 
@@ -57,6 +58,15 @@ public class NetworkingOptions implements CLIOptions<NetworkingConfiguration> {
       converter = DurationSecondsConverter.class)
   private Duration checkMaintainedConnectionsFrequency =
       NetworkingConfiguration.DEFAULT_CHECK_MAINTAINED_CONNECTIONS_FREQUENCY;
+
+  @CommandLine.Option(
+      names = P2P_PEER_TASK_TIMEOUT,
+      hidden = true,
+      paramLabel = "<INTEGER>",
+      description =
+          "The max amount of time (in millis) to wait for a peer task to complete (default: ${DEFAULT-VALUE})",
+      converter = DurationSecondsConverter.class)
+  private Duration p2pPeerTaskTimeout = NetworkingConfiguration.DEFAULT_P2P_PEER_TASK_TIMEOUT;
 
   @CommandLine.Option(
       names = DNS_DISCOVERY_SERVER_OVERRIDE_FLAG,
@@ -99,6 +109,7 @@ public class NetworkingOptions implements CLIOptions<NetworkingConfiguration> {
     cliOptions.checkMaintainedConnectionsFrequency =
         networkingConfig.checkMaintainedConnectionsFrequency();
     cliOptions.initiateConnectionsFrequency = networkingConfig.initiateConnectionsFrequency();
+    cliOptions.p2pPeerTaskTimeout = networkingConfig.p2pPeerTaskTimeout();
     cliOptions.dnsDiscoveryServerOverride = networkingConfig.dnsDiscoveryServerOverride();
 
     return cliOptions;
@@ -113,6 +124,7 @@ public class NetworkingOptions implements CLIOptions<NetworkingConfiguration> {
     return ImmutableNetworkingConfiguration.builder()
         .checkMaintainedConnectionsFrequency(checkMaintainedConnectionsFrequency)
         .initiateConnectionsFrequency(initiateConnectionsFrequency)
+        .p2pPeerTaskTimeout(p2pPeerTaskTimeout)
         .dnsDiscoveryServerOverride(dnsDiscoveryServerOverride)
         .discoveryConfiguration(discovery)
         .build();
