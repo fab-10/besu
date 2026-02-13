@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -89,13 +90,28 @@ public class DownloadSyncReceiptsStep
     while (itEmptyBlocks.hasNext()) {
       final var blockHeader = itEmptyBlocks.next().blockHeader();
       if (blockHeader.getReceiptsRoot().getBytes().equals(Hash.EMPTY_TRIE_HASH.getBytes())) {
+        LOG.trace("Skipping receipts retrieval for empty block {}", blockHeader.getNumber());
         itEmptyBlocks.remove();
       }
     }
 
     final var firstBlockPartialReceipts = new ArrayList<SyncTransactionReceipt>();
 
-    do {
+    // repeat until all headers have blocksReceipts
+    while (!receiptRequests.isEmpty()) {
+      final String logDetails =
+          LOG.isTraceEnabled()
+              ? receiptRequests.stream()
+                  .map(br -> br.blockHeader().getNumber() + "(" + br.receiptCount() + ")")
+                  .collect(Collectors.joining(","))
+              : "";
+
+      LOG.trace(
+          "Requesting receipts for {} blocks: {}; partial receipts fetched for first block {}",
+          receiptRequests.size(),
+          logDetails,
+          firstBlockPartialReceipts.size());
+
       final var task =
           new GetSyncReceiptsFromPeerTask(
               new Request<>(receiptRequests, firstBlockPartialReceipts),
@@ -120,23 +136,38 @@ public class DownloadSyncReceiptsStep
 
         final var resolvedRequests = receiptRequests.subList(0, completedBlockSize);
 
+        LOG.trace(
+            "Received response for {} blocks, last block is incomplete? {}, complete blocks {}",
+            taskResult.blocksReceipts().size(),
+            taskResult.lastBlockIncomplete(),
+            resolvedRequests.size());
+
         for (int i = 0; i < resolvedRequests.size(); i++) {
-          final var requestBlockHeader = receiptRequests.get(i).blockHeader();
+          final var request = receiptRequests.get(i);
           final List<SyncTransactionReceipt> blockReceipts = blocksReceipts.get(i);
-          getReceipts.put(requestBlockHeader, blockReceipts);
+          LOG.trace("Request {}, received receipts {}", request, blockReceipts.size());
+          getReceipts.put(request.blockHeader(), blockReceipts);
         }
 
         resolvedRequests.clear();
+      } else {
+        LOG.trace(
+            "Failed with {} to retrieve receipts for {} blocks: {}; partial receipts fetched for first block {}",
+            getReceiptsResult.responseCode(),
+            receiptRequests.size(),
+            logDetails,
+            firstBlockPartialReceipts.size());
       }
-      // repeat until all headers have blocksReceipts
-    } while (!receiptRequests.isEmpty());
+    }
     if (LOG.isTraceEnabled()) {
       for (final var block : blocks) {
         final var transactionReceipts = getReceipts.get(block.getHeader());
-        LOG.trace(
-            "{} blocksReceipts received for header {}",
-            transactionReceipts == null ? 0 : transactionReceipts.size(),
-            block.getHash());
+        if (transactionReceipts != null) {
+          LOG.trace(
+              "{} blocksReceipts received for block {}",
+              transactionReceipts.size(),
+              block.getHeader().getNumber());
+        }
       }
     }
     return CompletableFuture.completedFuture(getReceipts);
