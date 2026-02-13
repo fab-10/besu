@@ -159,6 +159,7 @@ public class DownloadSyncReceiptsStep
             firstBlockPartialReceipts.size());
       }
     }
+
     if (LOG.isTraceEnabled()) {
       for (final var block : blocks) {
         final var transactionReceipts = getReceipts.get(block.getHeader());
@@ -186,9 +187,12 @@ public class DownloadSyncReceiptsStep
                 block.getHeader().writeTo(headerRlpOutput);
                 LOG.atTrace()
                     .setMessage("Header RLP: {}")
-                    .addArgument(headerRlpOutput.encoded())
+                    .addArgument(headerRlpOutput::encoded)
                     .log();
-                LOG.atTrace().setMessage("Body: {}").addArgument(block.getBody().getRlp()).log();
+                LOG.atTrace()
+                    .setMessage("Body: {}")
+                    .addArgument(() -> block.getBody().getRlp())
+                    .log();
                 throw new IllegalStateException(
                     "PeerTask response code was success, but incorrect number of receipts returned. Block hash: "
                         + block.getHeader().getHash()

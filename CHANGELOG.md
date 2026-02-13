@@ -35,6 +35,7 @@
     - Fast Sync
 
 ### Additions and Improvements
+- Support substring and glob matching for `--test-name` in `block-test` evmtool subcommand [#9790](https://github.com/hyperledger/besu/pull/9790)
 - Improve performance of snap sync chain download [#9510](https://github.com/hyperledger/besu/pull/9510) and [#9621](https://github.com/hyperledger/besu/pull/9621)
 - Add ability to pass a custom tracer to block simulation [#9708](https://github.com/hyperledger/besu/pull/9708)
 - Add support for `4byteTracer` in `debug_trace*` methods to collect function selectors from internal calls via PR [#9642](https://github.com/hyperledger/besu/pull/9642). Thanks to [@JukLee0ira](https://github.com/JukLee0ira).
@@ -75,6 +76,7 @@
   - Parallelize state root computation for Bonsai [#9576](https://github.com/hyperledger/besu/pull/9576)
 - Update to Netty 4.2.9.Final [#9587](https://github.com/hyperledger/besu/pull/9587)
 - Update to log4j 2.25.3 [#9600](https://github.com/hyperledger/besu/pull/9600)
+- Update vertx to 4.5.24 [#9645](https://github.com/hyperledger/besu/pull/9645)
 - Add `engine_getBlobsV3` method [#9582](https://github.com/hyperledger/besu/pull/9582)
 - Verify plugins on start [#9601](https://github.com/hyperledger/besu/pull/9601)
 - Add EIP-7778 to Amsterdam [#9664](https://github.com/hyperledger/besu/pull/9664)

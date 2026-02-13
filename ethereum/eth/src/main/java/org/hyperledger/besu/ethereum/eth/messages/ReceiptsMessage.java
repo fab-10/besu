@@ -124,7 +124,9 @@ public final class ReceiptsMessage extends AbstractMessageData {
       syncReceiptsByBlock =
           deserialize(
               getData(),
-              rlpInput -> syncTransactionReceiptDecoder.decode(rlpInput.currentListAsBytes()),
+              rlpInput ->
+                  syncTransactionReceiptDecoder.decode(
+                      rlpInput.nextIsList() ? rlpInput.currentListAsBytes() : rlpInput.readBytes()),
               false);
     }
     return syncReceiptsByBlock;
