@@ -16,6 +16,9 @@ package org.hyperledger.besu.ethereum.eth.sync.fastsync;
 
 import static java.util.Collections.emptyList;
 import static java.util.stream.Collectors.toCollection;
+import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.NO_PEER_AVAILABLE;
+import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.SUCCESS;
+import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.TIMEOUT;
 
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -26,7 +29,6 @@ import org.hyperledger.besu.ethereum.core.encoding.receipt.SyncTransactionReceip
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutor;
-import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.BlockHeaderAndReceiptCount;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Request;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetSyncReceiptsFromPeerTask;
@@ -46,8 +48,8 @@ import org.slf4j.LoggerFactory;
 
 public class DownloadSyncReceiptsStep
     implements Function<List<SyncBlock>, CompletableFuture<List<SyncBlockWithReceipts>>> {
-
   private static final Logger LOG = LoggerFactory.getLogger(DownloadSyncReceiptsStep.class);
+  private static final long DEFAULT_BASE_WAIT_MILLIS = 100;
 
   private final EthScheduler ethScheduler;
   private final ProtocolSchedule protocolSchedule;
@@ -97,8 +99,10 @@ public class DownloadSyncReceiptsStep
 
     final var firstBlockPartialReceipts = new ArrayList<SyncTransactionReceipt>();
 
+    int iteration = 0;
     // repeat until all headers have blocksReceipts
     while (!receiptRequests.isEmpty()) {
+      ++iteration;
       final String logDetails =
           LOG.isTraceEnabled()
               ? receiptRequests.stream()
@@ -107,7 +111,8 @@ public class DownloadSyncReceiptsStep
               : "";
 
       LOG.trace(
-          "Requesting receipts for {} blocks: {}; partial receipts fetched for first block {}",
+          "[{}] Requesting receipts for {} blocks: {}; partial receipts fetched for first block {}",
+          iteration,
           receiptRequests.size(),
           logDetails,
           firstBlockPartialReceipts.size());
@@ -119,8 +124,9 @@ public class DownloadSyncReceiptsStep
               syncTransactionReceiptEncoder);
       final var getReceiptsResult = peerTaskExecutor.execute(task);
 
-      if (getReceiptsResult.responseCode() == PeerTaskExecutorResponseCode.SUCCESS
-          && getReceiptsResult.result().isPresent()) {
+      final var responseCode = getReceiptsResult.responseCode();
+
+      if (responseCode == SUCCESS && getReceiptsResult.result().isPresent()) {
         final var taskResult = getReceiptsResult.result().get();
 
         final var blocksReceipts = taskResult.blocksReceipts();
@@ -137,7 +143,8 @@ public class DownloadSyncReceiptsStep
         final var resolvedRequests = receiptRequests.subList(0, completedBlockSize);
 
         LOG.trace(
-            "Received response for {} blocks, last block is incomplete? {}, complete blocks {}",
+            "[{}] Received response for {} blocks, last block is incomplete? {}, complete blocks {}",
+            iteration,
             taskResult.blocksReceipts().size(),
             taskResult.lastBlockIncomplete(),
             resolvedRequests.size());
@@ -145,18 +152,30 @@ public class DownloadSyncReceiptsStep
         for (int i = 0; i < resolvedRequests.size(); i++) {
           final var request = receiptRequests.get(i);
           final List<SyncTransactionReceipt> blockReceipts = blocksReceipts.get(i);
-          LOG.trace("Request {}, received receipts {}", request, blockReceipts.size());
+          LOG.trace(
+              "[{}] Request {}, received receipts {}", iteration, request, blockReceipts.size());
           getReceipts.put(request.blockHeader(), blockReceipts);
         }
 
         resolvedRequests.clear();
       } else {
         LOG.trace(
-            "Failed with {} to retrieve receipts for {} blocks: {}; partial receipts fetched for first block {}",
-            getReceiptsResult.responseCode(),
+            "[{}] Failed with {} to retrieve receipts for {} blocks: {}; partial receipts fetched for first block {}",
+            iteration,
+            responseCode,
             receiptRequests.size(),
             logDetails,
             firstBlockPartialReceipts.size());
+        if (responseCode == NO_PEER_AVAILABLE || responseCode == TIMEOUT) {
+          // wait a bit more every iteration before retrying
+          try {
+            final long incrementalWaitTime = DEFAULT_BASE_WAIT_MILLIS * iteration;
+            LOG.trace("[{}] Waiting for {}ms before retrying", iteration, incrementalWaitTime);
+            Thread.sleep(incrementalWaitTime);
+          } catch (InterruptedException e) {
+            throw new RuntimeException(e);
+          }
+        }
       }
     }
 
