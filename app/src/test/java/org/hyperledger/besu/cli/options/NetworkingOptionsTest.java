@@ -83,6 +83,30 @@ public class NetworkingOptionsTest
   }
 
   @Test
+  public void p2pPeerTaskTimeoutFlag_isSet() {
+    final TestBesuCommand cmd = parseCommand("--Xp2p-peer-task-timeout", "10");
+
+    final NetworkingOptions options = cmd.getNetworkingOptions();
+    final NetworkingConfiguration networkingConfig = options.toDomainObject();
+    assertThat(networkingConfig.p2pPeerTaskTimeout()).isEqualTo(Duration.ofSeconds(10));
+
+    assertThat(commandErrorOutput.toString(UTF_8)).isEmpty();
+    assertThat(commandOutput.toString(UTF_8)).isEmpty();
+  }
+
+  @Test
+  public void p2pPeerTaskTimeoutFlag_isNotSet() {
+    final TestBesuCommand cmd = parseCommand();
+
+    final NetworkingOptions options = cmd.getNetworkingOptions();
+    final NetworkingConfiguration networkingConfig = options.toDomainObject();
+    assertThat(networkingConfig.p2pPeerTaskTimeout()).isEqualTo(Duration.ofSeconds(5));
+
+    assertThat(commandErrorOutput.toString(UTF_8)).isEmpty();
+    assertThat(commandOutput.toString(UTF_8)).isEmpty();
+  }
+
+  @Test
   public void checkDnsServerOverrideFlag_isSet() {
     final TestBesuCommand cmd = parseCommand("--Xp2p-dns-discovery-server", "localhost");
 
