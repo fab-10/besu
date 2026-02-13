@@ -20,6 +20,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.hyperledger.besu.ethereum.p2p.config.ImmutableNetworkingConfiguration;
 import org.hyperledger.besu.ethereum.p2p.config.NetworkingConfiguration;
 
+import java.io.IOException;
+import java.nio.file.Path;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
@@ -104,6 +106,26 @@ public class NetworkingOptionsTest
 
     assertThat(commandErrorOutput.toString(UTF_8)).isEmpty();
     assertThat(commandOutput.toString(UTF_8)).isEmpty();
+  }
+
+  @Test
+  public void p2pPeerTaskTimeoutInConfigFileWorks() throws IOException {
+    final long p2pPeerTaskTimeout = 10;
+    final Path tempConfigFilePath =
+        createTempFile(
+            "config",
+            String.format(
+                """
+              Xp2p-peer-task-timeout=%s
+              """,
+                p2pPeerTaskTimeout));
+
+    internalTestSuccess(
+        config ->
+            assertThat(config.p2pPeerTaskTimeout())
+                .isEqualTo(Duration.ofSeconds(p2pPeerTaskTimeout)),
+        "--config-file",
+        tempConfigFilePath.toString());
   }
 
   @Test
