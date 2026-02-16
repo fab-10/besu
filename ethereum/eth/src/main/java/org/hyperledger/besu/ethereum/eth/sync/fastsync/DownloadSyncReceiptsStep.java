@@ -40,6 +40,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -50,6 +51,7 @@ public class DownloadSyncReceiptsStep
     implements Function<List<SyncBlock>, CompletableFuture<List<SyncBlockWithReceipts>>> {
   private static final Logger LOG = LoggerFactory.getLogger(DownloadSyncReceiptsStep.class);
   private static final long DEFAULT_BASE_WAIT_MILLIS = 100;
+  private static final AtomicInteger taskId = new AtomicInteger(0);
 
   private final EthScheduler ethScheduler;
   private final ProtocolSchedule protocolSchedule;
@@ -75,6 +77,8 @@ public class DownloadSyncReceiptsStep
 
   private CompletableFuture<Map<BlockHeader, List<SyncTransactionReceipt>>> getReceipts(
       final List<SyncBlock> blocks) {
+    final int currTaskId = taskId.getAndIncrement();
+
     final var receiptRequests =
         blocks.stream()
             .map(
@@ -98,7 +102,6 @@ public class DownloadSyncReceiptsStep
     }
 
     final var firstBlockPartialReceipts = new ArrayList<SyncTransactionReceipt>();
-
     int iteration = 0;
     // repeat until all headers have blocksReceipts
     while (!receiptRequests.isEmpty()) {
@@ -111,7 +114,8 @@ public class DownloadSyncReceiptsStep
               : "";
 
       LOG.trace(
-          "[{}] Requesting receipts for {} blocks: {}; partial receipts fetched for first block {}",
+          "[{}:{}] Requesting receipts for {} blocks: {}; partial receipts fetched for first block {}",
+          currTaskId,
           iteration,
           receiptRequests.size(),
           logDetails,
@@ -143,7 +147,8 @@ public class DownloadSyncReceiptsStep
         final var resolvedRequests = receiptRequests.subList(0, completedBlockSize);
 
         LOG.trace(
-            "[{}] Received response for {} blocks, last block is incomplete? {}, complete blocks {}",
+            "[{}:{}] Received response for {} blocks, last block is incomplete? {}, complete blocks {}",
+            currTaskId,
             iteration,
             taskResult.blocksReceipts().size(),
             taskResult.lastBlockIncomplete(),
@@ -153,14 +158,19 @@ public class DownloadSyncReceiptsStep
           final var request = receiptRequests.get(i);
           final List<SyncTransactionReceipt> blockReceipts = blocksReceipts.get(i);
           LOG.trace(
-              "[{}] Request {}, received receipts {}", iteration, request, blockReceipts.size());
+              "[{}:{}] Request {}, received receipts {}",
+              currTaskId,
+              iteration,
+              request,
+              blockReceipts.size());
           getReceipts.put(request.blockHeader(), blockReceipts);
         }
 
         resolvedRequests.clear();
       } else {
         LOG.trace(
-            "[{}] Failed with {} to retrieve receipts for {} blocks: {}; partial receipts fetched for first block {}",
+            "[{}:{}] Failed with {} to retrieve receipts for {} blocks: {}; partial receipts fetched for first block {}",
+            currTaskId,
             iteration,
             responseCode,
             receiptRequests.size(),
@@ -170,7 +180,11 @@ public class DownloadSyncReceiptsStep
           // wait a bit more every iteration before retrying
           try {
             final long incrementalWaitTime = DEFAULT_BASE_WAIT_MILLIS * iteration;
-            LOG.trace("[{}] Waiting for {}ms before retrying", iteration, incrementalWaitTime);
+            LOG.trace(
+                "[{}:{}] Waiting for {}ms before retrying",
+                currTaskId,
+                iteration,
+                incrementalWaitTime);
             Thread.sleep(incrementalWaitTime);
           } catch (InterruptedException e) {
             throw new RuntimeException(e);
