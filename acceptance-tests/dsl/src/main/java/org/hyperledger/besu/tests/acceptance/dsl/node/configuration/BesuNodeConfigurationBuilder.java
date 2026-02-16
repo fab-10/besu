@@ -101,10 +101,7 @@ public class BesuNodeConfigurationBuilder {
   private Optional<KeyValueStorageFactory> storageImplementation = Optional.empty();
   private PluginConfiguration pluginConfiguration;
 
-  public BesuNodeConfigurationBuilder() {
-    // Check connections more frequently during acceptance tests to cut down on
-    // intermittent failures due to the fact that we're running over a real network
-  }
+  public BesuNodeConfigurationBuilder() {}
 
   public BesuNodeConfigurationBuilder name(final String name) {
     this.name = name;
@@ -475,7 +472,8 @@ public class BesuNodeConfigurationBuilder {
       throw new IllegalStateException("Name is required");
     }
 
-    // Build networking configuration with custom initiate connections frequency
+    // Check connections more frequently during acceptance tests to cut down on
+    // intermittent failures due to the fact that we're running over a real network
     final NetworkingConfiguration networkingConfiguration =
         ImmutableNetworkingConfiguration.builder()
             .initiateConnectionsFrequency(Duration.ofSeconds(5))
