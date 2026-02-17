@@ -54,6 +54,8 @@ public class SynchronizerConfiguration {
       TimeUnit.SECONDS.toMillis(60);
   public static final long DEFAULT_RECEIPTS_DOWNLOAD_STEP_TIMEOUT_MILLIS =
       TimeUnit.SECONDS.toMillis(60);
+  public static final long DEFAULT_BACKWARD_HEADERS_DOWNLOAD_STEP_TIMEOUT_MILLIS =
+      TimeUnit.SECONDS.toMillis(60);
 
   public static final boolean DEFAULT_CHECKPOINT_POST_MERGE_ENABLED = false;
 
@@ -97,6 +99,7 @@ public class SynchronizerConfiguration {
   private final long worldStateMinMillisBeforeStalling;
   private final long propagationManagerGetBlockTimeoutMillis;
   private final long receiptsDownloadStepTimeoutMillis;
+  private final long backwardHeadersDownloadStepTimeoutMillis;
   private final boolean isPeerTaskSystemEnabled;
   private final boolean snapSyncSavePreCheckpointHeadersOnlyEnabled;
 
@@ -130,6 +133,7 @@ public class SynchronizerConfiguration {
       final int maxTrailingPeers,
       final long propagationManagerGetBlockTimeoutMillis,
       final long receiptsDownloadStepTimeoutMillis,
+      final long backwardHeadersDownloadStepTimeoutMillis,
       final boolean checkpointPostMergeEnabled,
       final boolean isPeerTaskSystemEnabled,
       final boolean snapSyncSavePreCheckpointHeadersOnlyEnabled,
@@ -160,6 +164,7 @@ public class SynchronizerConfiguration {
     this.maxTrailingPeers = maxTrailingPeers;
     this.propagationManagerGetBlockTimeoutMillis = propagationManagerGetBlockTimeoutMillis;
     this.receiptsDownloadStepTimeoutMillis = receiptsDownloadStepTimeoutMillis;
+    this.backwardHeadersDownloadStepTimeoutMillis = backwardHeadersDownloadStepTimeoutMillis;
     this.checkpointPostMergeEnabled = checkpointPostMergeEnabled;
     this.isPeerTaskSystemEnabled = isPeerTaskSystemEnabled;
     this.snapSyncSavePreCheckpointHeadersOnlyEnabled = snapSyncSavePreCheckpointHeadersOnlyEnabled;
@@ -303,6 +308,10 @@ public class SynchronizerConfiguration {
     return receiptsDownloadStepTimeoutMillis;
   }
 
+  public long getBackwardHeadersDownloadStepTimeoutMillis() {
+    return backwardHeadersDownloadStepTimeoutMillis;
+  }
+
   public boolean isPeerTaskSystemEnabled() {
     return isPeerTaskSystemEnabled;
   }
@@ -359,6 +368,8 @@ public class SynchronizerConfiguration {
     private long propagationManagerGetBlockTimeoutMillis =
         DEFAULT_PROPAGATION_MANAGER_GET_BLOCK_TIMEOUT_MILLIS;
     private long receiptsDownloadStepTimeoutMillis = DEFAULT_RECEIPTS_DOWNLOAD_STEP_TIMEOUT_MILLIS;
+    private long backwardHeadersDownloadStepTimeoutMillis =
+        DEFAULT_BACKWARD_HEADERS_DOWNLOAD_STEP_TIMEOUT_MILLIS;
     private boolean checkpointPostMergeEnabled = DEFAULT_CHECKPOINT_POST_MERGE_ENABLED;
 
     public Builder syncPivotDistance(final int distance) {
@@ -492,6 +503,12 @@ public class SynchronizerConfiguration {
       return this;
     }
 
+    public Builder backwardHeadersDownloadStepTimeoutMillis(
+        final long backwardHeadersDownloadStepTimeoutMillis) {
+      this.backwardHeadersDownloadStepTimeoutMillis = backwardHeadersDownloadStepTimeoutMillis;
+      return this;
+    }
+
     public Builder checkpointPostMergeEnabled(final boolean checkpointPostMergeEnabled) {
       this.checkpointPostMergeEnabled = checkpointPostMergeEnabled;
       return this;
@@ -550,6 +567,7 @@ public class SynchronizerConfiguration {
           maxTrailingPeers,
           propagationManagerGetBlockTimeoutMillis,
           receiptsDownloadStepTimeoutMillis,
+          backwardHeadersDownloadStepTimeoutMillis,
           checkpointPostMergeEnabled,
           isPeerTaskSystemEnabled,
           snapSyncSavePreCheckpointHeadersOnlyEnabled,
