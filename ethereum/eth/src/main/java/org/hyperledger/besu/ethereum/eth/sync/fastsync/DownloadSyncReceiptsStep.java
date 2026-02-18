@@ -18,6 +18,7 @@ import static java.util.Collections.emptyList;
 import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.SUCCESS;
 
 import org.hyperledger.besu.datatypes.Hash;
+import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.SyncBlock;
 import org.hyperledger.besu.ethereum.core.SyncBlockWithReceipts;
 import org.hyperledger.besu.ethereum.core.SyncTransactionReceipt;
@@ -31,7 +32,6 @@ import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -74,12 +74,12 @@ public class DownloadSyncReceiptsStep
   public CompletableFuture<List<SyncBlockWithReceipts>> apply(final List<SyncBlock> blocks) {
     final int currTaskId = taskSequence.incrementAndGet();
     final List<SyncBlock> blocksToRequest = prepareRequest(blocks);
-    final Map<Hash, List<SyncTransactionReceipt>> receiptsByRootHash =
+    final Map<BlockHeader, List<SyncTransactionReceipt>> receiptsByBlockHeader =
         HashMap.newHashMap(blocksToRequest.size());
 
     return ethScheduler
         .scheduleServiceTask(
-            () -> downloadReceipts(currTaskId, 0, blocksToRequest, receiptsByRootHash))
+            () -> downloadReceipts(currTaskId, 0, blocksToRequest, receiptsByBlockHeader))
         .thenApply((receipts) -> combineBlocksAndReceipts(blocks, receipts))
         .orTimeout(timeoutDuration.toMillis(), TimeUnit.MILLISECONDS)
         .exceptionally(
@@ -97,45 +97,28 @@ public class DownloadSyncReceiptsStep
 
   private List<SyncBlock> prepareRequest(final List<SyncBlock> blocks) {
     // filter any headers with an empty receipts root, for which we do not need to request anything
-    final List<SyncBlock> blocksWithTxs =
-        blocks.stream()
-            .filter(
-                sb -> {
-                  if (sb.getHeader()
-                      .getReceiptsRoot()
-                      .getBytes()
-                      .equals(Hash.EMPTY_TRIE_HASH.getBytes())) {
-                    LOG.trace(
-                        "Skipping receipts retrieval for empty block {}",
-                        sb.getHeader().getNumber());
-                    return false;
-                  }
-                  return true;
-                })
-            .collect(Collectors.toCollection(ArrayList::new));
 
-    // dedup by grouping blocks by same receipt root hash
-    final List<SyncBlock> blocksToRequest =
-        blocksWithTxs.stream()
-            .collect(
-                Collectors.groupingBy(
-                    syncBlock -> syncBlock.getHeader().getReceiptsRoot(),
-                    LinkedHashMap::new,
-                    Collectors.toList()))
-            .values()
-            .stream()
-            .map(List::getFirst)
-            .collect(Collectors.toCollection(ArrayList::new));
-
-    LOG.trace("Saving by dedup {}", blocksWithTxs.size() - blocksToRequest.size());
-    return blocksToRequest;
+    return blocks.stream()
+        .filter(
+            sb -> {
+              if (sb.getHeader()
+                  .getReceiptsRoot()
+                  .getBytes()
+                  .equals(Hash.EMPTY_TRIE_HASH.getBytes())) {
+                LOG.trace(
+                    "Skipping receipts retrieval for empty block {}", sb.getHeader().getNumber());
+                return false;
+              }
+              return true;
+            })
+        .collect(Collectors.toCollection(ArrayList::new));
   }
 
-  private CompletableFuture<Map<Hash, List<SyncTransactionReceipt>>> downloadReceipts(
+  private CompletableFuture<Map<BlockHeader, List<SyncTransactionReceipt>>> downloadReceipts(
       final int currTaskId,
       final int prevIterations,
       final List<SyncBlock> blocksToRequest,
-      final Map<Hash, List<SyncTransactionReceipt>> receiptsByRootHash) {
+      final Map<BlockHeader, List<SyncTransactionReceipt>> receiptsByBlockHeader) {
 
     final int initialBlockCount = blocksToRequest.size();
     int iteration = prevIterations;
@@ -183,7 +166,7 @@ public class DownloadSyncReceiptsStep
         for (int i = 0; i < resolvedBlocks.size(); i++) {
           final SyncBlock requestedBlock = blocksToRequest.get(i);
           final List<SyncTransactionReceipt> blockReceipts = blocksReceipts.get(i);
-          receiptsByRootHash.put(requestedBlock.getHeader().getReceiptsRoot(), blockReceipts);
+          receiptsByBlockHeader.put(requestedBlock.getHeader(), blockReceipts);
         }
 
         // clearing the sublist also as the effect of removing the received blocks from the original
@@ -208,21 +191,21 @@ public class DownloadSyncReceiptsStep
                 ethScheduler.scheduleServiceTask(
                     () ->
                         downloadReceipts(
-                            currTaskId, passIterations, blocksToRequest, receiptsByRootHash)),
+                            currTaskId, passIterations, blocksToRequest, receiptsByBlockHeader)),
             RETRY_DELAY);
       }
     }
-    return CompletableFuture.completedFuture(receiptsByRootHash);
+    return CompletableFuture.completedFuture(receiptsByBlockHeader);
   }
 
   List<SyncBlockWithReceipts> combineBlocksAndReceipts(
       final List<SyncBlock> blocks,
-      final Map<Hash, List<SyncTransactionReceipt>> receiptsByRootHash) {
+      final Map<BlockHeader, List<SyncTransactionReceipt>> receiptsByBlockHeader) {
     return blocks.stream()
         .map(
             block -> {
               final List<SyncTransactionReceipt> receipts =
-                  receiptsByRootHash.getOrDefault(block.getHeader().getReceiptsRoot(), emptyList());
+                  receiptsByBlockHeader.getOrDefault(block.getHeader(), emptyList());
               if (block.getBody().getTransactionCount() != receipts.size()) {
                 throw new IllegalStateException(
                     "PeerTask response code was success, but incorrect number of receipts returned. Block hash: "
