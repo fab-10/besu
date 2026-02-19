@@ -34,7 +34,6 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -76,13 +75,13 @@ public class DownloadSyncReceiptsStep
   public CompletableFuture<List<SyncBlockWithReceipts>> apply(final List<SyncBlock> blocks) {
     final int currTaskId = taskSequence.incrementAndGet();
     final List<SyncBlock> blocksToRequest = prepareRequest(blocks);
-    final Map<Hash, List<SyncTransactionReceipt>> receiptsByRootHash =
+    final Map<SyncBlock, List<SyncTransactionReceipt>> cumulativeReceiptsByBlock =
         HashMap.newHashMap(blocksToRequest.size());
 
     return ethScheduler
         .scheduleServiceTask(
-            () -> downloadReceipts(currTaskId, 0, blocksToRequest, receiptsByRootHash))
-        .thenApply(receipts -> combineBlocksAndReceipts(blocks, receipts))
+            () -> downloadReceipts(currTaskId, 0, blocksToRequest, cumulativeReceiptsByBlock))
+        .thenApply((receipts) -> combineBlocksAndReceipts(blocks, receipts))
         .orTimeout(timeoutDuration.toMillis(), TimeUnit.MILLISECONDS)
         .whenComplete(
             (unused, throwable) -> {
@@ -98,45 +97,28 @@ public class DownloadSyncReceiptsStep
 
   private List<SyncBlock> prepareRequest(final List<SyncBlock> blocks) {
     // filter any headers with an empty receipts root, for which we do not need to request anything
-    final List<SyncBlock> blocksWithTxs =
-        blocks.stream()
-            .filter(
-                sb -> {
-                  if (sb.getHeader()
-                      .getReceiptsRoot()
-                      .getBytes()
-                      .equals(Hash.EMPTY_TRIE_HASH.getBytes())) {
-                    LOG.trace(
-                        "Skipping receipts retrieval for empty block {}",
-                        sb.getHeader().getNumber());
-                    return false;
-                  }
-                  return true;
-                })
-            .collect(Collectors.toCollection(ArrayList::new));
 
-    // dedup by grouping blocks by same receipt root hash
-    final List<SyncBlock> blocksToRequest =
-        blocksWithTxs.stream()
-            .collect(
-                Collectors.groupingBy(
-                    syncBlock -> syncBlock.getHeader().getReceiptsRoot(),
-                    LinkedHashMap::new,
-                    Collectors.toList()))
-            .values()
-            .stream()
-            .map(List::getFirst)
-            .collect(Collectors.toCollection(ArrayList::new));
-
-    LOG.trace("Saving by dedup {}", blocksWithTxs.size() - blocksToRequest.size());
-    return blocksToRequest;
+    return blocks.stream()
+        .filter(
+            sb -> {
+              if (sb.getHeader()
+                  .getReceiptsRoot()
+                  .getBytes()
+                  .equals(Hash.EMPTY_TRIE_HASH.getBytes())) {
+                LOG.trace(
+                    "Skipping receipts retrieval for empty block {}", sb.getHeader().getNumber());
+                return false;
+              }
+              return true;
+            })
+        .collect(Collectors.toCollection(ArrayList::new));
   }
 
-  private CompletableFuture<Map<Hash, List<SyncTransactionReceipt>>> downloadReceipts(
+  private CompletableFuture<Map<SyncBlock, List<SyncTransactionReceipt>>> downloadReceipts(
       final int currTaskId,
       final int prevIterations,
       final List<SyncBlock> blocksToRequest,
-      final Map<Hash, List<SyncTransactionReceipt>> receiptsByRootHash) {
+      final Map<SyncBlock, List<SyncTransactionReceipt>> cumulativeReceiptsByBlock) {
 
     final int initialBlockCount = blocksToRequest.size();
     int iteration = prevIterations;
@@ -180,10 +162,7 @@ public class DownloadSyncReceiptsStep
             .addArgument(() -> formatBlockDetails(receiptsByBlock.keySet()))
             .log();
 
-        receiptsByBlock.forEach(
-            (syncBlock, syncTransactionReceipts) ->
-                receiptsByRootHash.put(
-                    syncBlock.getHeader().getReceiptsRoot(), syncTransactionReceipts));
+        cumulativeReceiptsByBlock.putAll(receiptsByBlock);
 
         blocksToRequest.removeAll(receiptsByBlock.keySet());
       } else {
@@ -205,21 +184,24 @@ public class DownloadSyncReceiptsStep
                 ethScheduler.scheduleServiceTask(
                     () ->
                         downloadReceipts(
-                            currTaskId, passIterations, blocksToRequest, receiptsByRootHash)),
+                            currTaskId,
+                            passIterations,
+                            blocksToRequest,
+                            cumulativeReceiptsByBlock)),
             RETRY_DELAY);
       }
     }
-    return CompletableFuture.completedFuture(receiptsByRootHash);
+    return CompletableFuture.completedFuture(cumulativeReceiptsByBlock);
   }
 
   List<SyncBlockWithReceipts> combineBlocksAndReceipts(
       final List<SyncBlock> blocks,
-      final Map<Hash, List<SyncTransactionReceipt>> receiptsByRootHash) {
+      final Map<SyncBlock, List<SyncTransactionReceipt>> cumulatibeReceiptsByBlock) {
     return blocks.stream()
         .map(
             block -> {
               final List<SyncTransactionReceipt> receipts =
-                  receiptsByRootHash.getOrDefault(block.getHeader().getReceiptsRoot(), emptyList());
+                  cumulatibeReceiptsByBlock.getOrDefault(block, emptyList());
               if (block.getBody().getTransactionCount() != receipts.size()) {
                 throw new IllegalStateException(
                     "PeerTask response code was success, but incorrect number of receipts returned. Block hash: "

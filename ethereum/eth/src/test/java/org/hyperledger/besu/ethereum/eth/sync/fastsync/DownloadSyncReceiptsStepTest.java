@@ -234,18 +234,17 @@ public class DownloadSyncReceiptsStepTest {
     final Block block = gen.block();
     final List<SyncBlock> syncBlocks = blocksToSyncBlocks(List.of(block));
 
+    final Map<SyncBlock, List<SyncTransactionReceipt>> receiptsByBlock = new HashMap<>();
+
     final List<SyncTransactionReceipt> allReceipts =
         receiptsToSyncReceipts(gen.receipts(block), ETH69_RECEIPT_CONFIGURATION);
 
     // Add fewer receipts than transactions
-    final Map<Hash, List<SyncTransactionReceipt>> receiptsByRootHash =
-        Map.of(
-            syncBlocks.get(0).getHeader().getReceiptsRoot(),
-            allReceipts.subList(0, allReceipts.size() - 1));
+    receiptsByBlock.put(syncBlocks.getFirst(), allReceipts.subList(0, allReceipts.size() - 1));
 
     // When/Then: should throw IllegalStateException
     assertThatThrownBy(
-            () -> downloadSyncReceiptsStep.combineBlocksAndReceipts(syncBlocks, receiptsByRootHash))
+            () -> downloadSyncReceiptsStep.combineBlocksAndReceipts(syncBlocks, receiptsByBlock))
         .isInstanceOf(IllegalStateException.class)
         .hasMessageContaining("incorrect number of receipts returned");
   }
@@ -257,11 +256,11 @@ public class DownloadSyncReceiptsStepTest {
     final Block blockWithoutTxs = gen.block();
     final List<SyncBlock> syncBlocks = blocksToSyncBlocks(List.of(blockWithoutTxs));
 
-    final Map<Hash, List<SyncTransactionReceipt>> receiptsByRootHash = Map.of();
+    final Map<SyncBlock, List<SyncTransactionReceipt>> receiptsByBlock = Map.of();
 
     // When: combining blocks and receipts
     final List<SyncBlockWithReceipts> result =
-        downloadSyncReceiptsStep.combineBlocksAndReceipts(syncBlocks, receiptsByRootHash);
+        downloadSyncReceiptsStep.combineBlocksAndReceipts(syncBlocks, receiptsByBlock);
 
     // Then: should return blocks with empty receipts
     assertThat(result).hasSize(1);
@@ -392,66 +391,6 @@ public class DownloadSyncReceiptsStepTest {
         .hasRootCauseMessage("Task validation failure, it must flag empty result as failure");
 
     // Verify the task was executed once
-    verify(peerTaskExecutor, times(1)).execute(any(GetSyncReceiptsFromPeerTask.class));
-  }
-
-  @Test
-  public void shouldDeduplicateBlocksWithSameReceiptRoot()
-      throws ExecutionException, InterruptedException {
-    // Given: Create 3 blocks where block2 has the same receipt root as block1.
-    // The dedup in prepareRequest sends only one request per unique receipt root, so block2 is
-    // excluded from the request. combineBlocksAndReceipts looks up by receipt root hash, so block2
-    // still gets block1's receipts.
-    final List<Block> allBlocks = gen.blockSequence(4).subList(1, 4);
-    final Block block1 = allBlocks.get(0);
-    final Block block3 = allBlocks.get(2);
-
-    gen.setBlockOptionsSupplier(
-        () ->
-            BlockOptions.create()
-                .hasTransactions(true)
-                .setReceiptsRoot(block1.getHeader().getReceiptsRoot()));
-    final Block block2WithSameRoot = gen.blockSequence(block1, 1).getFirst();
-
-    final List<Block> blocks = List.of(block1, block2WithSameRoot, block3);
-    final List<SyncBlock> syncBlocks = blocksToSyncBlocks(blocks);
-
-    // Only 2 unique receipt requests should be made (for block1 and block3)
-    final var receiptsForBlock1 =
-        receiptsToSyncReceipts(gen.receipts(block1), ETH69_RECEIPT_CONFIGURATION);
-    final var receiptsForBlock3 =
-        receiptsToSyncReceipts(gen.receipts(block3), ETH69_RECEIPT_CONFIGURATION);
-
-    final Map<SyncBlock, List<SyncTransactionReceipt>> returnedReceiptsByBlock =
-        Map.of(syncBlocks.get(0), receiptsForBlock1, syncBlocks.get(2), receiptsForBlock3);
-
-    final var executorResult =
-        new PeerTaskExecutorResult<>(Optional.of(returnedReceiptsByBlock), SUCCESS, emptyList());
-    when(peerTaskExecutor.execute(any(GetSyncReceiptsFromPeerTask.class)))
-        .thenReturn(executorResult);
-
-    // When: downloading receipts
-    final CompletableFuture<List<SyncBlockWithReceipts>> result =
-        downloadSyncReceiptsStep.apply(syncBlocks);
-
-    // Then: should return all 3 blocks with receipts
-    final List<SyncBlockWithReceipts> blocksWithReceipts = result.get();
-    assertThat(blocksWithReceipts).hasSize(3);
-
-    // block1 should have its receipts
-    assertThat(blocksWithReceipts.get(0).getBlock()).isEqualTo(syncBlocks.get(0));
-    assertThat(blocksWithReceipts.get(0).getReceipts()).isEqualTo(receiptsForBlock1);
-
-    // block2 was deduped out of the request; combineBlocksAndReceipts finds its receipts via the
-    // shared receipt root, so it gets the same receipts as block1
-    assertThat(blocksWithReceipts.get(1).getBlock()).isEqualTo(syncBlocks.get(1));
-    assertThat(blocksWithReceipts.get(1).getReceipts()).isEqualTo(receiptsForBlock1);
-
-    // block3 should have its own receipts
-    assertThat(blocksWithReceipts.get(2).getBlock()).isEqualTo(syncBlocks.get(2));
-    assertThat(blocksWithReceipts.get(2).getReceipts()).isEqualTo(receiptsForBlock3);
-
-    // Verify the task was executed only once (deduplication worked)
     verify(peerTaskExecutor, times(1)).execute(any(GetSyncReceiptsFromPeerTask.class));
   }
 
