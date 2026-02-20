@@ -23,8 +23,8 @@ import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.InvalidPeerTaskResponseException;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult;
-import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.BlockHeaderAndReceiptCount;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Request;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Response;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetBodiesFromPeerTask;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetHeadersFromPeerTask;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetHeadersFromPeerTask.Direction;
@@ -86,26 +86,32 @@ public class CheckpointDownloadBlockStep {
   }
 
   private Optional<BlockWithReceipts> downloadReceipts(final Block block) {
-    final var blockPartialReceipts = new ArrayList<TransactionReceipt>();
-    final var receiptsRequest =
-        List.of(
-            new BlockHeaderAndReceiptCount(
-                block.getHeader(), block.getBody().getTransactions().size()));
+    final List<TransactionReceipt> blockPartialReceipts = new ArrayList<>();
 
     do {
-      final var request = new Request<>(receiptsRequest, blockPartialReceipts);
+      final Request<Block, TransactionReceipt> request =
+          new Request<>(List.of(block), blockPartialReceipts);
 
-      final var task = new GetReceiptsFromPeerTask(request, protocolSchedule);
+      final GetReceiptsFromPeerTask task = new GetReceiptsFromPeerTask(request, protocolSchedule);
 
-      final var executorResult = ethContext.getPeerTaskExecutor().execute(task);
+      final PeerTaskExecutorResult<Response<Block, TransactionReceipt>> executorResult =
+          ethContext.getPeerTaskExecutor().execute(task);
 
       if (executorResult.responseCode() == PeerTaskExecutorResponseCode.SUCCESS) {
-        final var taskResult = executorResult.result().get();
+        final Response<Block, TransactionReceipt> taskResult =
+            executorResult
+                .result()
+                .orElseThrow(
+                    () ->
+                        new IllegalStateException(
+                            "Task validation failure, it must flag empty result as failure"));
 
-        final var receivedReceipts = taskResult.blocksReceipts().getFirst();
+        final List<TransactionReceipt> receivedReceipts =
+            taskResult.completeReceiptsByBlock().values().iterator().next();
 
-        if (taskResult.lastBlockIncomplete()) {
-          blockPartialReceipts.addAll(receivedReceipts);
+        if (!taskResult.lastBlockPartialReceipts().isEmpty()) {
+          blockPartialReceipts.clear();
+          blockPartialReceipts.addAll(taskResult.lastBlockPartialReceipts());
         } else {
           return Optional.of(new BlockWithReceipts(block, receivedReceipts));
         }

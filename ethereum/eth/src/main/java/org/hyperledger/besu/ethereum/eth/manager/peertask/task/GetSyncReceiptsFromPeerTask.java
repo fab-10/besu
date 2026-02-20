@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.core.SyncBlock;
 import org.hyperledger.besu.ethereum.core.SyncTransactionReceipt;
 import org.hyperledger.besu.ethereum.core.Util;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.SyncTransactionReceiptEncoder;
@@ -22,16 +23,17 @@ import org.hyperledger.besu.ethereum.eth.messages.ReceiptsMessage;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
 import java.util.List;
+import java.util.Map;
 
 import org.apache.tuweni.bytes.Bytes;
 
 public class GetSyncReceiptsFromPeerTask
-    extends AbstractGetReceiptsFromPeerTask<SyncTransactionReceipt> {
+    extends AbstractGetReceiptsFromPeerTask<SyncBlock, SyncTransactionReceipt> {
 
   private final SyncTransactionReceiptEncoder syncTransactionReceiptEncoder;
 
   public GetSyncReceiptsFromPeerTask(
-      final Request<SyncTransactionReceipt> request,
+      final Request<SyncBlock, SyncTransactionReceipt> request,
       final ProtocolSchedule protocolSchedule,
       final SyncTransactionReceiptEncoder syncTransactionReceiptEncoder) {
     super(request, protocolSchedule);
@@ -45,9 +47,10 @@ public class GetSyncReceiptsFromPeerTask
   }
 
   @Override
-  protected Response<SyncTransactionReceipt> newResponse(
-      final List<List<SyncTransactionReceipt>> blocksReceipts, final boolean lastBlockIncomplete) {
-    return new Response<>(blocksReceipts, lastBlockIncomplete);
+  protected Response<SyncBlock, SyncTransactionReceipt> newResponse(
+      final Map<SyncBlock, List<SyncTransactionReceipt>> receiptsByBlock,
+      final List<SyncTransactionReceipt> lastBlockPartialReceipts) {
+    return new Response<>(receiptsByBlock, lastBlockPartialReceipts);
   }
 
   @Override
@@ -68,5 +71,15 @@ public class GetSyncReceiptsFromPeerTask
                 .toList());
 
     return calculatedReceiptsRoot.getBytes().equals(blockHeader.getReceiptsRoot().getBytes());
+  }
+
+  @Override
+  protected BlockHeader getBlockHeader(final SyncBlock block) {
+    return block.getHeader();
+  }
+
+  @Override
+  protected int getTransactionCount(final SyncBlock block) {
+    return block.getBody().getTransactionCount();
   }
 }

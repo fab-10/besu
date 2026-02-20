@@ -14,6 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 
+import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.eth.messages.ReceiptsMessage;
@@ -21,11 +22,13 @@ import org.hyperledger.besu.ethereum.mainnet.BodyValidation;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
 import java.util.List;
+import java.util.Map;
 
-public class GetReceiptsFromPeerTask extends AbstractGetReceiptsFromPeerTask<TransactionReceipt> {
+public class GetReceiptsFromPeerTask
+    extends AbstractGetReceiptsFromPeerTask<Block, TransactionReceipt> {
 
   public GetReceiptsFromPeerTask(
-      final Request<TransactionReceipt> request, final ProtocolSchedule protocolSchedule) {
+      final Request<Block, TransactionReceipt> request, final ProtocolSchedule protocolSchedule) {
     super(request, protocolSchedule);
   }
 
@@ -36,9 +39,10 @@ public class GetReceiptsFromPeerTask extends AbstractGetReceiptsFromPeerTask<Tra
   }
 
   @Override
-  protected Response<TransactionReceipt> newResponse(
-      final List<List<TransactionReceipt>> blocksReceipts, final boolean lastBlockIncomplete) {
-    return new Response<>(blocksReceipts, lastBlockIncomplete);
+  protected Response<Block, TransactionReceipt> newResponse(
+      final Map<Block, List<TransactionReceipt>> receiptsByBlock,
+      final List<TransactionReceipt> lastBlockPartialReceipts) {
+    return new Response<>(receiptsByBlock, lastBlockPartialReceipts);
   }
 
   @Override
@@ -48,5 +52,15 @@ public class GetReceiptsFromPeerTask extends AbstractGetReceiptsFromPeerTask<Tra
         .getReceiptsRoot()
         .getBytes()
         .equals(BodyValidation.receiptsRoot(receipts).getBytes());
+  }
+
+  @Override
+  protected BlockHeader getBlockHeader(final Block block) {
+    return block.getHeader();
+  }
+
+  @Override
+  protected int getTransactionCount(final Block block) {
+    return block.getBody().getTransactions().size();
   }
 }

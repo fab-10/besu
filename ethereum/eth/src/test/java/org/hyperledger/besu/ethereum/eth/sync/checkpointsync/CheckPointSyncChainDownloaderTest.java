@@ -168,13 +168,13 @@ public class CheckPointSyncChainDownloaderTest {
             (invocationOnMock) -> {
               GetReceiptsFromPeerTask task =
                   invocationOnMock.getArgument(0, GetReceiptsFromPeerTask.class);
-              Map<BlockHeader, List<TransactionReceipt>> getReceiptsFromPeerTaskResult =
-                  new HashMap<>();
-              task.getBlockHeaders()
+              Map<Block, List<TransactionReceipt>> getReceiptsFromPeerTaskResult = new HashMap<>();
+              task.getRequestedBlocks()
                   .forEach(
-                      (bh) ->
+                      (block) ->
                           getReceiptsFromPeerTaskResult.put(
-                              bh, otherBlockchain.getTxReceipts(bh.getHash()).get()));
+                              block,
+                              otherBlockchain.getTxReceipts(block.getHeader().getHash()).get()));
 
               return new PeerTaskExecutorResult<>(
                   Optional.of(getReceiptsFromPeerTaskResult),
@@ -186,14 +186,17 @@ public class CheckPointSyncChainDownloaderTest {
             (invocationOnMock) -> {
               GetSyncReceiptsFromPeerTask task =
                   invocationOnMock.getArgument(0, GetSyncReceiptsFromPeerTask.class);
-              Map<BlockHeader, List<SyncTransactionReceipt>> getReceiptsFromPeerTaskResult =
+              Map<SyncBlock, List<SyncTransactionReceipt>> getReceiptsFromPeerTaskResult =
                   new HashMap<>();
-              task.getBlockHeaders()
+              task.getRequestedBlocks()
                   .forEach(
-                      (bh) ->
+                      (block) ->
                           getReceiptsFromPeerTaskResult.put(
-                              bh,
-                              otherBlockchain.getTxReceipts(bh.getHash()).get().stream()
+                              block,
+                              otherBlockchain
+                                  .getTxReceipts(block.getHeader().getHash())
+                                  .get()
+                                  .stream()
                                   .map(
                                       (tr) ->
                                           syncTransactionReceiptDecoder.decode(

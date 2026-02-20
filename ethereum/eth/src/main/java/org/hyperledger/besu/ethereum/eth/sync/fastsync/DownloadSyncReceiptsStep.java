@@ -1,5 +1,5 @@
 /*
- * Copyright ConsenSys AG.
+ * Copyright contributors to Hyperledger Besu.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -15,13 +15,9 @@
 package org.hyperledger.besu.ethereum.eth.sync.fastsync;
 
 import static java.util.Collections.emptyList;
-import static java.util.stream.Collectors.toCollection;
-import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.NO_PEER_AVAILABLE;
 import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.SUCCESS;
-import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.TIMEOUT;
 
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.SyncBlock;
 import org.hyperledger.besu.ethereum.core.SyncBlockWithReceipts;
 import org.hyperledger.besu.ethereum.core.SyncTransactionReceipt;
@@ -29,17 +25,23 @@ import org.hyperledger.besu.ethereum.core.encoding.receipt.SyncTransactionReceip
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutor;
-import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.BlockHeaderAndReceiptCount;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Request;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Response;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetSyncReceiptsFromPeerTask;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
-import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 
+import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -49,183 +51,203 @@ import org.slf4j.LoggerFactory;
 
 public class DownloadSyncReceiptsStep
     implements Function<List<SyncBlock>, CompletableFuture<List<SyncBlockWithReceipts>>> {
-  private static final Logger LOG = LoggerFactory.getLogger(DownloadSyncReceiptsStep.class);
-  private static final long DEFAULT_BASE_WAIT_MILLIS = 100;
-  private static final AtomicInteger taskId = new AtomicInteger(0);
 
-  private final EthScheduler ethScheduler;
+  private static final Logger LOG = LoggerFactory.getLogger(DownloadSyncReceiptsStep.class);
+  private static final Duration RETRY_DELAY = Duration.ofSeconds(1);
+  private static final AtomicInteger taskSequence = new AtomicInteger(0);
+
   private final ProtocolSchedule protocolSchedule;
+  private final EthScheduler ethScheduler;
   private final PeerTaskExecutor peerTaskExecutor;
   private final SyncTransactionReceiptEncoder syncTransactionReceiptEncoder;
+  private final Duration timeoutDuration;
 
   public DownloadSyncReceiptsStep(
       final ProtocolSchedule protocolSchedule,
       final EthContext ethContext,
-      final SyncTransactionReceiptEncoder syncTransactionReceiptEncoder) {
+      final SyncTransactionReceiptEncoder syncTransactionReceiptEncoder,
+      final Duration timeoutDuration) {
     this.protocolSchedule = protocolSchedule;
     this.ethScheduler = ethContext.getScheduler();
     this.peerTaskExecutor = ethContext.getPeerTaskExecutor();
     this.syncTransactionReceiptEncoder = syncTransactionReceiptEncoder;
+    this.timeoutDuration = timeoutDuration;
   }
 
   @Override
   public CompletableFuture<List<SyncBlockWithReceipts>> apply(final List<SyncBlock> blocks) {
+    final int currTaskId = taskSequence.incrementAndGet();
+    final List<SyncBlock> blocksToRequest = prepareRequest(blocks);
+    final List<SyncTransactionReceipt> firstBlockPartialReceipts = new ArrayList<>();
+    final Map<Hash, List<SyncTransactionReceipt>> receiptsByRootHash =
+        HashMap.newHashMap(blocksToRequest.size());
+
     return ethScheduler
-        .scheduleServiceTask(() -> getReceipts(blocks))
-        .thenApply((receipts) -> combineBlocksAndReceipts(blocks, receipts));
+        .scheduleServiceTask(
+            () ->
+                downloadReceipts(
+                    currTaskId, 0, blocksToRequest, firstBlockPartialReceipts, receiptsByRootHash))
+        .thenApply(receipts -> combineBlocksAndReceipts(blocks, receipts))
+        .orTimeout(timeoutDuration.toMillis(), TimeUnit.MILLISECONDS)
+        .whenComplete(
+            (unused, throwable) -> {
+              if (throwable instanceof TimeoutException) {
+                LOG.trace(
+                    "[{}] Timed out after {} ms while downloading receipts for {} blocks",
+                    currTaskId,
+                    timeoutDuration.toMillis(),
+                    blocks.size());
+              }
+            });
   }
 
-  private CompletableFuture<Map<BlockHeader, List<SyncTransactionReceipt>>> getReceipts(
-      final List<SyncBlock> blocks) {
-    final int currTaskId = taskId.getAndIncrement();
-
-    final var receiptRequests =
+  private List<SyncBlock> prepareRequest(final List<SyncBlock> blocks) {
+    // filter any headers with an empty receipts root, for which we do not need to request anything
+    final List<SyncBlock> blocksWithTxs =
         blocks.stream()
-            .map(
-                b ->
-                    new BlockHeaderAndReceiptCount(
-                        b.getHeader(), b.getBody().getTransactionCount()))
-            .collect(toCollection(ArrayList::new));
+            .filter(
+                sb -> {
+                  if (sb.getHeader()
+                      .getReceiptsRoot()
+                      .getBytes()
+                      .equals(Hash.EMPTY_TRIE_HASH.getBytes())) {
+                    LOG.trace(
+                        "Skipping receipts retrieval for empty block {}",
+                        sb.getHeader().getNumber());
+                    return false;
+                  }
+                  return true;
+                })
+            .collect(Collectors.toCollection(ArrayList::new));
 
-    final Map<BlockHeader, List<SyncTransactionReceipt>> getReceipts =
-        HashMap.newHashMap(receiptRequests.size());
+    // dedup by grouping blocks by same receipt root hash
+    final List<SyncBlock> blocksToRequest =
+        blocksWithTxs.stream()
+            .collect(
+                Collectors.groupingBy(
+                    syncBlock -> syncBlock.getHeader().getReceiptsRoot(),
+                    LinkedHashMap::new,
+                    Collectors.toList()))
+            .values()
+            .stream()
+            .map(List::getFirst)
+            .collect(Collectors.toCollection(ArrayList::new));
 
-    // pre-filter blocks with empty blocksReceipts root, for which we do not need to request
-    // anything
-    final var itEmptyBlocks = receiptRequests.iterator();
-    while (itEmptyBlocks.hasNext()) {
-      final var blockHeader = itEmptyBlocks.next().blockHeader();
-      if (blockHeader.getReceiptsRoot().getBytes().equals(Hash.EMPTY_TRIE_HASH.getBytes())) {
-        LOG.trace("Skipping receipts retrieval for empty block {}", blockHeader.getNumber());
-        itEmptyBlocks.remove();
-      }
-    }
+    LOG.trace("Saving by dedup {}", blocksWithTxs.size() - blocksToRequest.size());
+    return blocksToRequest;
+  }
 
-    final var firstBlockPartialReceipts = new ArrayList<SyncTransactionReceipt>();
-    int iteration = 0;
-    // repeat until all headers have blocksReceipts
-    while (!receiptRequests.isEmpty()) {
+  private CompletableFuture<Map<Hash, List<SyncTransactionReceipt>>> downloadReceipts(
+      final int currTaskId,
+      final int prevIterations,
+      final List<SyncBlock> blocksToRequest,
+      final List<SyncTransactionReceipt> firstBlockPartialReceipts,
+      final Map<Hash, List<SyncTransactionReceipt>> receiptsByRootHash) {
+
+    final int initialBlockCount = blocksToRequest.size();
+    int iteration = prevIterations;
+    while (!blocksToRequest.isEmpty()) {
       ++iteration;
-      final String logDetails =
-          LOG.isTraceEnabled()
-              ? receiptRequests.stream()
-                  .map(br -> br.blockHeader().getNumber() + "(" + br.receiptCount() + ")")
-                  .collect(Collectors.joining(","))
-              : "";
 
-      LOG.trace(
-          "[{}:{}] Requesting receipts for {} blocks: {}; partial receipts fetched for first block {}",
-          currTaskId,
-          iteration,
-          receiptRequests.size(),
-          logDetails,
-          firstBlockPartialReceipts.size());
+      LOG.atTrace()
+          .setMessage(
+              "[{}:{}] Requesting receipts for {} blocks, partial receipts fetched for first block {} (initial {}): {}")
+          .addArgument(currTaskId)
+          .addArgument(iteration)
+          .addArgument(blocksToRequest::size)
+          .addArgument(firstBlockPartialReceipts::size)
+          .addArgument(initialBlockCount)
+          .addArgument(() -> formatBlockDetails(blocksToRequest))
+          .log();
 
-      final var task =
+      final GetSyncReceiptsFromPeerTask task =
           new GetSyncReceiptsFromPeerTask(
-              new Request<>(receiptRequests, firstBlockPartialReceipts),
+              new Request<>(blocksToRequest, firstBlockPartialReceipts),
               protocolSchedule,
               syncTransactionReceiptEncoder);
-      final var getReceiptsResult = peerTaskExecutor.execute(task);
 
-      final var responseCode = getReceiptsResult.responseCode();
+      final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> getReceiptsResult =
+          peerTaskExecutor.execute(task);
 
-      if (responseCode == SUCCESS && getReceiptsResult.result().isPresent()) {
-        final var taskResult = getReceiptsResult.result().get();
+      final PeerTaskExecutorResponseCode responseCode = getReceiptsResult.responseCode();
 
-        final var blocksReceipts = taskResult.blocksReceipts();
+      if (responseCode == SUCCESS) {
+        final Response<SyncBlock, SyncTransactionReceipt> response =
+            getReceiptsResult
+                .result()
+                .orElseThrow(
+                    () ->
+                        new IllegalStateException(
+                            "Task validation failure, it must flag empty result as failure"));
 
-        final int completedBlockSize;
+        final Map<SyncBlock, List<SyncTransactionReceipt>> receiptsByBlock =
+            response.completeReceiptsByBlock();
+        final List<SyncTransactionReceipt> lastBlockPartialReceipts =
+            response.lastBlockPartialReceipts();
+
         firstBlockPartialReceipts.clear();
-        if (taskResult.lastBlockIncomplete()) {
-          completedBlockSize = blocksReceipts.size() - 1;
-          firstBlockPartialReceipts.addAll(blocksReceipts.getLast());
-        } else {
-          completedBlockSize = blocksReceipts.size();
+        if (!lastBlockPartialReceipts.isEmpty()) {
+          firstBlockPartialReceipts.addAll(lastBlockPartialReceipts);
         }
 
-        final var resolvedRequests = receiptRequests.subList(0, completedBlockSize);
+        LOG.atTrace()
+            .setMessage(
+                "[{}:{}] Received complete response for {} blocks, last block partial receipts {}, completed blocks {} (requested {}, initial {}): {}")
+            .addArgument(currTaskId)
+            .addArgument(iteration)
+            .addArgument(response::size)
+            .addArgument(lastBlockPartialReceipts::size)
+            .addArgument(receiptsByBlock::size)
+            .addArgument(blocksToRequest::size)
+            .addArgument(initialBlockCount)
+            .addArgument(() -> formatBlockDetails(receiptsByBlock.keySet()))
+            .log();
 
-        LOG.trace(
-            "[{}:{}] Received response for {} blocks, last block is incomplete? {}, complete blocks {}",
-            currTaskId,
-            iteration,
-            taskResult.blocksReceipts().size(),
-            taskResult.lastBlockIncomplete(),
-            resolvedRequests.size());
-
-        for (int i = 0; i < resolvedRequests.size(); i++) {
-          final var request = receiptRequests.get(i);
-          final List<SyncTransactionReceipt> blockReceipts = blocksReceipts.get(i);
-          LOG.trace(
-              "[{}:{}] Request {}, received receipts {}",
-              currTaskId,
-              iteration,
-              request,
-              blockReceipts.size());
-          getReceipts.put(request.blockHeader(), blockReceipts);
-        }
-
-        resolvedRequests.clear();
+        receiptsByBlock.forEach(
+            (block, receipts) -> {
+              receiptsByRootHash.put(
+                  block.getHeader().getReceiptsRoot(), receiptsByBlock.get(block));
+              blocksToRequest.remove(block);
+            });
       } else {
-        LOG.trace(
-            "[{}:{}] Failed with {} to retrieve receipts for {} blocks: {}; partial receipts fetched for first block {}",
-            currTaskId,
-            iteration,
-            responseCode,
-            receiptRequests.size(),
-            logDetails,
-            firstBlockPartialReceipts.size());
-        if (responseCode == NO_PEER_AVAILABLE || responseCode == TIMEOUT) {
-          // wait a bit more every iteration before retrying
-          try {
-            final long incrementalWaitTime = DEFAULT_BASE_WAIT_MILLIS * iteration;
-            LOG.trace(
-                "[{}:{}] Waiting for {}ms before retrying",
-                currTaskId,
-                iteration,
-                incrementalWaitTime);
-            Thread.sleep(incrementalWaitTime);
-          } catch (InterruptedException e) {
-            throw new RuntimeException(e);
-          }
-        }
-      }
-    }
+        LOG.atTrace()
+            .setMessage(
+                "[{}:{}] Failed with {} to retrieve receipts for {} blocks (initial {}): {}")
+            .addArgument(currTaskId)
+            .addArgument(iteration)
+            .addArgument(responseCode)
+            .addArgument(blocksToRequest::size)
+            .addArgument(initialBlockCount)
+            .addArgument(() -> formatBlockDetails(blocksToRequest))
+            .log();
 
-    if (LOG.isTraceEnabled()) {
-      for (final var block : blocks) {
-        final var transactionReceipts = getReceipts.get(block.getHeader());
-        if (transactionReceipts != null) {
-          LOG.trace(
-              "{} blocksReceipts received for block {}",
-              transactionReceipts.size(),
-              block.getHeader().getNumber());
-        }
+        LOG.trace("[{}:{}] Waiting for {} before retrying", currTaskId, iteration, RETRY_DELAY);
+        final int passIterations = iteration;
+        return ethScheduler.scheduleFutureTask(
+            () ->
+                ethScheduler.scheduleServiceTask(
+                    () ->
+                        downloadReceipts(
+                            currTaskId,
+                            passIterations,
+                            blocksToRequest,
+                            firstBlockPartialReceipts,
+                            receiptsByRootHash)),
+            RETRY_DELAY);
       }
     }
-    return CompletableFuture.completedFuture(getReceipts);
+    return CompletableFuture.completedFuture(receiptsByRootHash);
   }
 
   List<SyncBlockWithReceipts> combineBlocksAndReceipts(
       final List<SyncBlock> blocks,
-      final Map<BlockHeader, List<SyncTransactionReceipt>> receiptsByHeader) {
+      final Map<Hash, List<SyncTransactionReceipt>> receiptsByRootHash) {
     return blocks.stream()
         .map(
             block -> {
               final List<SyncTransactionReceipt> receipts =
-                  receiptsByHeader.getOrDefault(block.getHeader(), emptyList());
+                  receiptsByRootHash.getOrDefault(block.getHeader().getReceiptsRoot(), emptyList());
               if (block.getBody().getTransactionCount() != receipts.size()) {
-                final BytesValueRLPOutput headerRlpOutput = new BytesValueRLPOutput();
-                block.getHeader().writeTo(headerRlpOutput);
-                LOG.atTrace()
-                    .setMessage("Header RLP: {}")
-                    .addArgument(headerRlpOutput::encoded)
-                    .log();
-                LOG.atTrace()
-                    .setMessage("Body: {}")
-                    .addArgument(() -> block.getBody().getRlp())
-                    .log();
                 throw new IllegalStateException(
                     "PeerTask response code was success, but incorrect number of receipts returned. Block hash: "
                         + block.getHeader().getHash()
@@ -237,5 +259,11 @@ public class DownloadSyncReceiptsStep
               return new SyncBlockWithReceipts(block, receipts);
             })
         .toList();
+  }
+
+  private String formatBlockDetails(final Collection<SyncBlock> blocks) {
+    return blocks.stream()
+        .map(sb -> sb.getHeader().getNumber() + "(" + sb.getBody().getTransactionCount() + ")")
+        .collect(Collectors.joining(","));
   }
 }

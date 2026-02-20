@@ -14,6 +14,13 @@
  */
 package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
+
+import org.hyperledger.besu.ethereum.core.Block;
+import org.hyperledger.besu.ethereum.core.BlockBody;
+import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Request;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
@@ -21,10 +28,11 @@ import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import java.util.List;
 
 public class GetReceiptsFromPeerTaskTest
-    extends AbstractGetReceiptsFromPeerTaskTest<TransactionReceipt, GetReceiptsFromPeerTask> {
+    extends AbstractGetReceiptsFromPeerTaskTest<
+        Block, TransactionReceipt, GetReceiptsFromPeerTask> {
   @Override
   protected GetReceiptsFromPeerTask createTask(
-      final Request<TransactionReceipt> request, final ProtocolSchedule protocolSchedule) {
+      final Request<Block, TransactionReceipt> request, final ProtocolSchedule protocolSchedule) {
     return new GetReceiptsFromPeerTask(request, protocolSchedule);
   }
 
@@ -46,5 +54,18 @@ public class GetReceiptsFromPeerTaskTest
       }
     }
     return 0;
+  }
+
+  @Override
+  protected BlockHeader getHeader(final Block block) {
+    return block.getHeader();
+  }
+
+  @Override
+  protected MockedBlock<Block> mockBlock(final long number, final int txCount) {
+    final BlockBody body = mock(BlockBody.class, RETURNS_DEEP_STUBS);
+    when(body.getTransactions().size()).thenReturn(txCount);
+    final List<TransactionReceipt> receipts = mockTransactionReceipts(number, txCount);
+    return new MockedBlock<>(new Block(mockBlockHeader(number, receipts), body), receipts);
   }
 }

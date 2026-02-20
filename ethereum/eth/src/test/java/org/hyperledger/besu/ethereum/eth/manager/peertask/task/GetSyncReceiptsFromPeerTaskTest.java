@@ -15,7 +15,12 @@
 package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 
 import static org.hyperledger.besu.ethereum.eth.core.Utils.receiptToSyncReceipt;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.core.SyncBlock;
+import org.hyperledger.besu.ethereum.core.SyncBlockBody;
 import org.hyperledger.besu.ethereum.core.SyncTransactionReceipt;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.SyncTransactionReceiptEncoder;
@@ -29,10 +34,11 @@ import java.util.List;
 
 public class GetSyncReceiptsFromPeerTaskTest
     extends AbstractGetReceiptsFromPeerTaskTest<
-        SyncTransactionReceipt, GetSyncReceiptsFromPeerTask> {
+        SyncBlock, SyncTransactionReceipt, GetSyncReceiptsFromPeerTask> {
   @Override
   protected GetSyncReceiptsFromPeerTask createTask(
-      final Request<SyncTransactionReceipt> request, final ProtocolSchedule protocolSchedule) {
+      final Request<SyncBlock, SyncTransactionReceipt> request,
+      final ProtocolSchedule protocolSchedule) {
     return new GetSyncReceiptsFromPeerTask(
         request, protocolSchedule, new SyncTransactionReceiptEncoder(new SimpleNoCopyRlpEncoder()));
   }
@@ -55,5 +61,18 @@ public class GetSyncReceiptsFromPeerTaskTest
       }
     }
     return 0;
+  }
+
+  @Override
+  protected BlockHeader getHeader(final SyncBlock block) {
+    return block.getHeader();
+  }
+
+  @Override
+  protected MockedBlock<SyncBlock> mockBlock(final long number, final int txCount) {
+    final SyncBlockBody body = mock(SyncBlockBody.class);
+    when(body.getTransactionCount()).thenReturn(txCount);
+    final List<TransactionReceipt> receipts = mockTransactionReceipts(number, txCount);
+    return new MockedBlock<>(new SyncBlock(mockBlockHeader(number, receipts), body), receipts);
   }
 }
