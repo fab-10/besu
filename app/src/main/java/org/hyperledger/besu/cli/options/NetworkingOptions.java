@@ -14,6 +14,7 @@
  */
 package org.hyperledger.besu.cli.options;
 
+import org.hyperledger.besu.cli.converter.DurationMillisConverter;
 import org.hyperledger.besu.cli.converter.DurationSecondsConverter;
 import org.hyperledger.besu.cli.util.CommandLineUtils;
 import org.hyperledger.besu.ethereum.p2p.config.DiscoveryConfiguration;
@@ -44,7 +45,7 @@ public class NetworkingOptions implements CLIOptions<NetworkingConfiguration> {
       hidden = true,
       paramLabel = "<INTEGER>",
       description =
-          "The frequency (in seconds) at which to initiate new outgoing connections (default: ${DEFAULT-VALUE})",
+          "The frequency (in seconds) at which to initiate new outgoing connections (default: 30)",
       converter = DurationSecondsConverter.class)
   private Duration initiateConnectionsFrequency =
       NetworkingConfiguration.DEFAULT_INITIATE_CONNECTIONS_FREQUENCY;
@@ -54,7 +55,7 @@ public class NetworkingOptions implements CLIOptions<NetworkingConfiguration> {
       hidden = true,
       paramLabel = "<INTEGER>",
       description =
-          "The frequency (in seconds) at which to check maintained connections (default: ${DEFAULT-VALUE})",
+          "The frequency (in seconds) at which to check maintained connections (default: 60)",
       converter = DurationSecondsConverter.class)
   private Duration checkMaintainedConnectionsFrequency =
       NetworkingConfiguration.DEFAULT_CHECK_MAINTAINED_CONNECTIONS_FREQUENCY;
@@ -64,8 +65,8 @@ public class NetworkingOptions implements CLIOptions<NetworkingConfiguration> {
       hidden = true,
       paramLabel = "<INTEGER>",
       description =
-          "The max amount of time (in millis) to wait for a peer task to complete (default: ${DEFAULT-VALUE})",
-      converter = DurationSecondsConverter.class)
+          "The max amount of time (in millis) to wait for a peer task to complete (default: 5000)",
+      converter = DurationMillisConverter.class)
   private Duration p2pPeerTaskTimeout = NetworkingConfiguration.DEFAULT_P2P_PEER_TASK_TIMEOUT;
 
   @CommandLine.Option(
