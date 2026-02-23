@@ -42,8 +42,8 @@ import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutor;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult;
-import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Response;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetSyncReceiptsFromPeerTask;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetSyncReceiptsFromPeerTask.Response;
 import org.hyperledger.besu.ethereum.mainnet.DefaultProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
@@ -100,10 +100,10 @@ public class DownloadSyncReceiptsStepTest {
     final var syncBlocks = blocksToSyncBlocks(blockWithTxs);
 
     // Mock the peer task executor to return receipts for both blocks
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> executorResult =
+    final PeerTaskExecutorResult<Response> executorResult =
         new PeerTaskExecutorResult<>(
             Optional.of(
-                new Response<>(
+                new Response(
                     Map.of(
                         syncBlocks.get(0),
                         returnedReceiptsByBlock.get(0),
@@ -154,12 +154,12 @@ public class DownloadSyncReceiptsStepTest {
 
     final List<SyncBlock> syncBlocks = blocksToSyncBlocks(blocks);
 
-    final Response<SyncBlock, SyncTransactionReceipt> taskResponse =
-        new Response<>(
+    final Response taskResponse =
+        new Response(
             Map.of(syncBlocks.get(0), receiptsForBlock1, syncBlocks.get(2), receiptsForBlock3),
             List.of());
 
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> executorResult =
+    final PeerTaskExecutorResult<Response> executorResult =
         new PeerTaskExecutorResult<>(Optional.of(taskResponse), SUCCESS, emptyList());
     when(peerTaskExecutor.execute(any(GetSyncReceiptsFromPeerTask.class)))
         .thenReturn(executorResult);
@@ -208,17 +208,17 @@ public class DownloadSyncReceiptsStepTest {
     final List<SyncTransactionReceipt> partialReceipts =
         firstBlockReceipts.subList(0, firstBlockReceipts.size() / 2);
 
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> firstExecutorResult =
+    final PeerTaskExecutorResult<Response> firstExecutorResult =
         new PeerTaskExecutorResult<>(
-            Optional.of(new Response<>(Map.of(), partialReceipts)), SUCCESS, emptyList());
+            Optional.of(new Response(Map.of(), partialReceipts)), SUCCESS, emptyList());
 
     // Second call returns combined receipts (partial + remaining) for first block and second block
     // Note: processResponse in AbstractGetReceiptsFromPeerTask combines firstBlockPartialReceipts
     // with newly received receipts, so the result contains the full receipt list
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> secondExecutorResult =
+    final PeerTaskExecutorResult<Response> secondExecutorResult =
         new PeerTaskExecutorResult<>(
             Optional.of(
-                new Response<>(
+                new Response(
                     Map.of(
                         syncBlocks.getFirst(),
                         firstBlockReceipts,
@@ -266,21 +266,18 @@ public class DownloadSyncReceiptsStepTest {
     final List<SyncTransactionReceipt> secondCallReturnedReceipts = returnedReceipts.subList(0, 2);
     final List<SyncTransactionReceipt> thirdCallReturnedReceipts = returnedReceipts;
 
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> firstExecutorResult =
+    final PeerTaskExecutorResult<Response> firstExecutorResult =
         new PeerTaskExecutorResult<>(
-            Optional.of(new Response<>(Map.of(), firstCallReturnedReceipts)), SUCCESS, emptyList());
+            Optional.of(new Response(Map.of(), firstCallReturnedReceipts)), SUCCESS, emptyList());
 
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> secondExecutorResult =
+    final PeerTaskExecutorResult<Response> secondExecutorResult =
         new PeerTaskExecutorResult<>(
-            Optional.of(new Response<>(Map.of(), secondCallReturnedReceipts)),
-            SUCCESS,
-            emptyList());
+            Optional.of(new Response(Map.of(), secondCallReturnedReceipts)), SUCCESS, emptyList());
 
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> thirdExecutorResult =
+    final PeerTaskExecutorResult<Response> thirdExecutorResult =
         new PeerTaskExecutorResult<>(
             Optional.of(
-                new Response<>(
-                    Map.of(syncBlocks.getFirst(), thirdCallReturnedReceipts), List.of())),
+                new Response(Map.of(syncBlocks.getFirst(), thirdCallReturnedReceipts), List.of())),
             SUCCESS,
             emptyList());
 
@@ -316,26 +313,26 @@ public class DownloadSyncReceiptsStepTest {
             .toList();
 
     // First call returns first block only
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> firstExecutorResult =
+    final PeerTaskExecutorResult<Response> firstExecutorResult =
         new PeerTaskExecutorResult<>(
             Optional.of(
-                new Response<>(Map.of(syncBlocks.get(0), receiptsPerBlock.get(0)), List.of())),
+                new Response(Map.of(syncBlocks.get(0), receiptsPerBlock.get(0)), List.of())),
             SUCCESS,
             emptyList());
 
     // Second call returns second block only
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> secondExecutorResult =
+    final PeerTaskExecutorResult<Response> secondExecutorResult =
         new PeerTaskExecutorResult<>(
             Optional.of(
-                new Response<>(Map.of(syncBlocks.get(1), receiptsPerBlock.get(1)), List.of())),
+                new Response(Map.of(syncBlocks.get(1), receiptsPerBlock.get(1)), List.of())),
             SUCCESS,
             emptyList());
 
     // Third call returns third block only
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> thirdExecutorResult =
+    final PeerTaskExecutorResult<Response> thirdExecutorResult =
         new PeerTaskExecutorResult<>(
             Optional.of(
-                new Response<>(Map.of(syncBlocks.get(2), receiptsPerBlock.get(2)), List.of())),
+                new Response(Map.of(syncBlocks.get(2), receiptsPerBlock.get(2)), List.of())),
             SUCCESS,
             emptyList());
 
@@ -420,15 +417,13 @@ public class DownloadSyncReceiptsStepTest {
     }
 
     // First call returns failure (e.g., peer disconnected)
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> failureResult =
+    final PeerTaskExecutorResult<Response> failureResult =
         new PeerTaskExecutorResult<>(Optional.empty(), PEER_DISCONNECTED, emptyList());
 
     // Second call returns success with all receipts
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> successResult =
+    final PeerTaskExecutorResult<Response> successResult =
         new PeerTaskExecutorResult<>(
-            Optional.of(new Response<>(returnedReceiptsByBlock, emptyList())),
-            SUCCESS,
-            emptyList());
+            Optional.of(new Response(returnedReceiptsByBlock, emptyList())), SUCCESS, emptyList());
 
     when(peerTaskExecutor.execute(any(GetSyncReceiptsFromPeerTask.class)))
         .thenReturn(failureResult)
@@ -464,18 +459,18 @@ public class DownloadSyncReceiptsStepTest {
             .toList();
 
     // First three calls return different failures
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> timeoutResult =
+    final PeerTaskExecutorResult<Response> timeoutResult =
         new PeerTaskExecutorResult<>(Optional.empty(), TIMEOUT, emptyList());
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> noPeerResult =
+    final PeerTaskExecutorResult<Response> noPeerResult =
         new PeerTaskExecutorResult<>(Optional.empty(), NO_PEER_AVAILABLE, emptyList());
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> disconnectedResult =
+    final PeerTaskExecutorResult<Response> disconnectedResult =
         new PeerTaskExecutorResult<>(Optional.empty(), PEER_DISCONNECTED, emptyList());
 
     // Fourth call returns success
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> successResult =
+    final PeerTaskExecutorResult<Response> successResult =
         new PeerTaskExecutorResult<>(
             Optional.of(
-                new Response<>(
+                new Response(
                     Map.of(syncBlocks.getFirst(), receiptsPerBlock.getFirst()), List.of())),
             SUCCESS,
             emptyList());
@@ -508,7 +503,7 @@ public class DownloadSyncReceiptsStepTest {
     final List<SyncBlock> syncBlocks = blocksToSyncBlocks(blocks);
 
     // Mock returns SUCCESS but with empty Optional (should never happen in practice)
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> invalidResult =
+    final PeerTaskExecutorResult<Response> invalidResult =
         new PeerTaskExecutorResult<>(Optional.empty(), SUCCESS, emptyList());
 
     when(peerTaskExecutor.execute(any(GetSyncReceiptsFromPeerTask.class)))
@@ -559,9 +554,9 @@ public class DownloadSyncReceiptsStepTest {
     final Map<SyncBlock, List<SyncTransactionReceipt>> returnedReceiptsByBlock =
         Map.of(syncBlocks.get(0), receiptsForBlock1, syncBlocks.get(2), receiptsForBlock3);
 
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> executorResult =
+    final PeerTaskExecutorResult<Response> executorResult =
         new PeerTaskExecutorResult<>(
-            Optional.of(new Response<>(returnedReceiptsByBlock, List.of())), SUCCESS, emptyList());
+            Optional.of(new Response(returnedReceiptsByBlock, List.of())), SUCCESS, emptyList());
     when(peerTaskExecutor.execute(any(GetSyncReceiptsFromPeerTask.class)))
         .thenReturn(executorResult);
 
@@ -604,10 +599,10 @@ public class DownloadSyncReceiptsStepTest {
             .toList();
 
     // First call returns partial success (first 2 blocks only)
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> firstSuccessResult =
+    final PeerTaskExecutorResult<Response> firstSuccessResult =
         new PeerTaskExecutorResult<>(
             Optional.of(
-                new Response<>(
+                new Response(
                     Map.of(
                         syncBlocks.get(0), allReceiptsPerBlock.get(0),
                         syncBlocks.get(1), allReceiptsPerBlock.get(1)),
@@ -616,14 +611,14 @@ public class DownloadSyncReceiptsStepTest {
             emptyList());
 
     // Second call for remaining blocks returns failure
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> failureResult =
+    final PeerTaskExecutorResult<Response> failureResult =
         new PeerTaskExecutorResult<>(Optional.empty(), TIMEOUT, emptyList());
 
     // Third call (retry) returns the remaining 2 blocks successfully
-    final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> secondSuccessResult =
+    final PeerTaskExecutorResult<Response> secondSuccessResult =
         new PeerTaskExecutorResult<>(
             Optional.of(
-                new Response<>(
+                new Response(
                     Map.of(
                         syncBlocks.get(2), allReceiptsPerBlock.get(2),
                         syncBlocks.get(3), allReceiptsPerBlock.get(3)),
@@ -679,7 +674,7 @@ public class DownloadSyncReceiptsStepTest {
               Duration.ofMillis(100));
 
       // Mock continuous failures that would retry indefinitely without timeout
-      final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> failureResult =
+      final PeerTaskExecutorResult<Response> failureResult =
           new PeerTaskExecutorResult<>(Optional.empty(), TIMEOUT, emptyList());
 
       when(peerTaskExecutor.execute(any(GetSyncReceiptsFromPeerTask.class)))

@@ -27,9 +27,9 @@ import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutor;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult;
-import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Request;
-import org.hyperledger.besu.ethereum.eth.manager.peertask.task.AbstractGetReceiptsFromPeerTask.Response;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetSyncReceiptsFromPeerTask;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetSyncReceiptsFromPeerTask.Request;
+import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetSyncReceiptsFromPeerTask.Response;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
 import java.time.Duration;
@@ -162,17 +162,16 @@ public class DownloadSyncReceiptsStep
 
       final GetSyncReceiptsFromPeerTask task =
           new GetSyncReceiptsFromPeerTask(
-              new Request<>(blocksToRequest, firstBlockPartialReceipts),
+              new Request(blocksToRequest, firstBlockPartialReceipts),
               protocolSchedule,
               syncTransactionReceiptEncoder);
 
-      final PeerTaskExecutorResult<Response<SyncBlock, SyncTransactionReceipt>> getReceiptsResult =
-          peerTaskExecutor.execute(task);
+      final PeerTaskExecutorResult<Response> getReceiptsResult = peerTaskExecutor.execute(task);
 
       final PeerTaskExecutorResponseCode responseCode = getReceiptsResult.responseCode();
 
       if (responseCode == SUCCESS) {
-        final Response<SyncBlock, SyncTransactionReceipt> response =
+        final Response response =
             getReceiptsResult
                 .result()
                 .orElseThrow(
