@@ -194,7 +194,7 @@ public class CliqueBesuControllerBuilderTest {
             .storageProvider(storageProvider)
             .evmConfiguration(EvmConfiguration.DEFAULT)
             .besuComponent(mock(BesuComponent.class))
-            .networkConfiguration(NetworkingConfiguration.create())
+            .networkConfiguration(NetworkingConfiguration.DEFAULT)
             .apiConfiguration(ImmutableApiConfiguration.builder().build());
   }
 
@@ -228,6 +228,7 @@ public class CliqueBesuControllerBuilderTest {
             null,
             null,
             null,
+            null, // slotNumber
             new CliqueBlockHeaderFunctions());
     final Block block1 = new Block(header1, BlockBody.empty());
 

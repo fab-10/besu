@@ -160,7 +160,7 @@ public abstract class AbstractBftBesuControllerBuilderTest {
             .storageProvider(storageProvider)
             .evmConfiguration(EvmConfiguration.DEFAULT)
             .besuComponent(mock(BesuComponent.class))
-            .networkConfiguration(NetworkingConfiguration.create())
+            .networkConfiguration(NetworkingConfiguration.DEFAULT)
             .apiConfiguration(ImmutableApiConfiguration.builder().build());
   }
 
@@ -198,6 +198,7 @@ public abstract class AbstractBftBesuControllerBuilderTest {
             null,
             null,
             null,
+            null, // slotNumber
             getBlockHeaderFunctions());
     final Block block1 = new Block(header1, BlockBody.empty());
 

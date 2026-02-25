@@ -58,7 +58,8 @@ import org.apache.tuweni.bytes.Bytes32;
   "withdrawalsRoot",
   "withdrawals",
   "requestsHash",
-  "balHash"
+  "balHash",
+  "slotNumber"
 })
 public class BlockResult implements JsonRpcResult {
 
@@ -92,6 +93,7 @@ public class BlockResult implements JsonRpcResult {
   private final String parentBeaconBlockRoot;
   private final String requestsHash;
   private final String balHash;
+  private final String slotNumber;
 
   public BlockResult(
       final BlockHeader header,
@@ -122,7 +124,10 @@ public class BlockResult implements JsonRpcResult {
     this.receiptsRoot = header.getReceiptsRoot().toString();
     this.miner = header.getCoinbase().toString();
     this.difficulty = Quantity.create(header.getDifficulty());
-    this.totalDifficulty = Quantity.create(totalDifficulty);
+    this.totalDifficulty =
+        totalDifficulty != null && !header.getDifficulty().isZero()
+            ? Quantity.create(totalDifficulty)
+            : null;
     this.extraData = header.getExtraData().toString();
     this.baseFeePerGas = header.getBaseFee().map(Quantity::create).orElse(null);
     this.size = Quantity.create(size);
@@ -144,6 +149,7 @@ public class BlockResult implements JsonRpcResult {
         header.getParentBeaconBlockRoot().map(Bytes32::toHexString).orElse(null);
     this.requestsHash = header.getRequestsHash().map(Hash::toString).orElse(null);
     this.balHash = header.getBalHash().map(Hash::toString).orElse(null);
+    this.slotNumber = header.getOptionalSlotNumber().map(Quantity::create).orElse(null);
   }
 
   @JsonGetter(value = "number")
@@ -290,5 +296,10 @@ public class BlockResult implements JsonRpcResult {
   @JsonGetter(value = "balHash")
   public String getBalHash() {
     return balHash;
+  }
+
+  @JsonGetter(value = "slotNumber")
+  public String getSlotNumber() {
+    return slotNumber;
   }
 }

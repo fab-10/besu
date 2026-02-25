@@ -505,6 +505,7 @@ public abstract class AbstractTransactionPoolTest extends AbstractTransactionPoo
     transactionPool.addRemoteTransactions(Collections.singletonList(transaction1));
 
     RespondingEthPeer peer = EthProtocolManagerTestUtil.createPeer(ethProtocolManager);
+    transactionPool.handleConnect(peer.getEthPeer());
 
     Set<Transaction> transactionsToSendToPeer = new HashSet<>();
     Transaction tx;

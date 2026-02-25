@@ -176,6 +176,7 @@ class AbstractBlockCreatorTest extends TrustedSetupClassLoaderExtension {
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
+            Optional.empty(),
             1L,
             false,
             miningOn.parentHeader);
@@ -190,6 +191,7 @@ class AbstractBlockCreatorTest extends TrustedSetupClassLoaderExtension {
     final AbstractBlockCreator blockCreator = miningOn.blockCreator;
     final BlockCreationResult blockCreationResult =
         blockCreator.createBlock(
+            Optional.empty(),
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
@@ -216,6 +218,7 @@ class AbstractBlockCreatorTest extends TrustedSetupClassLoaderExtension {
             Optional.of(withdrawals),
             Optional.empty(),
             Optional.empty(),
+            Optional.empty(),
             1L,
             false,
             miningOn.parentHeader);
@@ -238,6 +241,7 @@ class AbstractBlockCreatorTest extends TrustedSetupClassLoaderExtension {
             Optional.empty(),
             Optional.empty(),
             Optional.of(withdrawals),
+            Optional.empty(),
             Optional.empty(),
             Optional.empty(),
             1L,
@@ -270,6 +274,7 @@ class AbstractBlockCreatorTest extends TrustedSetupClassLoaderExtension {
     final BlockCreationResult blockCreationResult =
         blockCreator.createBlock(
             Optional.of(List.of(fullOfBlobs)),
+            Optional.empty(),
             Optional.empty(),
             Optional.empty(),
             Optional.empty(),
@@ -310,7 +315,7 @@ class AbstractBlockCreatorTest extends TrustedSetupClassLoaderExtension {
             specBuilder -> {
               specBuilder.isReplayProtectionSupported(true);
               specBuilder.withdrawalsProcessor(withdrawalsProcessor);
-              specBuilder.blockAccessListFactory(new BlockAccessListFactory(true, true));
+              specBuilder.blockAccessListFactory(new BlockAccessListFactory());
               specBuilder.transactionValidatorFactoryBuilder(
                   (evm, gasLimitCalculator, feeMarket) -> alwaysValidTransactionValidatorFactory);
               return specBuilder;
@@ -424,7 +429,7 @@ class AbstractBlockCreatorTest extends TrustedSetupClassLoaderExtension {
                         MiningConfiguration.MINING_DISABLED,
                         new BadBlockManager(),
                         false,
-                        ImmutableBalConfiguration.builder().isBalApiEnabled(true).build(),
+                        ImmutableBalConfiguration.builder().build(),
                         new NoOpMetricsSystem())
                     .createProtocolSchedule())
             .dataStorageFormat(DataStorageFormat.BONSAI)

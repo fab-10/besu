@@ -116,11 +116,15 @@ import org.hyperledger.besu.evm.operation.SModOperation;
 import org.hyperledger.besu.evm.operation.SModOperationOptimized;
 import org.hyperledger.besu.evm.operation.SStoreOperation;
 import org.hyperledger.besu.evm.operation.SarOperation;
+import org.hyperledger.besu.evm.operation.SarOperationOptimized;
 import org.hyperledger.besu.evm.operation.SelfBalanceOperation;
 import org.hyperledger.besu.evm.operation.SelfDestructOperation;
 import org.hyperledger.besu.evm.operation.ShlOperation;
+import org.hyperledger.besu.evm.operation.ShlOperationOptimized;
 import org.hyperledger.besu.evm.operation.ShrOperation;
+import org.hyperledger.besu.evm.operation.ShrOperationOptimized;
 import org.hyperledger.besu.evm.operation.SignExtendOperation;
+import org.hyperledger.besu.evm.operation.SlotNumOperation;
 import org.hyperledger.besu.evm.operation.StaticCallOperation;
 import org.hyperledger.besu.evm.operation.StopOperation;
 import org.hyperledger.besu.evm.operation.SubOperation;
@@ -492,9 +496,15 @@ public class MainnetEVMs {
       final EvmConfiguration evmConfiguration) {
     registerByzantiumOperations(registry, gasCalculator, evmConfiguration);
     registry.put(new Create2Operation(gasCalculator));
-    registry.put(new SarOperation(gasCalculator));
-    registry.put(new ShlOperation(gasCalculator));
-    registry.put(new ShrOperation(gasCalculator));
+    if (evmConfiguration.enableOptimizedOpcodes()) {
+      registry.put(new ShlOperationOptimized(gasCalculator));
+      registry.put(new ShrOperationOptimized(gasCalculator));
+      registry.put(new SarOperationOptimized(gasCalculator));
+    } else {
+      registry.put(new ShlOperation(gasCalculator));
+      registry.put(new ShrOperation(gasCalculator));
+      registry.put(new SarOperation(gasCalculator));
+    }
     registry.put(new ExtCodeHashOperation(gasCalculator));
   }
 
@@ -1135,6 +1145,9 @@ public class MainnetEVMs {
     // EIP-7708: SelfDestruct with transfer log emission
     registry.put(
         new SelfDestructOperation(gasCalculator, true, EIP7708TransferLogEmitter.INSTANCE));
+
+    // EIP-7843 SLOTNUM opcode
+    registry.put(new SlotNumOperation(gasCalculator));
 
     // EIP-8024: DUPN, SWAPN, EXCHANGE
     registry.put(new DupNOperation(gasCalculator));
