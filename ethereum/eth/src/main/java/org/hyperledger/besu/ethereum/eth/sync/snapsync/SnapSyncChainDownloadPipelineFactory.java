@@ -190,7 +190,10 @@ public class SnapSyncChainDownloadPipelineFactory {
         new BlockHeaderSource(blockchain, anchorBlock, pivotHeaderNumber, bodiesRequestSize);
 
     final DownloadSyncBodiesStep downloadBodiesStep =
-        new DownloadSyncBodiesStep(protocolSchedule, ethContext, metricsSystem, syncConfig);
+        new DownloadSyncBodiesStep(
+            protocolSchedule,
+            ethContext,
+            Duration.ofMillis(syncConfig.getBodiesDownloadStepTimeoutMillis()));
 
     final DownloadSyncReceiptsStep downloadReceiptsStep =
         new DownloadSyncReceiptsStep(
