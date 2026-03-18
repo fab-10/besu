@@ -27,8 +27,8 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcRespon
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
-import org.hyperledger.besu.ethereum.core.DefaultInclusionListSelector;
-import org.hyperledger.besu.ethereum.core.InclusionListConstants;
+import org.hyperledger.besu.ethereum.core.InclusionListConfiguration;
+import org.hyperledger.besu.ethereum.core.InclusionListTransactionSelector;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
@@ -49,6 +49,7 @@ public class EngineGetInclusionListV1 extends ExecutionEngineJsonRpcMethod {
   private static final Logger LOG = LoggerFactory.getLogger(EngineGetInclusionListV1.class);
 
   private final TransactionPool transactionPool;
+  private final InclusionListTransactionSelector selector;
   private final Counter transactionsGeneratedCounter;
   private final Counter bytesGeneratedCounter;
   private final Counter selectorDurationMsCounter;
@@ -58,9 +59,11 @@ public class EngineGetInclusionListV1 extends ExecutionEngineJsonRpcMethod {
       final ProtocolContext protocolContext,
       final EngineCallListener engineCallListener,
       final TransactionPool transactionPool,
-      final MetricsSystem metricsSystem) {
+      final MetricsSystem metricsSystem,
+      final InclusionListTransactionSelector selector) {
     super(vertx, protocolContext, engineCallListener);
     this.transactionPool = transactionPool;
+    this.selector = selector;
     this.transactionsGeneratedCounter =
         metricsSystem.createCounter(
             BesuMetricCategory.RPC,
@@ -103,7 +106,6 @@ public class EngineGetInclusionListV1 extends ExecutionEngineJsonRpcMethod {
     }
 
     final Optional<Wei> baseFeePerGas = parentHeader.get().getBaseFee();
-    final DefaultInclusionListSelector selector = new DefaultInclusionListSelector(baseFeePerGas);
 
     final List<Transaction> mempoolTransactions =
         transactionPool.getPendingTransactions().stream()
@@ -113,11 +115,33 @@ public class EngineGetInclusionListV1 extends ExecutionEngineJsonRpcMethod {
     final long startTimeMs = System.currentTimeMillis();
     final List<Bytes> selectedTransactions =
         selector.selectTransactions(
-            parentHash, mempoolTransactions, InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST);
+            parentHash,
+            mempoolTransactions,
+            InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST,
+            baseFeePerGas);
     final long durationMs = System.currentTimeMillis() - startTimeMs;
 
-    final List<String> result = selectedTransactions.stream().map(Bytes::toHexString).toList();
-    final int totalBytes = selectedTransactions.stream().mapToInt(Bytes::size).sum();
+    // Per engine-api-eip7805.md point 3: MUST NOT include blob transactions
+    final List<Bytes> filteredTransactions =
+        selectedTransactions.stream()
+            .filter(
+                txBytes -> {
+                  try {
+                    final Transaction tx =
+                        org.hyperledger.besu.ethereum.core.encoding.TransactionDecoder
+                            .decodeOpaqueBytes(
+                                txBytes,
+                                org.hyperledger.besu.ethereum.core.encoding.EncodingContext
+                                    .BLOCK_BODY);
+                    return !tx.getType().supportsBlob();
+                  } catch (final Exception e) {
+                    return false;
+                  }
+                })
+            .toList();
+
+    final List<String> result = filteredTransactions.stream().map(Bytes::toHexString).toList();
+    final int totalBytes = filteredTransactions.stream().mapToInt(Bytes::size).sum();
 
     transactionsGeneratedCounter.inc(result.size());
     bytesGeneratedCounter.inc(totalBytes);
@@ -132,8 +156,9 @@ public class EngineGetInclusionListV1 extends ExecutionEngineJsonRpcMethod {
         .addArgument(durationMs)
         .log();
     LOG.atDebug()
-        .setMessage("IL generation details: mempool size={}, strategy=default")
+        .setMessage("IL generation details: mempool size={}, strategy={}")
         .addArgument(mempoolTransactions.size())
+        .addArgument(selector.getClass().getSimpleName())
         .log();
 
     return new JsonRpcSuccessResponse(request.getRequest().getId(), result);

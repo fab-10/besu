@@ -73,7 +73,7 @@ public class LenientInclusionListValidatorTest {
     final InclusionListValidationResult result =
         validator.validate(List.of(TX_A, TX_C), List.of(TX_A, TX_B, TX_C));
     assertThat(result.isValid()).isTrue();
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.VALID);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.VALID);
     assertThat(validator.getViolationCount()).isEqualTo(1);
   }
 
@@ -97,7 +97,7 @@ public class LenientInclusionListValidatorTest {
   @Test
   public void validEvenWhenILExceedsMaxBytes() {
     final Bytes largeTx =
-        Bytes.wrap(new byte[InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST + 1]);
+        Bytes.wrap(new byte[InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST + 1]);
     final InclusionListValidationResult result =
         validator.validate(List.of(largeTx), List.of(largeTx));
     assertThat(result.isValid()).isTrue();
@@ -112,7 +112,7 @@ public class LenientInclusionListValidatorTest {
 
     // Second violation: byte limit exceeded
     final Bytes largeTx =
-        Bytes.wrap(new byte[InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST + 1]);
+        Bytes.wrap(new byte[InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST + 1]);
     validator.validate(List.of(largeTx), List.of(largeTx));
     assertThat(validator.getViolationCount()).isEqualTo(2);
 

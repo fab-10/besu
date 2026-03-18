@@ -35,7 +35,7 @@ import org.junit.jupiter.api.Test;
 
 class DefaultInclusionListSelectorTest {
 
-  private static final Wei BASE_FEE = Wei.of(1000);
+  private static final Optional<Wei> BASE_FEE = Optional.of(Wei.of(1000));
   private static KeyPair senderKeys1;
   private static KeyPair senderKeys2;
 
@@ -68,36 +68,27 @@ class DefaultInclusionListSelectorTest {
   }
 
   @Test
-  void isEnabledReturnsTrue() {
-    final DefaultInclusionListSelector selector =
-        new DefaultInclusionListSelector(Optional.of(BASE_FEE));
-    assertThat(selector.isEnabled()).isTrue();
-  }
-
-  @Test
   void emptyMempoolReturnsEmptyList() {
-    final DefaultInclusionListSelector selector =
-        new DefaultInclusionListSelector(Optional.of(BASE_FEE));
-    assertThat(selector.selectTransactions(Hash.ZERO, Collections.emptyList(), 8192)).isEmpty();
+    final DefaultInclusionListSelector selector = new DefaultInclusionListSelector();
+    assertThat(selector.selectTransactions(Hash.ZERO, Collections.emptyList(), 8192, BASE_FEE))
+        .isEmpty();
   }
 
   @Test
   void nullMempoolReturnsEmptyList() {
-    final DefaultInclusionListSelector selector =
-        new DefaultInclusionListSelector(Optional.of(BASE_FEE));
-    assertThat(selector.selectTransactions(Hash.ZERO, null, 8192)).isEmpty();
+    final DefaultInclusionListSelector selector = new DefaultInclusionListSelector();
+    assertThat(selector.selectTransactions(Hash.ZERO, null, 8192, BASE_FEE)).isEmpty();
   }
 
   @Test
   void selectsTransactionsByGasPriceHighestFirst() {
-    final DefaultInclusionListSelector selector =
-        new DefaultInclusionListSelector(Optional.of(BASE_FEE));
+    final DefaultInclusionListSelector selector = new DefaultInclusionListSelector();
 
     final Transaction lowPrice = createFrontierTx(senderKeys1, 0, Wei.of(2000));
     final Transaction highPrice = createFrontierTx(senderKeys2, 0, Wei.of(5000));
 
     final List<Bytes> result =
-        selector.selectTransactions(Hash.ZERO, List.of(lowPrice, highPrice), 8192);
+        selector.selectTransactions(Hash.ZERO, List.of(lowPrice, highPrice), 8192, BASE_FEE);
 
     assertThat(result).hasSize(2);
     // High price should be first
@@ -106,23 +97,23 @@ class DefaultInclusionListSelectorTest {
   }
 
   @Test
-  void includesBlobTransactions() {
-    final DefaultInclusionListSelector selector =
-        new DefaultInclusionListSelector(Optional.of(BASE_FEE));
+  void excludesBlobTransactions() {
+    final DefaultInclusionListSelector selector = new DefaultInclusionListSelector();
 
     final Transaction normalTx = createFrontierTx(senderKeys1, 0, Wei.of(2000));
     final Transaction blobTx = createBlobTx(senderKeys2, 0);
 
     final List<Bytes> result =
-        selector.selectTransactions(Hash.ZERO, List.of(normalTx, blobTx), 8192);
+        selector.selectTransactions(Hash.ZERO, List.of(normalTx, blobTx), 8192, BASE_FEE);
 
-    assertThat(result).hasSize(2);
+    // Blob transactions are excluded from inclusion lists per EIP-7805
+    assertThat(result).hasSize(1);
+    assertThat(result.get(0)).isEqualTo(normalTx.encoded());
   }
 
   @Test
   void respectsByteLimit() {
-    final DefaultInclusionListSelector selector =
-        new DefaultInclusionListSelector(Optional.of(BASE_FEE));
+    final DefaultInclusionListSelector selector = new DefaultInclusionListSelector();
 
     final Transaction tx1 = createFrontierTx(senderKeys1, 0, Wei.of(3000));
     final int tx1Size = tx1.encoded().size();
@@ -130,21 +121,24 @@ class DefaultInclusionListSelectorTest {
     // Use a maxBytes that can fit only one transaction
     final List<Bytes> result =
         selector.selectTransactions(
-            Hash.ZERO, List.of(tx1, createFrontierTx(senderKeys2, 0, Wei.of(2000))), tx1Size);
+            Hash.ZERO,
+            List.of(tx1, createFrontierTx(senderKeys2, 0, Wei.of(2000))),
+            tx1Size,
+            BASE_FEE);
 
     assertThat(result).hasSize(1);
   }
 
   @Test
   void enforcesSequentialNoncesPerSender() {
-    final DefaultInclusionListSelector selector =
-        new DefaultInclusionListSelector(Optional.of(BASE_FEE));
+    final DefaultInclusionListSelector selector = new DefaultInclusionListSelector();
 
     // nonce 0 and nonce 2 (gap at nonce 1) from same sender
     final Transaction tx0 = createFrontierTx(senderKeys1, 0, Wei.of(5000));
     final Transaction tx2 = createFrontierTx(senderKeys1, 2, Wei.of(4000));
 
-    final List<Bytes> result = selector.selectTransactions(Hash.ZERO, List.of(tx0, tx2), 8192);
+    final List<Bytes> result =
+        selector.selectTransactions(Hash.ZERO, List.of(tx0, tx2), 8192, BASE_FEE);
 
     // Only nonce 0 should be selected; nonce 2 is skipped (gap)
     assertThat(result).hasSize(1);
@@ -153,29 +147,30 @@ class DefaultInclusionListSelectorTest {
 
   @Test
   void selectsSequentialNoncesFromSameSender() {
-    final DefaultInclusionListSelector selector =
-        new DefaultInclusionListSelector(Optional.of(BASE_FEE));
+    final DefaultInclusionListSelector selector = new DefaultInclusionListSelector();
 
     // Both nonce 0 and 1 from same sender
     final Transaction tx0 = createFrontierTx(senderKeys1, 0, Wei.of(5000));
     final Transaction tx1 = createFrontierTx(senderKeys1, 1, Wei.of(4000));
 
-    final List<Bytes> result = selector.selectTransactions(Hash.ZERO, List.of(tx0, tx1), 8192);
+    final List<Bytes> result =
+        selector.selectTransactions(Hash.ZERO, List.of(tx0, tx1), 8192, BASE_FEE);
 
     assertThat(result).hasSize(2);
   }
 
   @Test
   void filtersTransactionsBelowBaseFee() {
-    final DefaultInclusionListSelector selector =
-        new DefaultInclusionListSelector(Optional.of(Wei.of(3000)));
+    final DefaultInclusionListSelector selector = new DefaultInclusionListSelector();
 
     // Gas price below base fee
     final Transaction lowTx = createFrontierTx(senderKeys1, 0, Wei.of(2000));
     // Gas price above base fee
     final Transaction highTx = createFrontierTx(senderKeys2, 0, Wei.of(5000));
 
-    final List<Bytes> result = selector.selectTransactions(Hash.ZERO, List.of(lowTx, highTx), 8192);
+    final List<Bytes> result =
+        selector.selectTransactions(
+            Hash.ZERO, List.of(lowTx, highTx), 8192, Optional.of(Wei.of(3000)));
 
     assertThat(result).hasSize(1);
     assertThat(result.get(0)).isEqualTo(highTx.encoded());
@@ -183,20 +178,19 @@ class DefaultInclusionListSelectorTest {
 
   @Test
   void worksWithNoBaseFee() {
-    final DefaultInclusionListSelector selector =
-        new DefaultInclusionListSelector(Optional.empty());
+    final DefaultInclusionListSelector selector = new DefaultInclusionListSelector();
 
     final Transaction tx = createFrontierTx(senderKeys1, 0, Wei.of(2000));
 
-    final List<Bytes> result = selector.selectTransactions(Hash.ZERO, List.of(tx), 8192);
+    final List<Bytes> result =
+        selector.selectTransactions(Hash.ZERO, List.of(tx), 8192, Optional.empty());
 
     assertThat(result).hasSize(1);
   }
 
   @Test
   void stopsWhenByteLimitReached() {
-    final DefaultInclusionListSelector selector =
-        new DefaultInclusionListSelector(Optional.of(BASE_FEE));
+    final DefaultInclusionListSelector selector = new DefaultInclusionListSelector();
 
     // Create many transactions to exceed the byte limit
     final List<Transaction> txs = new ArrayList<>();
@@ -206,7 +200,7 @@ class DefaultInclusionListSelectorTest {
 
     // Use a small byte limit
     final int smallLimit = 300;
-    final List<Bytes> result = selector.selectTransactions(Hash.ZERO, txs, smallLimit);
+    final List<Bytes> result = selector.selectTransactions(Hash.ZERO, txs, smallLimit, BASE_FEE);
 
     int totalBytes = result.stream().mapToInt(Bytes::size).sum();
     assertThat(totalBytes).isLessThanOrEqualTo(smallLimit);

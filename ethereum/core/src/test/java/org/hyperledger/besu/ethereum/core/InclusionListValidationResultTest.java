@@ -23,7 +23,7 @@ public class InclusionListValidationResultTest {
   @Test
   public void validResultHasValidStatus() {
     final InclusionListValidationResult result = InclusionListValidationResult.valid();
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.VALID);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.VALID);
     assertThat(result.isValid()).isTrue();
     assertThat(result.getErrorMessage()).isEmpty();
   }
@@ -32,7 +32,7 @@ public class InclusionListValidationResultTest {
   public void invalidResultHasInvalidStatus() {
     final InclusionListValidationResult result =
         InclusionListValidationResult.invalid("bad encoding");
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.INVALID);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.INVALID);
     assertThat(result.isValid()).isFalse();
     assertThat(result.getErrorMessage()).contains("bad encoding");
   }
@@ -41,18 +41,18 @@ public class InclusionListValidationResultTest {
   public void unsatisfiedResultHasUnsatisfiedStatus() {
     final InclusionListValidationResult result =
         InclusionListValidationResult.unsatisfied("missing transaction 0xaabb");
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.UNSATISFIED);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.UNSATISFIED);
     assertThat(result.isValid()).isFalse();
     assertThat(result.getErrorMessage()).contains("missing transaction 0xaabb");
   }
 
   @Test
   public void statusEnumHasThreeValues() {
-    assertThat(InclusionListValidationStatus.values()).hasSize(3);
-    assertThat(InclusionListValidationStatus.values())
+    assertThat(InclusionListValidationResult.Status.values()).hasSize(3);
+    assertThat(InclusionListValidationResult.Status.values())
         .containsExactly(
-            InclusionListValidationStatus.VALID,
-            InclusionListValidationStatus.INVALID,
-            InclusionListValidationStatus.UNSATISFIED);
+            InclusionListValidationResult.Status.VALID,
+            InclusionListValidationResult.Status.INVALID,
+            InclusionListValidationResult.Status.UNSATISFIED);
   }
 }

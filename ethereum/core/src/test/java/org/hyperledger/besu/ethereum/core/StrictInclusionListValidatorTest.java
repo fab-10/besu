@@ -76,7 +76,7 @@ public class StrictInclusionListValidatorTest {
     final InclusionListValidationResult result =
         validator.validate(List.of(TX_A, TX_B), Collections.emptyList());
     assertThat(result.isValid()).isTrue();
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.VALID);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.VALID);
   }
 
   @Test
@@ -114,10 +114,10 @@ public class StrictInclusionListValidatorTest {
   public void invalidWhenILExceedsMaxBytes() {
     // Create an IL transaction that exceeds MAX_BYTES_PER_INCLUSION_LIST
     final Bytes largeTx =
-        Bytes.wrap(new byte[InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST + 1]);
+        Bytes.wrap(new byte[InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST + 1]);
     final InclusionListValidationResult result =
         validator.validate(List.of(largeTx), List.of(largeTx));
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.INVALID);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.INVALID);
     assertThat(result.getErrorMessage()).isPresent();
     assertThat(result.getErrorMessage().get()).contains("MAX_BYTES_PER_INCLUSION_LIST");
   }
@@ -126,7 +126,8 @@ public class StrictInclusionListValidatorTest {
   public void validWhenILExactlyAtMaxBytes() {
     // Create IL transactions that sum to exactly MAX_BYTES_PER_INCLUSION_LIST
     // These are present in the payload so step 1 skips them (no decoding needed)
-    final Bytes exactTx = Bytes.wrap(new byte[InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST]);
+    final Bytes exactTx =
+        Bytes.wrap(new byte[InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST]);
     final InclusionListValidationResult result =
         validator.validate(List.of(exactTx), List.of(exactTx));
     assertThat(result.isValid()).isTrue();
@@ -135,12 +136,12 @@ public class StrictInclusionListValidatorTest {
   @Test
   public void invalidWhenMultipleILTransactionsExceedMaxBytes() {
     // Two transactions that individually fit but together exceed the limit
-    final int halfPlus = (InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST / 2) + 1;
+    final int halfPlus = (InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST / 2) + 1;
     final Bytes tx1 = Bytes.wrap(new byte[halfPlus]);
     final Bytes tx2 = Bytes.wrap(new byte[halfPlus]);
     final InclusionListValidationResult result =
         validator.validate(List.of(tx1, tx2), List.of(tx1, tx2));
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.INVALID);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.INVALID);
   }
 
   @Test
@@ -149,7 +150,7 @@ public class StrictInclusionListValidatorTest {
     final InclusionListValidationResult result =
         validator.validate(
             Collections.emptyList(), List.of(TX_A), InclusionListValidationContext.unlimited());
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.INVALID);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.INVALID);
     assertThat(result.getErrorMessage()).isPresent();
     assertThat(result.getErrorMessage().get()).contains("undecodable transaction");
   }
@@ -174,7 +175,7 @@ public class StrictInclusionListValidatorTest {
     final InclusionListValidationResult result =
         validator.validate(Collections.emptyList(), List.of(realTxBytes), context);
 
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.UNSATISFIED);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.UNSATISFIED);
     assertThat(result.getErrorMessage()).isPresent();
   }
 
@@ -198,7 +199,7 @@ public class StrictInclusionListValidatorTest {
         validator.validate(Collections.emptyList(), List.of(realTxBytes), context);
 
     assertThat(result.isValid()).isTrue();
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.VALID);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.VALID);
   }
 
   /**
@@ -219,7 +220,7 @@ public class StrictInclusionListValidatorTest {
         validator.validate(Collections.emptyList(), List.of(realTxBytes), context);
 
     assertThat(result.isValid()).isTrue();
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.VALID);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.VALID);
   }
 
   /**
@@ -239,7 +240,7 @@ public class StrictInclusionListValidatorTest {
         validator.validate(Collections.emptyList(), List.of(realTxBytes), context);
 
     assertThat(result.isValid()).isTrue();
-    assertThat(result.getStatus()).isEqualTo(InclusionListValidationStatus.VALID);
+    assertThat(result.getStatus()).isEqualTo(InclusionListValidationResult.Status.VALID);
   }
 
   /**

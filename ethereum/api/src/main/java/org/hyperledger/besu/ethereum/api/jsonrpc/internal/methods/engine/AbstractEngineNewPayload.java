@@ -389,7 +389,7 @@ public abstract class AbstractEngineNewPayload extends ExecutionEngineJsonRpcMet
               .sum(),
           lastExecutionTimeInNs,
           executionResult.getNbParallelizedTransactions());
-      return handleSuccessfulExecution(reqId, blockParam, newBlockHeader.getHash(), requestContext);
+      return respondWith(reqId, blockParam, newBlockHeader.getHash(), VALID);
     } else {
       if (executionResult.causedBy().isPresent()) {
         Throwable causedBy = executionResult.causedBy().get();
@@ -512,14 +512,6 @@ public abstract class AbstractEngineNewPayload extends ExecutionEngineJsonRpcMet
 
   protected EngineStatus getInvalidBlockHashStatus() {
     return INVALID;
-  }
-
-  protected JsonRpcResponse handleSuccessfulExecution(
-      final Object reqId,
-      final EnginePayloadParameter blockParam,
-      final Hash blockHash,
-      final JsonRpcRequestContext requestContext) {
-    return respondWith(reqId, blockParam, blockHash, VALID);
   }
 
   protected ValidationResult<RpcErrorType> validateParameters(

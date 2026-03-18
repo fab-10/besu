@@ -17,7 +17,6 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.AMSTERDAM;
 
 import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
-import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
@@ -28,7 +27,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSucces
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EnginePayloadStatusResult;
 import org.hyperledger.besu.ethereum.core.InclusionListValidationResult;
-import org.hyperledger.besu.ethereum.core.InclusionListValidationStatus;
 import org.hyperledger.besu.ethereum.core.InclusionListValidator;
 import org.hyperledger.besu.ethereum.core.encoding.BlockAccessListDecoder;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
@@ -41,8 +39,10 @@ import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
 
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import io.vertx.core.Vertx;
 import org.apache.tuweni.bytes.Bytes;
@@ -84,6 +84,75 @@ public class EngineNewPayloadV5 extends AbstractEngineNewPayload {
   @Override
   public String getName() {
     return RpcMethod.ENGINE_NEW_PAYLOAD_V5.getMethodName();
+  }
+
+  /**
+   * Validates inclusion list constraints before processing the payload. Per engine-api-eip7805.md:
+   * returns INCLUSION_LIST_UNSATISFIED with latestValidHash=null and validationError=null if the
+   * payload does not satisfy the inclusion list constraints.
+   */
+  @Override
+  public JsonRpcResponse syncResponse(final JsonRpcRequestContext requestContext) {
+    final List<String> inclusionListTxHexStrings = extractInclusionListTransactions(requestContext);
+
+    if (!inclusionListTxHexStrings.isEmpty()) {
+      final EnginePayloadParameter blockParam;
+      try {
+        blockParam = requestContext.getRequiredParameter(0, EnginePayloadParameter.class);
+      } catch (final JsonRpcParameterException e) {
+        return super.syncResponse(requestContext);
+      }
+
+      final List<Bytes> inclusionListTxBytes =
+          inclusionListTxHexStrings.stream().map(Bytes::fromHexString).toList();
+      final List<Bytes> payloadTxBytes =
+          blockParam.getTransactions().stream().map(Bytes::fromHexString).toList();
+
+      LOG.atDebug()
+          .setMessage("IL validation: block={}, IL txs={}, payload txs={}, validator={}")
+          .addArgument(blockParam.getBlockHash())
+          .addArgument(inclusionListTxBytes.size())
+          .addArgument(payloadTxBytes.size())
+          .addArgument(inclusionListValidator.getClass().getSimpleName())
+          .log();
+
+      final Set<Bytes> payloadTxSet = new HashSet<>(payloadTxBytes);
+      final boolean allPresent = inclusionListTxBytes.stream().allMatch(payloadTxSet::contains);
+
+      if (!allPresent) {
+        final InclusionListValidationResult ilResult =
+            inclusionListValidator.validate(payloadTxBytes, inclusionListTxBytes);
+
+        if (ilResult.getStatus() == InclusionListValidationResult.Status.UNSATISFIED) {
+          validationFailuresCounter.inc();
+          LOG.warn(
+              "Inclusion list unsatisfied for block {}: {}",
+              blockParam.getBlockHash(),
+              ilResult.getErrorMessage().orElse("unknown"));
+          // Per spec: latestValidHash MUST be null, validationError MUST be null
+          return new JsonRpcSuccessResponse(
+              requestContext.getRequest().getId(),
+              new EnginePayloadStatusResult(
+                  EngineStatus.INCLUSION_LIST_UNSATISFIED, null, Optional.empty()));
+        }
+
+        if (ilResult.getStatus() == InclusionListValidationResult.Status.INVALID) {
+          validationFailuresCounter.inc();
+          LOG.warn(
+              "Inclusion list invalid for block {}: {}",
+              blockParam.getBlockHash(),
+              ilResult.getErrorMessage().orElse("unknown"));
+        }
+      } else {
+        LOG.atInfo()
+            .setMessage("IL validation passed for block {}: {} IL transactions present")
+            .addArgument(blockParam.getBlockHash())
+            .addArgument(inclusionListTxBytes.size())
+            .log();
+      }
+    }
+
+    return super.syncResponse(requestContext);
   }
 
   @Override
@@ -138,70 +207,6 @@ public class EngineNewPayloadV5 extends AbstractEngineNewPayload {
   @Override
   protected ValidationResult<RpcErrorType> validateForkSupported(final long blockTimestamp) {
     return ForkSupportHelper.validateForkSupported(AMSTERDAM, amsterdamMilestone, blockTimestamp);
-  }
-
-  @Override
-  protected JsonRpcResponse handleSuccessfulExecution(
-      final Object reqId,
-      final EnginePayloadParameter blockParam,
-      final Hash blockHash,
-      final JsonRpcRequestContext requestContext) {
-
-    final List<String> inclusionListTxHexStrings = extractInclusionListTransactions(requestContext);
-
-    if (inclusionListTxHexStrings.isEmpty()) {
-      return respondWith(reqId, blockParam, blockHash, EngineStatus.VALID);
-    }
-
-    final List<Bytes> inclusionListTxBytes =
-        inclusionListTxHexStrings.stream().map(Bytes::fromHexString).toList();
-    final List<Bytes> payloadTxBytes =
-        blockParam.getTransactions().stream().map(Bytes::fromHexString).toList();
-
-    LOG.atDebug()
-        .setMessage("IL validation: block={}, IL txs={}, payload txs={}, validator={}")
-        .addArgument(blockHash)
-        .addArgument(inclusionListTxBytes.size())
-        .addArgument(payloadTxBytes.size())
-        .addArgument(inclusionListValidator.getClass().getSimpleName())
-        .log();
-
-    final InclusionListValidationResult ilResult =
-        inclusionListValidator.validate(payloadTxBytes, inclusionListTxBytes);
-
-    if (ilResult.getStatus() == InclusionListValidationStatus.UNSATISFIED) {
-      validationFailuresCounter.inc();
-      LOG.warn(
-          "Inclusion list unsatisfied for block {}: {}",
-          blockHash,
-          ilResult.getErrorMessage().orElse("unknown"));
-      return new JsonRpcSuccessResponse(
-          reqId,
-          new EnginePayloadStatusResult(
-              EngineStatus.INCLUSION_LIST_UNSATISFIED, null, Optional.empty()));
-    }
-
-    if (ilResult.getStatus() == InclusionListValidationStatus.INVALID) {
-      validationFailuresCounter.inc();
-      LOG.warn(
-          "Inclusion list invalid for block {}: {}",
-          blockHash,
-          ilResult.getErrorMessage().orElse("unknown"));
-      return respondWithInvalid(
-          reqId,
-          blockParam,
-          blockHash,
-          EngineStatus.INVALID,
-          ilResult.getErrorMessage().orElse("Invalid inclusion list"));
-    }
-
-    LOG.atInfo()
-        .setMessage("IL validation passed for block {}: {} IL transactions validated")
-        .addArgument(blockHash)
-        .addArgument(inclusionListTxBytes.size())
-        .log();
-
-    return respondWith(reqId, blockParam, blockHash, EngineStatus.VALID);
   }
 
   private List<String> extractInclusionListTransactions(

@@ -66,16 +66,16 @@ public class StrictInclusionListValidator implements InclusionListValidator {
 
     // Validate total byte size of inclusion list
     final int totalBytes = inclusionListTransactions.stream().mapToInt(Bytes::size).sum();
-    if (totalBytes > InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST) {
+    if (totalBytes > InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST) {
       LOG.warn(
           "IL byte size exceeded: {} > {}",
           totalBytes,
-          InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST);
+          InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST);
       return InclusionListValidationResult.invalid(
           "Inclusion list exceeds MAX_BYTES_PER_INCLUSION_LIST: "
               + totalBytes
               + " > "
-              + InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST);
+              + InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST);
     }
 
     // Step 1: Build a set of payload transactions for O(1) presence lookup

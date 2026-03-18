@@ -15,8 +15,10 @@
 package org.hyperledger.besu.ethereum.core;
 
 import org.hyperledger.besu.datatypes.Hash;
+import org.hyperledger.besu.datatypes.Wei;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.tuweni.bytes.Bytes;
 
@@ -32,15 +34,12 @@ public interface InclusionListTransactionSelector {
    * @param parentHash the hash of the parent block
    * @param mempoolTransactions the candidate transactions from the transaction pool
    * @param maxBytes the maximum total bytes allowed for selected transactions
+   * @param baseFeePerGas the current base fee per gas, used to filter and price transactions
    * @return the selected transactions as raw encoded bytes
    */
   List<Bytes> selectTransactions(
-      Hash parentHash, List<Transaction> mempoolTransactions, int maxBytes);
-
-  /**
-   * Returns whether this selector is enabled and should be used for inclusion list generation.
-   *
-   * @return true if this selector is enabled
-   */
-  boolean isEnabled();
+      Hash parentHash,
+      List<Transaction> mempoolTransactions,
+      int maxBytes,
+      Optional<Wei> baseFeePerGas);
 }

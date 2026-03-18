@@ -18,15 +18,18 @@ package org.hyperledger.besu.ethereum.core;
  * Consolidated configuration for EIP-7805 inclusion list behavior.
  *
  * @param validationMode the validation mode (strict or lenient)
- * @param selectorType the transaction selector type
+ * @param selector the transaction selector implementation
  */
 public record InclusionListConfiguration(
-    InclusionListValidationMode validationMode, InclusionListSelectorType selectorType) {
+    InclusionListValidationMode validationMode, InclusionListTransactionSelector selector) {
+
+  /** Maximum total bytes allowed for an inclusion list per EIP-7805 (2^13 = 8192 bytes). */
+  public static final int MAX_BYTES_PER_INCLUSION_LIST = 8192;
 
   /** Default configuration: strict validation, default selector. */
   public static final InclusionListConfiguration DEFAULT =
       new InclusionListConfiguration(
-          InclusionListValidationMode.STRICT, InclusionListSelectorType.DEFAULT);
+          InclusionListValidationMode.STRICT, new DefaultInclusionListSelector());
 
   /**
    * Creates the appropriate validator for the configured validation mode.

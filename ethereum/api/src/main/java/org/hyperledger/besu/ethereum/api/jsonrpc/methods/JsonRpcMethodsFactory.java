@@ -25,7 +25,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.RpcModules;
 import org.hyperledger.besu.ethereum.api.jsonrpc.websocket.WebSocketConfiguration;
 import org.hyperledger.besu.ethereum.api.query.BlockchainQueries;
 import org.hyperledger.besu.ethereum.blockcreation.MiningCoordinator;
-import org.hyperledger.besu.ethereum.core.InclusionListValidationMode;
+import org.hyperledger.besu.ethereum.core.InclusionListConfiguration;
 import org.hyperledger.besu.ethereum.core.MiningConfiguration;
 import org.hyperledger.besu.ethereum.core.Synchronizer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
@@ -122,7 +122,7 @@ public class JsonRpcMethodsFactory {
         enodeDnsConfiguration,
         transactionSimulator,
         ethScheduler,
-        InclusionListValidationMode.STRICT);
+        InclusionListConfiguration.DEFAULT);
   }
 
   public Map<String, JsonRpcMethod> methods(
@@ -158,7 +158,7 @@ public class JsonRpcMethodsFactory {
       final Optional<EnodeDnsConfiguration> enodeDnsConfiguration,
       final TransactionSimulator transactionSimulator,
       final EthScheduler ethScheduler,
-      final InclusionListValidationMode inclusionListValidationMode) {
+      final InclusionListConfiguration inclusionListConfiguration) {
     final Map<String, JsonRpcMethod> enabled = new HashMap<>();
     if (!rpcApis.isEmpty()) {
       final JsonRpcMethod modules = new RpcModules(rpcApis);
@@ -196,7 +196,7 @@ public class JsonRpcMethodsFactory {
                   commit,
                   transactionPool,
                   metricsSystem,
-                  inclusionListValidationMode),
+                  inclusionListConfiguration),
               new EthJsonRpcMethods(
                   blockchainQueries,
                   synchronizer,

@@ -33,26 +33,18 @@ import org.slf4j.LoggerFactory;
 /**
  * Default implementation of {@link InclusionListTransactionSelector} that selects transactions for
  * inclusion lists per EIP-7805. Transactions are prioritized by effective gas price (highest
- * first) and nonce sequentiality per sender is enforced.
+ * first), time in pool (older first for ties), and nonce sequentiality per sender is enforced.
  */
 public class DefaultInclusionListSelector implements InclusionListTransactionSelector {
 
   private static final Logger LOG = LoggerFactory.getLogger(DefaultInclusionListSelector.class);
 
-  private final Optional<Wei> baseFeePerGas;
-
-  /**
-   * Creates a new selector with the given base fee for effective gas price calculation.
-   *
-   * @param baseFeePerGas the current base fee per gas, or empty if pre-London
-   */
-  public DefaultInclusionListSelector(final Optional<Wei> baseFeePerGas) {
-    this.baseFeePerGas = baseFeePerGas;
-  }
-
   @Override
   public List<Bytes> selectTransactions(
-      final Hash parentHash, final List<Transaction> mempoolTransactions, final int maxBytes) {
+      final Hash parentHash,
+      final List<Transaction> mempoolTransactions,
+      final int maxBytes,
+      final Optional<Wei> baseFeePerGas) {
     if (mempoolTransactions == null || mempoolTransactions.isEmpty()) {
       LOG.atDebug()
           .setMessage("IL selector: no mempool transactions available for parent {}")
@@ -61,7 +53,10 @@ public class DefaultInclusionListSelector implements InclusionListTransactionSel
       return List.of();
     }
 
-    // Filter those below base fee, then sort by effective gas price desc
+    // Filter those below base fee, then sort by effective gas price desc, then by arrival time asc
+    // (older transactions first among those with equal gas price, to prioritize
+    // potentially-censored
+    // txs)
     final PriorityQueue<Transaction> candidates =
         new PriorityQueue<>(
             Comparator.comparing(
@@ -70,6 +65,10 @@ public class DefaultInclusionListSelector implements InclusionListTransactionSel
 
     for (final Transaction tx : mempoolTransactions) {
       if (baseFeePerGas.isPresent() && tx.getMaxGasPrice().lessThan(baseFeePerGas.get())) {
+        continue;
+      }
+      // Skip blob transactions per EIP-7805 spec
+      if (tx.getType().supportsBlob()) {
         continue;
       }
       candidates.add(tx);
@@ -116,10 +115,5 @@ public class DefaultInclusionListSelector implements InclusionListTransactionSel
         .log();
 
     return selected;
-  }
-
-  @Override
-  public boolean isEnabled() {
-    return true;
   }
 }

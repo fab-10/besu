@@ -14,7 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters;
 
-import static org.hyperledger.besu.ethereum.core.InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST;
+import static org.hyperledger.besu.ethereum.core.InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST;
 
 import org.hyperledger.besu.datatypes.Address;
 
@@ -35,7 +35,7 @@ public class EnginePayloadAttributesParameter {
   final List<WithdrawalParameter> withdrawals;
   private final Bytes32 parentBeaconBlockRoot;
   private final Long slotNumber;
-  private final List<String> inclusionListTransactions;
+  private final List<Bytes> inclusionListTransactions;
 
   @JsonCreator
   public EnginePayloadAttributesParameter(
@@ -53,26 +53,21 @@ public class EnginePayloadAttributesParameter {
     this.parentBeaconBlockRoot =
         parentBeaconBlockRoot == null ? null : Bytes32.fromHexString(parentBeaconBlockRoot);
     this.slotNumber = slotNumber == null ? null : Long.decode(slotNumber);
-    this.inclusionListTransactions = validateInclusionListTransactions(inclusionListTransactions);
+    this.inclusionListTransactions =
+        validateAndDecodeInclusionListTransactions(inclusionListTransactions);
   }
 
-  private List<String> validateInclusionListTransactions(final List<String> transactions) {
+  private List<Bytes> validateAndDecodeInclusionListTransactions(final List<String> transactions) {
     if (transactions == null) {
       return null;
     }
-    int totalBytes = 0;
-    // Validate that each transaction is a valid hex string and enforce byte limit
-    for (final String tx : transactions) {
-      if (tx == null || tx.isEmpty()) {
-        throw new IllegalArgumentException("Inclusion list transaction cannot be null or empty");
-      }
-      try {
-        final Bytes txBytes = Bytes.fromHexString(tx);
-        totalBytes += txBytes.size();
-      } catch (final IllegalArgumentException e) {
-        throw new IllegalArgumentException("Invalid inclusion list transaction format: " + tx, e);
-      }
+    final List<Bytes> decoded;
+    try {
+      decoded = transactions.stream().map(Bytes::fromHexString).collect(Collectors.toList());
+    } catch (final IllegalArgumentException e) {
+      throw new IllegalArgumentException("Invalid inclusion list transaction format", e);
     }
+    final int totalBytes = decoded.stream().mapToInt(Bytes::size).sum();
     if (totalBytes > MAX_BYTES_PER_INCLUSION_LIST) {
       throw new IllegalArgumentException(
           "Inclusion list exceeds maximum size: "
@@ -81,7 +76,7 @@ public class EnginePayloadAttributesParameter {
               + MAX_BYTES_PER_INCLUSION_LIST
               + " bytes");
     }
-    return transactions;
+    return decoded;
   }
 
   public Long getTimestamp() {
@@ -108,7 +103,7 @@ public class EnginePayloadAttributesParameter {
     return slotNumber;
   }
 
-  public List<String> getInclusionListTransactions() {
+  public List<Bytes> getInclusionListTransactions() {
     return inclusionListTransactions;
   }
 
@@ -130,7 +125,9 @@ public class EnginePayloadAttributesParameter {
       json.put("slotNumber", slotNumber);
     }
     if (inclusionListTransactions != null) {
-      json.put("inclusionListTransactions", inclusionListTransactions);
+      json.put(
+          "inclusionListTransactions",
+          inclusionListTransactions.stream().map(Bytes::toHexString).collect(Collectors.toList()));
     }
     return json.encode();
   }

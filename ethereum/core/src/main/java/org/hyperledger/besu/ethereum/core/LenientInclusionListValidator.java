@@ -45,12 +45,12 @@ public class LenientInclusionListValidator implements InclusionListValidator {
 
     // Check total byte size
     final int totalBytes = inclusionListTransactions.stream().mapToInt(Bytes::size).sum();
-    if (totalBytes > InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST) {
+    if (totalBytes > InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST) {
       violationCount.incrementAndGet();
       LOG.warn(
           "Inclusion list exceeds MAX_BYTES_PER_INCLUSION_LIST: {} > {} (lenient mode - accepting)",
           totalBytes,
-          InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST);
+          InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST);
       return InclusionListValidationResult.valid();
     }
 

@@ -17,9 +17,11 @@ package org.hyperledger.besu.ethereum.core;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.hyperledger.besu.datatypes.Hash;
+import org.hyperledger.besu.datatypes.Wei;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
@@ -27,77 +29,44 @@ import org.junit.jupiter.api.Test;
 class InclusionListTransactionSelectorTest {
 
   @Test
-  void enabledSelectorReturnsTransactions() {
+  void selectorReturnsTransactions() {
     final Bytes tx1 = Bytes.fromHexString("0xaa");
     final Bytes tx2 = Bytes.fromHexString("0xbb");
 
     final InclusionListTransactionSelector selector =
-        new InclusionListTransactionSelector() {
-          @Override
-          public List<Bytes> selectTransactions(
-              final Hash parentHash,
-              final List<Transaction> mempoolTransactions,
-              final int maxBytes) {
-            return List.of(tx1, tx2);
-          }
+        (parentHash, mempoolTransactions, maxBytes, baseFeePerGas) -> List.of(tx1, tx2);
 
-          @Override
-          public boolean isEnabled() {
-            return true;
-          }
-        };
-
-    assertThat(selector.isEnabled()).isTrue();
-    assertThat(selector.selectTransactions(Hash.ZERO, Collections.emptyList(), 8192))
+    assertThat(
+            selector.selectTransactions(Hash.ZERO, Collections.emptyList(), 8192, Optional.empty()))
         .containsExactly(tx1, tx2);
   }
 
   @Test
-  void disabledSelectorReturnsEmptyList() {
+  void emptySelectorReturnsEmptyList() {
     final InclusionListTransactionSelector selector =
-        new InclusionListTransactionSelector() {
-          @Override
-          public List<Bytes> selectTransactions(
-              final Hash parentHash,
-              final List<Transaction> mempoolTransactions,
-              final int maxBytes) {
-            return Collections.emptyList();
-          }
+        (parentHash, mempoolTransactions, maxBytes, baseFeePerGas) -> Collections.emptyList();
 
-          @Override
-          public boolean isEnabled() {
-            return false;
-          }
-        };
-
-    assertThat(selector.isEnabled()).isFalse();
-    assertThat(selector.selectTransactions(Hash.ZERO, Collections.emptyList(), 8192)).isEmpty();
+    assertThat(
+            selector.selectTransactions(Hash.ZERO, Collections.emptyList(), 8192, Optional.empty()))
+        .isEmpty();
   }
 
   @Test
   void selectTransactionsReceivesCorrectParameters() {
     final Hash expectedHash = Hash.fromHexStringLenient("0x1234");
     final int expectedMaxBytes = 4096;
+    final Optional<Wei> expectedBaseFee = Optional.of(Wei.of(1000));
 
     final InclusionListTransactionSelector selector =
-        new InclusionListTransactionSelector() {
-          @Override
-          public List<Bytes> selectTransactions(
-              final Hash parentHash,
-              final List<Transaction> mempoolTransactions,
-              final int maxBytes) {
-            assertThat(parentHash).isEqualTo(expectedHash);
-            assertThat(mempoolTransactions).isEmpty();
-            assertThat(maxBytes).isEqualTo(expectedMaxBytes);
-            return Collections.emptyList();
-          }
-
-          @Override
-          public boolean isEnabled() {
-            return true;
-          }
+        (parentHash, mempoolTransactions, maxBytes, baseFeePerGas) -> {
+          assertThat(parentHash).isEqualTo(expectedHash);
+          assertThat(mempoolTransactions).isEmpty();
+          assertThat(maxBytes).isEqualTo(expectedMaxBytes);
+          assertThat(baseFeePerGas).isEqualTo(expectedBaseFee);
+          return Collections.emptyList();
         };
 
-    selector.selectTransactions(expectedHash, Collections.emptyList(), expectedMaxBytes);
+    selector.selectTransactions(
+        expectedHash, Collections.emptyList(), expectedMaxBytes, expectedBaseFee);
   }
 }

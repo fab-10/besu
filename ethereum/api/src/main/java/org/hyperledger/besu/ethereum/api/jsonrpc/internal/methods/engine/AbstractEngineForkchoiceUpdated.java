@@ -408,10 +408,10 @@ public abstract class AbstractEngineForkchoiceUpdated extends ExecutionEngineJso
 
   private Optional<List<Bytes>> getInclusionListBytes(
       final EnginePayloadAttributesParameter payloadAttributes) {
-    final List<String> ilTxs = payloadAttributes.getInclusionListTransactions();
+    final List<Bytes> ilTxs = payloadAttributes.getInclusionListTransactions();
     if (ilTxs == null || ilTxs.isEmpty()) {
       return Optional.empty();
     }
-    return Optional.of(ilTxs.stream().map(Bytes::fromHexString).collect(Collectors.toList()));
+    return Optional.of(ilTxs);
   }
 }

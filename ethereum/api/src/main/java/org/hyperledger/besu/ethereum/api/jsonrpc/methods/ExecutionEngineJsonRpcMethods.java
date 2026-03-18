@@ -53,7 +53,8 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineP
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineQosTimer;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.blockcreation.MiningCoordinator;
-import org.hyperledger.besu.ethereum.core.InclusionListValidationMode;
+import org.hyperledger.besu.ethereum.core.InclusionListConfiguration;
+import org.hyperledger.besu.ethereum.core.InclusionListTransactionSelector;
 import org.hyperledger.besu.ethereum.core.InclusionListValidator;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
@@ -82,6 +83,7 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
   private final TransactionPool transactionPool;
   private final MetricsSystem metricsSystem;
   private final InclusionListValidator inclusionListValidator;
+  private final InclusionListTransactionSelector inclusionListSelector;
 
   ExecutionEngineJsonRpcMethods(
       final MiningCoordinator miningCoordinator,
@@ -103,7 +105,7 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
         commit,
         transactionPool,
         metricsSystem,
-        InclusionListValidationMode.STRICT);
+        InclusionListConfiguration.DEFAULT);
   }
 
   ExecutionEngineJsonRpcMethods(
@@ -116,7 +118,7 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
       final String commit,
       final TransactionPool transactionPool,
       final MetricsSystem metricsSystem,
-      final InclusionListValidationMode inclusionListValidationMode) {
+      final InclusionListConfiguration inclusionListConfiguration) {
     this.mergeCoordinator =
         Optional.ofNullable(miningCoordinator)
             .filter(mc -> mc.isCompatibleWithEngineApi())
@@ -129,7 +131,8 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
     this.commit = commit;
     this.transactionPool = transactionPool;
     this.metricsSystem = metricsSystem;
-    this.inclusionListValidator = inclusionListValidationMode.createValidator();
+    this.inclusionListValidator = inclusionListConfiguration.createValidator();
+    this.inclusionListSelector = inclusionListConfiguration.selector();
   }
 
   @Override
@@ -314,7 +317,8 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
                 protocolContext,
                 engineQosTimer,
                 transactionPool,
-                metricsSystem));
+                metricsSystem,
+                inclusionListSelector));
       }
 
       return mapOf(executionEngineApisSupported);

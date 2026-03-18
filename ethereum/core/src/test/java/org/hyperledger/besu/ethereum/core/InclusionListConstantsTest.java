@@ -22,11 +22,11 @@ public class InclusionListConstantsTest {
 
   @Test
   public void maxBytesPerInclusionListIs8192() {
-    assertThat(InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST).isEqualTo(8192);
+    assertThat(InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST).isEqualTo(8192);
   }
 
   @Test
   public void maxBytesPerInclusionListIsPowerOfTwo() {
-    assertThat(InclusionListConstants.MAX_BYTES_PER_INCLUSION_LIST).isEqualTo(1 << 13);
+    assertThat(InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST).isEqualTo(1 << 13);
   }
 }

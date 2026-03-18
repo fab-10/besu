@@ -65,7 +65,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.websocket.subscription.syncing.
 import org.hyperledger.besu.ethereum.api.query.BlockchainQueries;
 import org.hyperledger.besu.ethereum.blockcreation.MiningCoordinator;
 import org.hyperledger.besu.ethereum.chain.Blockchain;
-import org.hyperledger.besu.ethereum.core.InclusionListValidationMode;
+import org.hyperledger.besu.ethereum.core.InclusionListConfiguration;
 import org.hyperledger.besu.ethereum.core.MiningConfiguration;
 import org.hyperledger.besu.ethereum.core.Synchronizer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
@@ -199,8 +199,8 @@ public class RunnerBuilder {
   private List<SubnetInfo> allowedSubnets = new ArrayList<>();
   private boolean poaDiscoveryRetryBootnodes = true;
   private TransactionValidatorServiceImpl transactionValidatorService;
-  private InclusionListValidationMode inclusionListValidationMode =
-      InclusionListValidationMode.STRICT;
+  private InclusionListConfiguration inclusionListConfiguration =
+      InclusionListConfiguration.DEFAULT;
 
   /** Instantiates a new Runner builder. */
   public RunnerBuilder() {}
@@ -654,14 +654,14 @@ public class RunnerBuilder {
   }
 
   /**
-   * Set inclusion list validation mode.
+   * Set inclusion list configuration.
    *
-   * @param inclusionListValidationMode the validation mode
+   * @param inclusionListConfiguration the inclusion list configuration
    * @return runner builder
    */
-  public RunnerBuilder inclusionListValidationMode(
-      final InclusionListValidationMode inclusionListValidationMode) {
-    this.inclusionListValidationMode = inclusionListValidationMode;
+  public RunnerBuilder inclusionListConfiguration(
+      final InclusionListConfiguration inclusionListConfiguration) {
+    this.inclusionListConfiguration = inclusionListConfiguration;
     return this;
   }
 
@@ -1394,7 +1394,7 @@ public class RunnerBuilder {
                 enodeDnsConfiguration,
                 transactionSimulator,
                 ethScheduler,
-                inclusionListValidationMode);
+                inclusionListConfiguration);
     methods.putAll(besuController.getAdditionalJsonRpcMethods(jsonRpcApis));
 
     final var pluginMethods =
