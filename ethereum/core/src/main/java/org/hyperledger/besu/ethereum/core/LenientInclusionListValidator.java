@@ -35,7 +35,9 @@ public class LenientInclusionListValidator implements InclusionListValidator {
 
   @Override
   public InclusionListValidationResult validate(
-      final List<Bytes> payloadTransactions, final List<Bytes> inclusionListTransactions) {
+      final List<Bytes> payloadTransactions,
+      final List<Bytes> inclusionListTransactions,
+      final InclusionListValidationContext context) {
 
     if (inclusionListTransactions == null || inclusionListTransactions.isEmpty()) {
       return InclusionListValidationResult.valid();
