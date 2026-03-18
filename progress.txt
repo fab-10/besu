@@ -253,3 +253,20 @@ Started: Fri Mar  6 19:43:39 UTC 2026
   - Existing docs pattern: markdown files in docs/ for technical notes (e.g., trace_rpc_apis.md, PROFILING.md)
   - Documentation-only stories don't require spotless/compile changes but should still verify builds pass
 ---
+
+## 2026-03-18 - US-004
+- What was implemented: Updated StrictInclusionListValidator to apply the EIP-7805 3-step conditional validation algorithm. Created InclusionListValidationContext record with gasLeft/accountNonces/accountBalances. Updated InclusionListValidator interface with 3-arg method + 2-arg default for backward compat. Updated LenientInclusionListValidator to implement new 3-arg method. Updated StrictInclusionListValidatorTest with new tests covering all 3-step cases.
+- Files changed:
+  - ethereum/core/src/main/java/.../core/InclusionListValidationContext.java (new - context record with gasLeft, accountNonces, accountBalances)
+  - ethereum/core/src/main/java/.../core/InclusionListValidator.java (added 3-arg method with context; 2-arg default for backward compat)
+  - ethereum/core/src/main/java/.../core/StrictInclusionListValidator.java (rewrote with 3-step algorithm: presence check, gas check, nonce/balance check)
+  - ethereum/core/src/main/java/.../core/LenientInclusionListValidator.java (implemented new 3-arg method)
+  - ethereum/core/src/test/java/.../core/StrictInclusionListValidatorTest.java (added tests for: undecodable tx → INVALID, missing valid tx → UNSATISFIED, missing ungasable tx → VALID, missing invalid nonce → VALID, missing insufficient balance → VALID)
+- **Learnings for future iterations:**
+  - 3-step algorithm: only decode IL txs that are NOT in the payload (step 1 handles presence via set lookup)
+  - If an IL tx can't be decoded → return INVALID (malformed IL is a protocol error)
+  - Use TransactionDecoder.decodeOpaqueBytes(bytes, EncodingContext.BLOCK_BODY) to decode IL tx bytes in the validator
+  - For balance check: use tx.getUpfrontCost(0) — compare against context balance
+  - InclusionListValidationContext.unlimited() provides backward-compat fallback (Long.MAX_VALUE gas, empty state)
+  - ethereum:api ByteBuddy/Mockito tests fail on ARM64 (pre-existing env issue, not caused by our changes)
+---

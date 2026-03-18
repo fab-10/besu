@@ -54,15 +54,17 @@
       "description": "As a node operator, I need strict validation that enforces EIP-7805 inclusion list constraints to ensure spec compliance.",
       "acceptanceCriteria": [
         "Implement StrictInclusionListValidator per EIP-7805 specification",
-        "Validate all IL transactions are included in payload in order (allowing interleaved txs)",
-        "Return INCLUSION_LIST_UNSATISFIED if constraints violated",
+        "Apply the 3-step conditional validation algorithm for each IL transaction not present in payload: (1) skip if T is present in block, (2) skip if T.gas > gas_left, (3) validate nonce and balance of T.origin against post-execution state",
+        "Return INCLUSION_LIST_UNSATISFIED only if a transaction passes all three checks (i.e. could have been included but wasn't)",
+        "INCLUSION_LIST_UNSATISFIED response must set latestValidHash: null and validationError: null",
+        "No ordering requirement — IL transactions may appear anywhere in the block",
         "Respect MAX_BYTES_PER_INCLUSION_LIST constant (8192 bytes)",
-        "Unit tests cover: valid cases, missing tx, wrong order, invalid encoding",
+        "Unit tests cover: valid cases, missing tx that is ungasable (should pass), missing tx with invalid nonce/balance (should pass), missing valid tx (should fail), invalid encoding",
         "Typecheck passes"
       ],
       "priority": 4,
       "passes": true,
-      "notes": ""
+      "notes": "Spec update 2026-03-18: validation is conditional (3-step algorithm), not ordering-based. Removed 'in order' requirement per EIP-7805 anywhere-in-block and conditional inclusion rules."
     },
     {
       "id": "US-005",
@@ -156,15 +158,16 @@
         "Accept parentHash parameter (32 bytes)",
         "Return array of transaction byte arrays",
         "Return -38006: Unknown parent error if parentHash block doesn't exist",
+        "Method MUST NOT return blob transactions in the list (engine-api-eip7805.md point 3, independent of selector implementation)",
         "Call configured InclusionListTransactionSelector implementation",
         "Method timeout set to 1 second per spec",
-        "Unit tests verify: success case, unknown parent error, timeout handling",
+        "Unit tests verify: success case, unknown parent error, timeout handling, blob transactions excluded from response",
         "Integration test with mock consensus client",
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": true,
-      "notes": ""
+      "passes": false,
+      "notes": "Spec update 2026-03-18: blob transaction exclusion is a method-level MUST in engine-api-eip7805.md (not just a selector concern). Must be enforced at the handler layer regardless of selector."
     },
     {
       "id": "US-011",
@@ -175,16 +178,16 @@
         "Add inclusionListTransactions parameter (5th parameter)",
         "Maintain V4 parameters: executionPayload, expectedBlobVersionedHashes, parentBeaconBlockRoot, executionRequests",
         "Call configured InclusionListValidator to check constraints",
-        "Return INCLUSION_LIST_UNSATISFIED status when validation fails (strict mode)",
+        "Return INCLUSION_LIST_UNSATISFIED status when validation fails (strict mode) with exactly {status: INCLUSION_LIST_UNSATISFIED, latestValidHash: null, validationError: null}",
         "Return VALID status in lenient mode even if unsatisfied",
         "Remove INVALID_BLOCK_HASH status per spec (use INVALID)",
-        "Unit tests verify: valid payload, unsatisfied IL, strict vs lenient modes",
+        "Unit tests verify: valid payload, unsatisfied IL, strict vs lenient modes, response shape has null latestValidHash and null validationError",
         "Integration test with mock consensus client requests",
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": true,
-      "notes": ""
+      "passes": false,
+      "notes": "Spec update 2026-03-18: engine-api-eip7805.md explicitly requires latestValidHash: null and validationError: null in INCLUSION_LIST_UNSATISFIED response."
     },
     {
       "id": "US-012",
@@ -210,19 +213,20 @@
       "title": "Update payload building to respect inclusion lists",
       "description": "As a block proposer, I need payload building to include inclusion list transactions in constructed blocks according to EIP-7805 constraints.",
       "acceptanceCriteria": [
-        "Modify BlockTransactionSelector to prioritize IL transactions",
-        "Include all IL transactions in order (allowing interleaved non-IL txs)",
+        "Modify BlockTransactionSelector to satisfy IL constraints during payload building",
+        "No ordering requirement — IL transactions may be placed anywhere in the block (anywhere-in-block)",
+        "Apply conditional inclusion: omit IL transactions that are invalid at their point of execution or cannot fit in remaining gas",
+        "Implement efficient EOA tracking: before building, record nonce and balance of all EOAs in IL transactions; update tracking as payload is built; append any remaining valid IL txs at end",
         "Validate IL transaction execution doesn't fail",
         "Track IL transaction inclusion in built payload",
-        "Log metrics for IL transactions included vs requested",
-        "Handle case where IL transaction becomes invalid during block building",
-        "Unit tests verify: IL txs included, ordering preserved, failed tx handling",
+        "Log metrics for IL transactions included vs omitted and reason for omission",
+        "Unit tests verify: IL txs included, no ordering constraint, conditional omission for invalid/gas-limited txs, EOA tracking",
         "Integration test builds valid payload with IL",
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": true,
-      "notes": ""
+      "passes": false,
+      "notes": "Spec update 2026-03-18: EIP-7805 is anywhere-in-block and uses conditional inclusion. Removed 'in order' requirement. Added efficient EOA tracking algorithm from EIP-7805 security considerations."
     },
     {
       "id": "US-014",
