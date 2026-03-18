@@ -298,7 +298,8 @@ public class LondonFeeMarketBlockTransactionSelectorTest
   }
 
   @Test
-  public void inclusionListTransactionsAreIncludedFirst() {
+  public void inclusionListTransactionsAreIncludedAnywhere() {
+    // Per EIP-7805 anywhere-in-block: IL txs not in pool are appended after pool txs
     final ProcessableBlockHeader blockHeader = createBlock(5_000_000);
 
     final Address miningBeneficiary = AddressHelpers.ofValue(1);
@@ -323,12 +324,15 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     final TransactionSelectionResults results =
         selector.buildTransactionListForBlock(List.of(ilTx));
 
-    // IL transaction should be first, then pool transaction
-    assertThat(results.getSelectedTransactions()).containsExactly(ilTx, poolTx);
+    // Both transactions should be included; pool tx first, IL tx appended at end
+    assertThat(results.getSelectedTransactions()).containsExactlyInAnyOrder(ilTx, poolTx);
+    assertThat(results.getSelectedTransactions()).contains(ilTx);
+    assertThat(results.getSelectedTransactions()).contains(poolTx);
   }
 
   @Test
-  public void inclusionListTransactionsOrderingIsPreserved() {
+  public void inclusionListTransactionsAreAllIncluded() {
+    // Multiple IL txs not in pool should all be appended
     final ProcessableBlockHeader blockHeader = createBlock(5_000_000);
 
     final Address miningBeneficiary = AddressHelpers.ofValue(1);
@@ -349,7 +353,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     final TransactionSelectionResults results =
         selector.buildTransactionListForBlock(List.of(ilTx1, ilTx2));
 
-    assertThat(results.getSelectedTransactions()).containsExactly(ilTx1, ilTx2);
+    assertThat(results.getSelectedTransactions()).containsExactlyInAnyOrder(ilTx1, ilTx2);
   }
 
   @Test

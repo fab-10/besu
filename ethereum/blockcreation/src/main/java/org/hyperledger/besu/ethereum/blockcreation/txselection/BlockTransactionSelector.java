@@ -65,9 +65,11 @@ import org.hyperledger.besu.plugin.services.txselection.SelectorsStateManager;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
@@ -211,41 +213,60 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
   }
 
   /**
-   * Builds a list of transactions for a block, processing inclusion list transactions first as
-   * priority transactions (EIP-7805), then filling remaining block space from the transaction pool.
+   * Builds a list of transactions for a block using the EIP-7805 anywhere-in-block algorithm. First
+   * fills the block from the transaction pool (IL transactions in the pool appear naturally), then
+   * appends any remaining IL transactions not yet included (conditional inclusion).
    *
-   * @param inclusionListTransactions the transactions from the inclusion list to prioritize
+   * @param inclusionListTransactions the transactions from the inclusion list
    * @return The {@code TransactionSelectionResults} containing the results of transaction
    *     evaluation.
    */
   public TransactionSelectionResults buildTransactionListForBlock(
       final List<Transaction> inclusionListTransactions) {
-    selectorsStateManager.blockSelectionStarted();
-    int included = 0;
-    int failed = 0;
+    // Step 1: Build block from transaction pool (IL txs in pool appear at their natural position)
+    blockSelectionContext.transactionPool().selectTransactions(this::timeLimitedSelection);
+
+    // Step 2: Determine which IL txs were NOT included during pool selection
+    final Set<org.hyperledger.besu.datatypes.Hash> selectedTxHashes = new HashSet<>();
+    for (final Transaction tx : transactionSelectionResults.getSelectedTransactions()) {
+      selectedTxHashes.add(tx.getHash());
+    }
+
+    int alreadyIncluded = 0;
+    int appended = 0;
+    int omitted = 0;
+
+    // Step 3: For remaining IL txs, attempt conditional inclusion at end of block
     for (final Transaction ilTx : inclusionListTransactions) {
+      if (selectedTxHashes.contains(ilTx.getHash())) {
+        alreadyIncluded++;
+        continue;
+      }
       final TransactionSelectionResult result =
           evaluateTransaction(new PendingTransaction.Local.Priority(ilTx));
       if (result.selected()) {
-        included++;
+        appended++;
       } else {
-        failed++;
+        omitted++;
         LOG.atDebug()
-            .setMessage("Inclusion list transaction {} was not selected for block: {}")
+            .setMessage("IL transaction {} conditionally omitted from block: {}")
             .addArgument(ilTx::getHash)
             .addArgument(result)
             .log();
       }
     }
-    LOG.atInfo()
-        .setMessage("Inclusion list processing complete: {} included, {} failed out of {} total")
-        .addArgument(included)
-        .addArgument(failed)
-        .addArgument(inclusionListTransactions.size())
-        .log();
 
-    // Fill remaining block space from the transaction pool
-    blockSelectionContext.transactionPool().selectTransactions(this::timeLimitedSelection);
+    if (!inclusionListTransactions.isEmpty()) {
+      LOG.atInfo()
+          .setMessage(
+              "IL processing: {}/{} from pool, {} appended at end, {} conditionally omitted")
+          .addArgument(alreadyIncluded)
+          .addArgument(inclusionListTransactions.size())
+          .addArgument(appended)
+          .addArgument(omitted)
+          .log();
+    }
+
     LOG.atTrace()
         .setMessage("Transaction selection result {}")
         .addArgument(transactionSelectionResults::toTraceLog)

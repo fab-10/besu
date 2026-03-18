@@ -37,6 +37,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSucces
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.core.DefaultInclusionListSelector;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
@@ -103,7 +104,12 @@ public class EngineGetInclusionListV1Test {
     this.metricsSystem = new StubMetricsSystem();
     this.method =
         new EngineGetInclusionListV1(
-            vertx, protocolContext, engineCallListener, transactionPool, metricsSystem);
+            vertx,
+            protocolContext,
+            engineCallListener,
+            transactionPool,
+            metricsSystem,
+            new DefaultInclusionListSelector());
   }
 
   @Test

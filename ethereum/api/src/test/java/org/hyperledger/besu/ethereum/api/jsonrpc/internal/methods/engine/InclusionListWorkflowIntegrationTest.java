@@ -174,7 +174,12 @@ public class InclusionListWorkflowIntegrationTest {
 
     getInclusionListMethod =
         new EngineGetInclusionListV1(
-            vertx, protocolContext, engineCallListener, transactionPool, metricsSystem);
+            vertx,
+            protocolContext,
+            engineCallListener,
+            transactionPool,
+            metricsSystem,
+            new org.hyperledger.besu.ethereum.core.DefaultInclusionListSelector());
 
     forkchoiceUpdatedMethod =
         new EngineForkchoiceUpdatedV4(
