@@ -57,7 +57,7 @@
         "Apply the 3-step conditional validation algorithm for each IL transaction not present in payload: (1) skip if T is present in block, (2) skip if T.gas > gas_left, (3) validate nonce and balance of T.origin against post-execution state",
         "Return INCLUSION_LIST_UNSATISFIED only if a transaction passes all three checks (i.e. could have been included but wasn't)",
         "INCLUSION_LIST_UNSATISFIED response must set latestValidHash: null and validationError: null",
-        "No ordering requirement — IL transactions may appear anywhere in the block",
+        "No ordering requirement \u2014 IL transactions may appear anywhere in the block",
         "Respect MAX_BYTES_PER_INCLUSION_LIST constant (8192 bytes)",
         "Unit tests cover: valid cases, missing tx that is ungasable (should pass), missing tx with invalid nonce/balance (should pass), missing valid tx (should fail), invalid encoding",
         "Typecheck passes"
@@ -166,7 +166,7 @@
         "Typecheck passes"
       ],
       "priority": 10,
-      "passes": false,
+      "passes": true,
       "notes": "Spec update 2026-03-18: blob transaction exclusion is a method-level MUST in engine-api-eip7805.md (not just a selector concern). Must be enforced at the handler layer regardless of selector."
     },
     {
@@ -186,7 +186,7 @@
         "Typecheck passes"
       ],
       "priority": 11,
-      "passes": false,
+      "passes": true,
       "notes": "Spec update 2026-03-18: engine-api-eip7805.md explicitly requires latestValidHash: null and validationError: null in INCLUSION_LIST_UNSATISFIED response."
     },
     {
@@ -214,7 +214,7 @@
       "description": "As a block proposer, I need payload building to include inclusion list transactions in constructed blocks according to EIP-7805 constraints.",
       "acceptanceCriteria": [
         "Modify BlockTransactionSelector to satisfy IL constraints during payload building",
-        "No ordering requirement — IL transactions may be placed anywhere in the block (anywhere-in-block)",
+        "No ordering requirement \u2014 IL transactions may be placed anywhere in the block (anywhere-in-block)",
         "Apply conditional inclusion: omit IL transactions that are invalid at their point of execution or cannot fit in remaining gas",
         "Implement efficient EOA tracking: before building, record nonce and balance of all EOAs in IL transactions; update tracking as payload is built; append any remaining valid IL txs at end",
         "Validate IL transaction execution doesn't fail",
@@ -225,7 +225,7 @@
         "Typecheck passes"
       ],
       "priority": 13,
-      "passes": false,
+      "passes": true,
       "notes": "Spec update 2026-03-18: EIP-7805 is anywhere-in-block and uses conditional inclusion. Removed 'in order' requirement. Added efficient EOA tracking algorithm from EIP-7805 security considerations."
     },
     {
@@ -250,7 +250,7 @@
       "title": "Integration test for complete IL workflow",
       "description": "As a QA engineer, I need end-to-end integration tests that verify the complete inclusion list workflow from generation to validation.",
       "acceptanceCriteria": [
-        "Test full flow: getInclusionListV1 → forkchoiceUpdatedV4 → payload building → newPayloadV5",
+        "Test full flow: getInclusionListV1 \u2192 forkchoiceUpdatedV4 \u2192 payload building \u2192 newPayloadV5",
         "Mock consensus client making sequential Engine API calls",
         "Verify IL transactions generated from mempool",
         "Verify payload built includes IL transactions",
