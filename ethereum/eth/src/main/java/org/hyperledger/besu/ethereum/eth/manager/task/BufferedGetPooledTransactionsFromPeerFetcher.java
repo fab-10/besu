@@ -85,13 +85,13 @@ public class BufferedGetPooledTransactionsFromPeerFetcher {
             .addArgument(batchToRequest)
             .setCause(t)
             .log();
-        batchToRequest =
-            toModifiableHashList(
-                transactionTracker.claimAnnouncementsToRequestFromPeer(
-                    peer, MAX_HASHES, maxTransactionsMessageSize));
       } finally {
         transactionTracker.consumedAnnouncements(initialBatchContent);
       }
+      batchToRequest =
+          toModifiableHashList(
+              transactionTracker.claimAnnouncementsToRequestFromPeer(
+                  peer, MAX_HASHES, maxTransactionsMessageSize));
     }
   }
 
