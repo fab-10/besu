@@ -45,8 +45,8 @@ class TransactionsMessageSender {
     TransactionsMessage.SizeLimitedBuilder limitedTransactionsMessageBuilder =
         new TransactionsMessage.SizeLimitedBuilder(maxTransactionsMessageSize);
 
-    Transaction txToSend;
-    while ((txToSend = transactionTracker.claimTransactionToSendToPeer(peer)) != null) {
+    Transaction txToSend = transactionTracker.claimTransactionToSendToPeer(peer);
+    while (txToSend != null) {
 
       if (!transactionTracker.hasPeerSeenTransactionOrAnnouncement(peer, txToSend.getHash())) {
         transactionTracker.markTransactionsAsSeen(peer, List.of(txToSend.getHash()));
@@ -72,6 +72,7 @@ class TransactionsMessageSender {
           }
         }
       }
+      txToSend = transactionTracker.claimTransactionToSendToPeer(peer);
     }
 
     if (!transactionsBatch.isEmpty()) {

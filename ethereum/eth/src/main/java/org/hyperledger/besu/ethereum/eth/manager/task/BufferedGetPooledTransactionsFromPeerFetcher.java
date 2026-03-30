@@ -64,105 +64,17 @@ public class BufferedGetPooledTransactionsFromPeerFetcher {
   public void requestTransactions() {
     final int taskId = TASK_ID_GENERATOR.incrementAndGet();
     int batch = 0;
-    List<Hash> batchToRequest;
-    while (!(batchToRequest =
-            toModifiableHashList(
-                transactionTracker.claimAnnouncementsToRequestFromPeer(
-                    peer, MAX_HASHES, maxTransactionsMessageSize)))
-        .isEmpty()) {
+    List<Hash> batchToRequest =
+        toModifiableHashList(
+            transactionTracker.claimAnnouncementsToRequestFromPeer(
+                peer, MAX_HASHES, maxTransactionsMessageSize));
+    while (!batchToRequest.isEmpty()) {
       ++batch;
       final List<Hash> initialBatchContent = List.copyOf(batchToRequest);
       try {
         // retry until this batch is complete, in a best effort way,
         // since loop can be interrupted by a failure or an empty response.
-        int iteration = 0;
-        while (!batchToRequest.isEmpty()) {
-          ++iteration;
-          LOG.atTrace()
-              .setMessage(
-                  "[{}:{}:{}] Transaction hashes to request from peer={}, requesting hashes={}")
-              .addArgument(taskId)
-              .addArgument(batch)
-              .addArgument(iteration)
-              .addArgument(peer::getLoggableId)
-              .addArgument(batchToRequest)
-              .log();
-
-          final GetPooledTransactionsFromPeerTask task =
-              new GetPooledTransactionsFromPeerTask(batchToRequest);
-
-          final PeerTaskExecutorResult<List<Transaction>> taskResult =
-              ethContext.getPeerTaskExecutor().executeAgainstPeer(task, peer);
-
-          // if failure or no results then stop iterating
-          if (taskResult.responseCode() != PeerTaskExecutorResponseCode.SUCCESS
-              || taskResult.result().map(List::isEmpty).orElse(true)) {
-
-            LOG.atTrace()
-                .setMessage(
-                    "[{}:{}:{}] Aborting task, failed to retrieve transactions by hash from peer={}, requested hashes={}, result={}")
-                .addArgument(taskId)
-                .addArgument(batch)
-                .addArgument(iteration)
-                .addArgument(peer::getLoggableId)
-                .addArgument(batchToRequest)
-                .addArgument(
-                    () ->
-                        taskResult.responseCode() == PeerTaskExecutorResponseCode.SUCCESS
-                            ? "empty response"
-                            : taskResult.responseCode())
-                .log();
-
-            // in case of failure or no progress, stop iterating for this batch
-            // so other peers can try to download
-            break;
-
-          } else {
-            final List<Transaction> retrievedTransactions = taskResult.result().get();
-            final List<Hash> retrievedHashes = toHashList(retrievedTransactions);
-            transactionTracker.markTransactionsAsSeen(peer, retrievedHashes);
-            transactionPool.addRemoteTransactions(retrievedTransactions);
-
-            // From the specification:
-            // The transactions must be in same order as in the request, but it is OK to
-            // skip transactions which are not available. This way, if the response size limit is
-            // reached, requesters will know which hashes to request again (everything starting from
-            // the last returned transaction) and which to assume unavailable (all gaps before the
-            // last returned transaction).
-
-            final Hash lastRetrievedHash = retrievedHashes.getLast();
-
-            // do the search backward, for efficiency,
-            // since in the normal case we should receive almost all txs
-            boolean found = false;
-            for (int i = batchToRequest.size() - 1; i >= 0; i--) {
-              if (lastRetrievedHash.equals(batchToRequest.get(i))) {
-                batchToRequest.subList(0, i + 1).clear();
-                found = true;
-                break;
-              }
-            }
-
-            if (!found) {
-              // defensive check: peer returned something that we did not request,
-              // clear the batch to avoid infinite cycle
-              batchToRequest.clear();
-            }
-
-            LOG.atTrace()
-                .setMessage(
-                    "[{}:{}:{}] Got {} transactions (missing {}) from peer={}, retrieved hashes={}, missed hashes={}")
-                .addArgument(taskId)
-                .addArgument(batch)
-                .addArgument(iteration)
-                .addArgument(retrievedHashes::size)
-                .addArgument(batchToRequest::size)
-                .addArgument(peer::getLoggableId)
-                .addArgument(retrievedHashes)
-                .addArgument(batchToRequest)
-                .log();
-          }
-        }
+        retryUntilBatchCompleteOrFailure(batchToRequest, taskId, batch);
       } catch (final Throwable t) {
         LOG.atTrace()
             .setMessage(
@@ -173,8 +85,103 @@ public class BufferedGetPooledTransactionsFromPeerFetcher {
             .addArgument(batchToRequest)
             .setCause(t)
             .log();
+        batchToRequest =
+            toModifiableHashList(
+                transactionTracker.claimAnnouncementsToRequestFromPeer(
+                    peer, MAX_HASHES, maxTransactionsMessageSize));
       } finally {
         transactionTracker.consumedAnnouncements(initialBatchContent);
+      }
+    }
+  }
+
+  private void retryUntilBatchCompleteOrFailure(
+      final List<Hash> batchToRequest, final int taskId, final int batch) {
+    int iteration = 0;
+    while (!batchToRequest.isEmpty()) {
+      ++iteration;
+      LOG.atTrace()
+          .setMessage("[{}:{}:{}] Transaction hashes to request from peer={}, requesting hashes={}")
+          .addArgument(taskId)
+          .addArgument(batch)
+          .addArgument(iteration)
+          .addArgument(peer::getLoggableId)
+          .addArgument(batchToRequest)
+          .log();
+
+      final GetPooledTransactionsFromPeerTask task =
+          new GetPooledTransactionsFromPeerTask(batchToRequest);
+
+      final PeerTaskExecutorResult<List<Transaction>> taskResult =
+          ethContext.getPeerTaskExecutor().executeAgainstPeer(task, peer);
+
+      // if failure or no results then stop iterating
+      if (taskResult.responseCode() != PeerTaskExecutorResponseCode.SUCCESS
+          || taskResult.result().map(List::isEmpty).orElse(true)) {
+
+        LOG.atTrace()
+            .setMessage(
+                "[{}:{}:{}] Aborting task, failed to retrieve transactions by hash from peer={}, requested hashes={}, result={}")
+            .addArgument(taskId)
+            .addArgument(batch)
+            .addArgument(iteration)
+            .addArgument(peer::getLoggableId)
+            .addArgument(batchToRequest)
+            .addArgument(
+                () ->
+                    taskResult.responseCode() == PeerTaskExecutorResponseCode.SUCCESS
+                        ? "empty response"
+                        : taskResult.responseCode())
+            .log();
+
+        // in case of failure or no progress, stop iterating for this batch
+        // so other peers can try to download
+        break;
+
+      } else {
+        final List<Transaction> retrievedTransactions = taskResult.result().get();
+        final List<Hash> retrievedHashes = toHashList(retrievedTransactions);
+        transactionTracker.markTransactionsAsSeen(peer, retrievedHashes);
+        transactionPool.addRemoteTransactions(retrievedTransactions);
+
+        // From the specification:
+        // The transactions must be in same order as in the request, but it is OK to
+        // skip transactions which are not available. This way, if the response size limit is
+        // reached, requesters will know which hashes to request again (everything starting from
+        // the last returned transaction) and which to assume unavailable (all gaps before the
+        // last returned transaction).
+
+        final Hash lastRetrievedHash = retrievedHashes.getLast();
+
+        // do the search backward, for efficiency,
+        // since in the normal case we should receive almost all txs
+        boolean found = false;
+        for (int i = batchToRequest.size() - 1; i >= 0; i--) {
+          if (lastRetrievedHash.equals(batchToRequest.get(i))) {
+            batchToRequest.subList(0, i + 1).clear();
+            found = true;
+            break;
+          }
+        }
+
+        if (!found) {
+          // defensive check: peer returned something that we did not request,
+          // clear the batch to avoid infinite cycle
+          batchToRequest.clear();
+        }
+
+        LOG.atTrace()
+            .setMessage(
+                "[{}:{}:{}] Got {} transactions (missing {}) from peer={}, retrieved hashes={}, missed hashes={}")
+            .addArgument(taskId)
+            .addArgument(batch)
+            .addArgument(iteration)
+            .addArgument(retrievedHashes::size)
+            .addArgument(batchToRequest::size)
+            .addArgument(peer::getLoggableId)
+            .addArgument(retrievedHashes)
+            .addArgument(batchToRequest)
+            .log();
       }
     }
   }

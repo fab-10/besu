@@ -282,7 +282,7 @@ public class TransactionPoolOptions implements CLIOptions<TransactionPoolConfigu
         paramLabel = "<LONG>",
         hidden = true,
         description =
-            "The number of exchanged txs that are remembered, to minimize broadcasting duplicates (default: ${DEFAULT-VALUE})")
+            "The max number of exchanged txs that are remembered, to minimize broadcasting duplicates (default: ${DEFAULT-VALUE})")
     private int maxTrackedSeenTxs =
         TransactionPoolConfiguration.Unstable.DEFAULT_MAX_TRACKED_SEEN_TXS;
 
