@@ -18,11 +18,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.entry;
 import static org.hyperledger.besu.ethereum.blockcreation.AbstractBlockTransactionSelectorTest.Sender.SENDER1;
 import static org.hyperledger.besu.ethereum.blockcreation.AbstractBlockTransactionSelectorTest.Sender.SENDER2;
-import static org.hyperledger.besu.ethereum.core.MiningConfiguration.DEFAULT_NON_POA_BLOCK_TXS_SELECTION_MAX_TIME;
-import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.hyperledger.besu.ethereum.core.MiningConfiguration.DEFAULT_POS_BLOCK_TXS_SELECTION_MAX_TIME;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.config.GenesisConfig;
 import org.hyperledger.besu.datatypes.Address;
@@ -48,8 +45,6 @@ import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
-import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
-import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
@@ -124,10 +119,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     final BlockTransactionSelector selector =
         createBlockSelectorAndSetupTxPool(
             createMiningParameters(
-                transactionSelectionService,
-                Wei.of(6),
-                MIN_OCCUPANCY_80_PERCENT,
-                DEFAULT_NON_POA_BLOCK_TXS_SELECTION_MAX_TIME),
+                transactionSelectionService, Wei.of(6), DEFAULT_POS_BLOCK_TXS_SELECTION_MAX_TIME),
             transactionProcessor,
             blockHeader,
             miningBeneficiary,
@@ -156,10 +148,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     final BlockTransactionSelector selector =
         createBlockSelectorAndSetupTxPool(
             createMiningParameters(
-                transactionSelectionService,
-                Wei.of(6),
-                MIN_OCCUPANCY_80_PERCENT,
-                DEFAULT_NON_POA_BLOCK_TXS_SELECTION_MAX_TIME),
+                transactionSelectionService, Wei.of(6), DEFAULT_POS_BLOCK_TXS_SELECTION_MAX_TIME),
             transactionProcessor,
             blockHeader,
             miningBeneficiary,
@@ -187,10 +176,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     final BlockTransactionSelector selector =
         createBlockSelectorAndSetupTxPool(
             createMiningParameters(
-                transactionSelectionService,
-                Wei.of(6),
-                MIN_OCCUPANCY_80_PERCENT,
-                DEFAULT_NON_POA_BLOCK_TXS_SELECTION_MAX_TIME),
+                transactionSelectionService, Wei.of(6), DEFAULT_POS_BLOCK_TXS_SELECTION_MAX_TIME),
             transactionProcessor,
             blockHeader,
             miningBeneficiary,
@@ -295,128 +281,5 @@ public class LondonFeeMarketBlockTransactionSelectorTest
                 txNotSelected1, TransactionSelectionResult.PRIORITY_FEE_PER_GAS_BELOW_CURRENT_MIN),
             entry(
                 txNotSelected2, TransactionSelectionResult.PRIORITY_FEE_PER_GAS_BELOW_CURRENT_MIN));
-  }
-
-  @Test
-  public void inclusionListTransactionsAreIncludedAnywhere() {
-    // Per EIP-7805 anywhere-in-block: IL txs not in pool are appended after pool txs
-    final ProcessableBlockHeader blockHeader = createBlock(5_000_000);
-
-    final Address miningBeneficiary = AddressHelpers.ofValue(1);
-    final BlockTransactionSelector selector =
-        createBlockSelectorAndSetupTxPool(
-            defaultTestMiningConfiguration,
-            transactionProcessor,
-            blockHeader,
-            miningBeneficiary,
-            Wei.ZERO,
-            transactionSelectionService);
-
-    // IL transaction (not in pool)
-    final Transaction ilTx = createEIP1559Transaction(0, Wei.of(7), Wei.ONE, 100_000, SENDER2);
-    ensureTransactionIsValid(ilTx);
-
-    // Pool transaction
-    final Transaction poolTx = createEIP1559Transaction(0, Wei.of(7), Wei.ONE, 100_000, SENDER1);
-    ensureTransactionIsValid(poolTx);
-    transactionPool.addRemoteTransactions(List.of(poolTx));
-
-    final TransactionSelectionResults results =
-        selector.buildTransactionListForBlock(List.of(ilTx));
-
-    // Both transactions should be included; pool tx first, IL tx appended at end
-    assertThat(results.getSelectedTransactions()).containsExactlyInAnyOrder(ilTx, poolTx);
-    assertThat(results.getSelectedTransactions()).contains(ilTx);
-    assertThat(results.getSelectedTransactions()).contains(poolTx);
-  }
-
-  @Test
-  public void inclusionListTransactionsAreAllIncluded() {
-    // Multiple IL txs not in pool should all be appended
-    final ProcessableBlockHeader blockHeader = createBlock(5_000_000);
-
-    final Address miningBeneficiary = AddressHelpers.ofValue(1);
-    final BlockTransactionSelector selector =
-        createBlockSelectorAndSetupTxPool(
-            defaultTestMiningConfiguration,
-            transactionProcessor,
-            blockHeader,
-            miningBeneficiary,
-            Wei.ZERO,
-            transactionSelectionService);
-
-    final Transaction ilTx1 = createEIP1559Transaction(0, Wei.of(7), Wei.ONE, 100_000, SENDER1);
-    final Transaction ilTx2 = createEIP1559Transaction(0, Wei.of(7), Wei.ONE, 100_000, SENDER2);
-    ensureTransactionIsValid(ilTx1);
-    ensureTransactionIsValid(ilTx2);
-
-    final TransactionSelectionResults results =
-        selector.buildTransactionListForBlock(List.of(ilTx1, ilTx2));
-
-    assertThat(results.getSelectedTransactions()).containsExactlyInAnyOrder(ilTx1, ilTx2);
-  }
-
-  @Test
-  public void inclusionListHandlesFailedTransaction() {
-    final ProcessableBlockHeader blockHeader = createBlock(5_000_000);
-
-    final Address miningBeneficiary = AddressHelpers.ofValue(1);
-    final BlockTransactionSelector selector =
-        createBlockSelectorAndSetupTxPool(
-            defaultTestMiningConfiguration,
-            transactionProcessor,
-            blockHeader,
-            miningBeneficiary,
-            Wei.ZERO,
-            transactionSelectionService);
-
-    // Valid IL transaction
-    final Transaction validIlTx = createEIP1559Transaction(0, Wei.of(7), Wei.ONE, 100_000, SENDER1);
-    ensureTransactionIsValid(validIlTx);
-
-    // Invalid IL transaction (processing fails)
-    final Transaction invalidIlTx =
-        createEIP1559Transaction(0, Wei.of(7), Wei.ONE, 100_000, SENDER2);
-    when(transactionProcessor.processTransaction(
-            any(), any(), eq(invalidIlTx), any(), any(), any(), any(), any()))
-        .thenReturn(
-            TransactionProcessingResult.invalid(
-                ValidationResult.invalid(TransactionInvalidReason.NONCE_TOO_LOW)));
-    when(transactionProcessor.processTransaction(
-            any(), any(), eq(invalidIlTx), any(), any(), any(), any(), any(), any()))
-        .thenReturn(
-            TransactionProcessingResult.invalid(
-                ValidationResult.invalid(TransactionInvalidReason.NONCE_TOO_LOW)));
-
-    final TransactionSelectionResults results =
-        selector.buildTransactionListForBlock(List.of(validIlTx, invalidIlTx));
-
-    // Only the valid IL tx should be selected; invalid one should be skipped
-    assertThat(results.getSelectedTransactions()).containsExactly(validIlTx);
-    assertThat(results.getNotSelectedTransactions()).containsKey(invalidIlTx);
-  }
-
-  @Test
-  public void emptyInclusionListFallsBackToPoolSelection() {
-    final ProcessableBlockHeader blockHeader = createBlock(5_000_000);
-
-    final Address miningBeneficiary = AddressHelpers.ofValue(1);
-    final BlockTransactionSelector selector =
-        createBlockSelectorAndSetupTxPool(
-            defaultTestMiningConfiguration,
-            transactionProcessor,
-            blockHeader,
-            miningBeneficiary,
-            Wei.ZERO,
-            transactionSelectionService);
-
-    final Transaction poolTx = createEIP1559Transaction(0, Wei.of(7), Wei.ONE, 100_000, SENDER1);
-    ensureTransactionIsValid(poolTx);
-    transactionPool.addRemoteTransactions(List.of(poolTx));
-
-    // Empty IL list should just select from pool
-    final TransactionSelectionResults results = selector.buildTransactionListForBlock(List.of());
-
-    assertThat(results.getSelectedTransactions()).containsExactly(poolTx);
   }
 }
