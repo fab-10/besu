@@ -58,9 +58,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineUpdateFo
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
-import org.hyperledger.besu.ethereum.core.LenientInclusionListValidator;
 import org.hyperledger.besu.ethereum.core.Request;
-import org.hyperledger.besu.ethereum.core.StrictInclusionListValidator;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
@@ -193,8 +191,7 @@ public class InclusionListWorkflowIntegrationTest {
             mergeCoordinator,
             ethPeers,
             engineCallListener,
-            metricsSystem,
-            new StrictInclusionListValidator());
+            metricsSystem);
 
     newPayloadLenientMethod =
         new EngineNewPayloadV5(
@@ -204,8 +201,7 @@ public class InclusionListWorkflowIntegrationTest {
             mergeCoordinator,
             ethPeers,
             engineCallListener,
-            metricsSystem,
-            new LenientInclusionListValidator());
+            metricsSystem);
   }
 
   @Test
