@@ -77,7 +77,7 @@ import org.hyperledger.besu.ethereum.mainnet.parallelization.MainnetParallelBloc
 import org.hyperledger.besu.ethereum.mainnet.requests.MainnetRequestsValidator;
 import org.hyperledger.besu.ethereum.mainnet.requests.RequestContractAddresses;
 import org.hyperledger.besu.ethereum.mainnet.requests.RequestProcessorCoordinator;
-import org.hyperledger.besu.ethereum.mainnet.staterootcommitter.StateRootCommitterFactoryBal;
+import org.hyperledger.besu.ethereum.mainnet.staterootcommitter.BalStateRootCommitterFactory;
 import org.hyperledger.besu.ethereum.mainnet.transactionpool.OsakaTransactionPoolPreProcessor;
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.evm.MainnetEVMs;
@@ -118,12 +118,11 @@ import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.IntStream;
 
-import com.google.common.base.Supplier;
-import com.google.common.base.Suppliers;
 import com.google.common.io.Resources;
 import io.vertx.core.json.JsonArray;
 import org.slf4j.Logger;
@@ -135,8 +134,8 @@ public abstract class MainnetProtocolSpecs {
   private static final Address RIPEMD160_PRECOMPILE =
       Address.fromHexString("0x0000000000000000000000000000000000000003");
 
-  private static final Supplier<SignatureAlgorithm> SIGNATURE_ALGORITHM =
-      Suppliers.memoize(SignatureAlgorithmFactory::getInstance);
+  private static final SignatureAlgorithm SIGNATURE_ALGORITHM =
+      SignatureAlgorithmFactory.getInstance();
 
   // A consensus bug at Ethereum mainnet transaction 0xcf416c53
   // deleted an empty account even when the message execution scope
@@ -956,7 +955,7 @@ public abstract class MainnetProtocolSpecs {
                         .codeDelegationProcessor(
                             new CodeDelegationProcessor(
                                 chainId,
-                                SIGNATURE_ALGORITHM.get().getHalfCurveOrder(),
+                                SIGNATURE_ALGORITHM.getHalfCurveOrder(),
                                 new CodeDelegationService()))
                         .build())
             // EIP-2935 Blockhash processor
@@ -1021,7 +1020,8 @@ public abstract class MainnetProtocolSpecs {
                     gasCalculator,
                     blobSchedule.getMax(),
                     blobSchedule.getTarget(),
-                    miningConfiguration.getMaxBlobsPerTransaction()))
+                    miningConfiguration.getMaxBlobsPerTransaction(),
+                    miningConfiguration.getMaxBlobsPerBlock()))
         .evmBuilder(
             (gasCalculator, __) ->
                 MainnetEVMs.osaka(gasCalculator, chainId.orElse(BigInteger.ZERO), evmConfiguration))
@@ -1066,7 +1066,12 @@ public abstract class MainnetProtocolSpecs {
             isParallelTxProcessingEnabled,
             balConfiguration,
             metricsSystem);
-    return applyBlobSchedule(builder, genesisConfigOptions, BlobScheduleOptions::getBpo1, BPO1);
+    return applyBlobSchedule(
+        builder,
+        genesisConfigOptions,
+        BlobScheduleOptions::getBpo1,
+        GenesisConfigOptions::getBpo1Time,
+        BPO1);
   }
 
   static ProtocolSpecBuilder bpo2Definition(
@@ -1088,7 +1093,12 @@ public abstract class MainnetProtocolSpecs {
             isParallelTxProcessingEnabled,
             balConfiguration,
             metricsSystem);
-    return applyBlobSchedule(builder, genesisConfigOptions, BlobScheduleOptions::getBpo2, BPO2);
+    return applyBlobSchedule(
+        builder,
+        genesisConfigOptions,
+        BlobScheduleOptions::getBpo2,
+        GenesisConfigOptions::getBpo2Time,
+        BPO2);
   }
 
   static ProtocolSpecBuilder bpo3Definition(
@@ -1110,7 +1120,12 @@ public abstract class MainnetProtocolSpecs {
             isParallelTxProcessingEnabled,
             balConfiguration,
             metricsSystem);
-    return applyBlobSchedule(builder, genesisConfigOptions, BlobScheduleOptions::getBpo3, BPO3);
+    return applyBlobSchedule(
+        builder,
+        genesisConfigOptions,
+        BlobScheduleOptions::getBpo3,
+        GenesisConfigOptions::getBpo3Time,
+        BPO3);
   }
 
   static ProtocolSpecBuilder bpo4Definition(
@@ -1132,7 +1147,12 @@ public abstract class MainnetProtocolSpecs {
             isParallelTxProcessingEnabled,
             balConfiguration,
             metricsSystem);
-    return applyBlobSchedule(builder, genesisConfigOptions, BlobScheduleOptions::getBpo4, BPO4);
+    return applyBlobSchedule(
+        builder,
+        genesisConfigOptions,
+        BlobScheduleOptions::getBpo4,
+        GenesisConfigOptions::getBpo4Time,
+        BPO4);
   }
 
   static ProtocolSpecBuilder bpo5Definition(
@@ -1154,7 +1174,12 @@ public abstract class MainnetProtocolSpecs {
             isParallelTxProcessingEnabled,
             balConfiguration,
             metricsSystem);
-    return applyBlobSchedule(builder, genesisConfigOptions, BlobScheduleOptions::getBpo5, BPO5);
+    return applyBlobSchedule(
+        builder,
+        genesisConfigOptions,
+        BlobScheduleOptions::getBpo5,
+        GenesisConfigOptions::getBpo5Time,
+        BPO5);
   }
 
   static ProtocolSpecBuilder amsterdamDefinition(
@@ -1219,17 +1244,33 @@ public abstract class MainnetProtocolSpecs {
                     .codeDelegationProcessor(
                         new CodeDelegationProcessor(
                             chainId,
-                            SIGNATURE_ALGORITHM.get().getHalfCurveOrder(),
+                            SIGNATURE_ALGORITHM.getHalfCurveOrder(),
                             new CodeDelegationService()))
                     .transferLogEmitter(EIP7708TransferLogEmitter.INSTANCE)
                     .build())
         .blockAccessListFactory(new BlockAccessListFactory())
         .blockAccessListValidatorBuilder(MainnetBlockAccessListValidator::create)
-        .stateRootCommitterFactory(new StateRootCommitterFactoryBal(balConfiguration))
-
-        // EIP-7778: Block gas accounting without refunds (prevents block gas limit circumvention)
-        .blockGasAccountingStrategy(BlockGasAccountingStrategy.EIP7778)
-        .blockGasUsedValidator(BlockGasUsedValidator.EIP7778)
+        .stateRootCommitterFactory(new BalStateRootCommitterFactory(balConfiguration))
+        // EIP-8037: Disable validation-time TX_MAX_GAS_LIMIT cap (enforced at runtime on regular
+        // gas)
+        .gasLimitCalculatorBuilder(
+            (feeMarket, gasCalculator, blobSchedule) -> {
+              final long londonForkBlock = genesisConfigOptions.getLondonBlockNumber().orElse(0L);
+              return new AmsterdamTargetingGasLimitCalculator(
+                  londonForkBlock,
+                  (BaseFeeMarket) feeMarket,
+                  gasCalculator,
+                  blobSchedule.getMax(),
+                  blobSchedule.getTarget(),
+                  miningConfiguration.getMaxBlobsPerTransaction(),
+                  miningConfiguration.getMaxBlobsPerBlock());
+            })
+        // EIP-8037: Amsterdam gas calculator with state gas cost support
+        .gasCalculator(AmsterdamGasCalculator::new)
+        // Amsterdam (EIP-7778 + EIP-8037): Pre-refund 2D gas accounting
+        .blockGasAccountingStrategy(BlockGasAccountingStrategy.AMSTERDAM)
+        // Amsterdam: Validator uses pre-refund gas_metered = max(regular, state) from processing
+        .blockGasUsedValidator(BlockGasUsedValidator.AMSTERDAM)
         .hardforkId(AMSTERDAM);
   }
 
@@ -1237,11 +1278,17 @@ public abstract class MainnetProtocolSpecs {
       final ProtocolSpecBuilder builder,
       final GenesisConfigOptions genesisConfigOptions,
       final Function<BlobScheduleOptions, Optional<BlobSchedule>> blobGetter,
+      final Function<GenesisConfigOptions, OptionalLong> blobScheduleTimestampGetter,
       final HardforkId hardforkId) {
-    genesisConfigOptions
-        .getBlobScheduleOptions()
-        .flatMap(blobGetter)
-        .ifPresent(builder::blobSchedule);
+    // Only apply a fork's blob schedule if the fork is actually activated (has a timestamp).
+    // This prevents inactive BPO forks from overriding the blob schedule with stale values
+    // from the genesis config.
+    if (blobScheduleTimestampGetter.apply(genesisConfigOptions).isPresent()) {
+      genesisConfigOptions
+          .getBlobScheduleOptions()
+          .flatMap(blobGetter)
+          .ifPresent(builder::blobSchedule);
+    }
     return builder.hardforkId(hardforkId);
   }
 

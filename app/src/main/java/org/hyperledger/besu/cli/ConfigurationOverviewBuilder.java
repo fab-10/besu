@@ -65,6 +65,7 @@ public class ConfigurationOverviewBuilder {
   private TransactionPoolConfiguration.Implementation txPoolImplementation;
   private EvmConfiguration.WorldUpdaterMode worldStateUpdateMode;
   private boolean enabledOpcodeOptimizations;
+  private boolean evmV2 = false;
   private Map<String, String> environment;
   private BesuPluginContextImpl besuPluginContext;
   private boolean isHistoryExpiryPruneEnabled = false;
@@ -76,6 +77,8 @@ public class ConfigurationOverviewBuilder {
   private RocksDBCLIOptions.BlobDBSettings blobDBSettings;
   private Long targetGasLimit;
   private Integer maxBlobsPerTransaction;
+  private Integer maxBlobsPerBlock;
+  private static final String SNAP_SYNC_MODE = "SNAP";
 
   /**
    * Create a new ConfigurationOverviewBuilder.
@@ -319,6 +322,17 @@ public class ConfigurationOverviewBuilder {
   }
 
   /**
+   * Sets whether the experimental EVM v2 (long[] stack) is enabled.
+   *
+   * @param evmV2 true if --Xevm-go-fast / --Xevm-v2 is enabled
+   * @return the builder
+   */
+  public ConfigurationOverviewBuilder setEvmV2(final boolean evmV2) {
+    this.evmV2 = evmV2;
+    return this;
+  }
+
+  /**
    * Sets the engine jwt file path.
    *
    * @param engineJwtFilePath the engine apis
@@ -412,6 +426,17 @@ public class ConfigurationOverviewBuilder {
   }
 
   /**
+   * Sets the max blobs per block for block building.
+   *
+   * @param maxBlobsPerBlock the max blobs per block
+   * @return the builder
+   */
+  public ConfigurationOverviewBuilder setMaxBlobsPerBlock(final Integer maxBlobsPerBlock) {
+    this.maxBlobsPerBlock = maxBlobsPerBlock;
+    return this;
+  }
+
+  /**
    * Sets the chain pruning configuration.
    *
    * @param pruningStrategy the chain pruning strategy
@@ -465,6 +490,10 @@ public class ConfigurationOverviewBuilder {
 
     if (syncMode != null) {
       lines.add("Sync mode: " + syncMode);
+      if (syncMode.equalsIgnoreCase(SNAP_SYNC_MODE)) {
+        final String snapServerStatus = isSnapServerEnabled ? "enabled" : "disabled";
+        lines.add("  SNAP Sync server " + snapServerStatus);
+      }
     }
 
     if (syncMinPeers != null) {
@@ -496,7 +525,11 @@ public class ConfigurationOverviewBuilder {
 
     lines.add("Using " + worldStateUpdateMode + " worldstate update mode");
 
-    lines.add("Opcode optimizations " + (enabledOpcodeOptimizations ? "enabled" : "disabled"));
+    if (evmV2) {
+      lines.add("Experimental EVM v2 (long[] stack) enabled");
+    } else {
+      lines.add("Opcode optimizations " + (enabledOpcodeOptimizations ? "enabled" : "disabled"));
+    }
 
     if (isParallelTxProcessingEnabled) {
       lines.add("Parallel transaction processing enabled");
@@ -536,10 +569,6 @@ public class ConfigurationOverviewBuilder {
       lines.add(chainPruningString.toString());
     }
 
-    if (isSnapServerEnabled) {
-      lines.add("Snap Sync server enabled");
-    }
-
     if (isHighSpec) {
       lines.add("Experimental high spec configuration enabled");
     }
@@ -574,6 +603,10 @@ public class ConfigurationOverviewBuilder {
 
     if (maxBlobsPerTransaction != null) {
       lines.add("Max Blobs Per Transaction: " + maxBlobsPerTransaction);
+    }
+
+    if (maxBlobsPerBlock != null) {
+      lines.add("Max Blobs Per Block (builder): " + maxBlobsPerBlock);
     }
 
     lines.add("");
