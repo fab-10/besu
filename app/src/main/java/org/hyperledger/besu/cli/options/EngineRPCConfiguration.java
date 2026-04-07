@@ -15,8 +15,8 @@
 package org.hyperledger.besu.cli.options;
 
 import org.hyperledger.besu.cli.custom.JsonRPCAllowlistHostsProperty;
-import org.hyperledger.besu.ethereum.core.InclusionListConfiguration;
-import org.hyperledger.besu.ethereum.core.InclusionListValidationMode;
+import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListValidationMode;
 
 import java.nio.file.Path;
 

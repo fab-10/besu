@@ -12,15 +12,12 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-package org.hyperledger.besu.ethereum.core;
+package org.hyperledger.besu.ethereum.eth.transactions.inclusionlist;
 
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 
 import java.util.List;
-import java.util.Optional;
-
-import org.apache.tuweni.bytes.Bytes;
 
 /**
  * Interface for selecting transactions to include in an EIP-7805 inclusion list. Implementations
@@ -32,14 +29,11 @@ public interface InclusionListTransactionSelector {
    * Selects transactions from the mempool for inclusion in an inclusion list.
    *
    * @param parentHash the hash of the parent block
-   * @param mempoolTransactions the candidate transactions from the transaction pool
+   * @param pendingTransactionsBySender the candidate transactions from the transaction pool grouped
+   *     by sender
    * @param maxBytes the maximum total bytes allowed for selected transactions
-   * @param baseFeePerGas the current base fee per gas, used to filter and price transactions
-   * @return the selected transactions as raw encoded bytes
+   * @return the selected pending transactions
    */
-  List<Bytes> selectTransactions(
-      Hash parentHash,
-      List<Transaction> mempoolTransactions,
-      int maxBytes,
-      Optional<Wei> baseFeePerGas);
+  List<PendingTransaction> selectTransactions(
+      Hash parentHash, List<List<PendingTransaction>> pendingTransactionsBySender, int maxBytes);
 }

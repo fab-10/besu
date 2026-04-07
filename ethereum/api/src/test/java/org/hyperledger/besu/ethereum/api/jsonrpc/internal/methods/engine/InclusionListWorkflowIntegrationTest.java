@@ -64,6 +64,7 @@ import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.DefaultInclusionListSelector;
 import org.hyperledger.besu.ethereum.mainnet.BodyValidation;
 import org.hyperledger.besu.ethereum.mainnet.CancunTargetingGasLimitCalculator;
 import org.hyperledger.besu.ethereum.mainnet.DefaultProtocolSchedule;
@@ -177,7 +178,7 @@ public class InclusionListWorkflowIntegrationTest {
             engineCallListener,
             transactionPool,
             metricsSystem,
-            new org.hyperledger.besu.ethereum.core.DefaultInclusionListSelector());
+            new DefaultInclusionListSelector());
 
     forkchoiceUpdatedMethod =
         new EngineForkchoiceUpdatedV4(
