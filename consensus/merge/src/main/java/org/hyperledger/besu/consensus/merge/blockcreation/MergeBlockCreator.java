@@ -93,7 +93,7 @@ class MergeBlockCreator extends AbstractBlockCreator {
         parentBeaconBlockRoot,
         slotNumber,
         parentHeader,
-        Optional.empty());
+        List.of());
   }
 
   /**
@@ -117,7 +117,7 @@ class MergeBlockCreator extends AbstractBlockCreator {
       final Optional<Bytes32> parentBeaconBlockRoot,
       final Optional<Long> slotNumber,
       final BlockHeader parentHeader,
-      final Optional<List<Transaction>> inclusionListTransactions) {
+      final List<Transaction> inclusionListTransactions) {
 
     return createBlock(
         maybeTransactions,
