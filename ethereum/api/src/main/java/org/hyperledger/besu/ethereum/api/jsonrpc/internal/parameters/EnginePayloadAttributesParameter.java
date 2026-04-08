@@ -14,7 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters;
 
-import static org.hyperledger.besu.ethereum.core.InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST;
+import static org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST;
 
 import org.hyperledger.besu.datatypes.Address;
 

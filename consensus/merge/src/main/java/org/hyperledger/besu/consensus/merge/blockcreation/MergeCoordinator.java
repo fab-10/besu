@@ -311,25 +311,8 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
       }
     }
 
-    // Decode inclusion list transaction bytes to Transaction objects
-    final Optional<List<Transaction>> decodedIlTransactions =
-        inclusionListTransactions.map(
-            ilBytes ->
-                ilBytes.stream()
-                    .map(
-                        bytes -> {
-                          try {
-                            return TransactionDecoder.decodeOpaqueBytes(
-                                bytes, EncodingContext.BLOCK_BODY);
-                          } catch (final Exception e) {
-                            LOG.warn(
-                                "Failed to decode inclusion list transaction, skipping: {}",
-                                e.getMessage());
-                            return null;
-                          }
-                        })
-                    .filter(Objects::nonNull)
-                    .collect(Collectors.toList()));
+    final List<Transaction> decodedIlTransactions =
+        getInclusionListTransactions(inclusionListTransactions);
 
     // Create the async block building task and store it
     tryToBuildBetterBlock(
@@ -344,6 +327,32 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
         decodedIlTransactions);
 
     return payloadIdentifier;
+  }
+
+  private static List<Transaction> getInclusionListTransactions(
+      final Optional<List<Bytes>> inclusionListTransactions) {
+    // Decode inclusion list transaction bytes to Transaction objects
+    final List<Transaction> decodedIlTransactions =
+        inclusionListTransactions
+            .map(
+                ilBytes ->
+                    ilBytes.stream()
+                        .map(
+                            bytes -> {
+                              try {
+                                return TransactionDecoder.decodeOpaqueBytes(
+                                    bytes, EncodingContext.BLOCK_BODY);
+                              } catch (final Exception e) {
+                                LOG.warn(
+                                    "Failed to decode inclusion list transaction, skipping: {}",
+                                    e.getMessage());
+                                return null;
+                              }
+                            })
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toList()))
+            .orElse(List.of());
+    return decodedIlTransactions;
   }
 
   private void cancelAnyExistingBlockCreationTasks(final PayloadIdentifier payloadIdentifier) {
@@ -445,7 +454,7 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
       final Optional<Bytes32> parentBeaconBlockRoot,
       final Optional<Long> slotNumber,
       final BlockHeader parentHeader,
-      final Optional<List<Transaction>> inclusionListTransactions) {
+      final List<Transaction> inclusionListTransactions) {
 
     final Supplier<BlockCreationResult> blockCreator =
         () ->

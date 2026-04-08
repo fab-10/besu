@@ -204,7 +204,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
         timestamp,
         rewardCoinbase,
         parentHeader,
-        Optional.empty());
+        List.of());
   }
 
   public BlockCreationResult createBlock(
@@ -217,7 +217,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
       final long timestamp,
       final boolean rewardCoinbase,
       final BlockHeader parentHeader,
-      final Optional<List<Transaction>> inclusionListTransactions) {
+      final List<Transaction> inclusionListTransactions) {
 
     final var timings = new BlockCreationTiming();
 
@@ -427,7 +427,7 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
       final SelectorsStateManager selectorsStateManager,
       final BlockHeader parentHeader,
       final Optional<BlockAccessListBuilder> blockAccessListBuilder,
-      final Optional<List<Transaction>> inclusionListTransactions) {
+      final List<Transaction> inclusionListTransactions) {
     final MainnetTransactionProcessor transactionProcessor = protocolSpec.getTransactionProcessor();
 
     final AbstractBlockProcessor.TransactionReceiptFactory transactionReceiptFactory =
@@ -453,13 +453,11 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
             pluginTransactionSelector,
             ethScheduler,
             selectorsStateManager,
-            blockAccessListBuilder);
+            blockAccessListBuilder,
+            inclusionListTransactions);
 
     if (transactions.isPresent()) {
       return selector.evaluateTransactions(transactions.get());
-    } else if (inclusionListTransactions.isPresent()
-        && !inclusionListTransactions.get().isEmpty()) {
-      return selector.buildTransactionListForBlock(inclusionListTransactions.get());
     } else {
       return selector.buildTransactionListForBlock();
     }

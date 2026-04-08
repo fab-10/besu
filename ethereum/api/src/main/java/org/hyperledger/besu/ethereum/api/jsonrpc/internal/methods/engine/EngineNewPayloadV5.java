@@ -15,46 +15,25 @@
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.AMSTERDAM;
+import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.BOGOTA;
 
 import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.EnginePayloadParameter;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.JsonRpcParameter.JsonRpcParameterException;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EnginePayloadStatusResult;
-import org.hyperledger.besu.ethereum.core.InclusionListValidationResult;
-import org.hyperledger.besu.ethereum.core.InclusionListValidator;
-import org.hyperledger.besu.ethereum.core.encoding.BlockAccessListDecoder;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
-import org.hyperledger.besu.ethereum.mainnet.block.access.list.BlockAccessList;
-import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
-import org.hyperledger.besu.metrics.BesuMetricCategory;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
-import org.hyperledger.besu.plugin.services.metrics.Counter;
 
-import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
-import java.util.Set;
 
 import io.vertx.core.Vertx;
-import org.apache.tuweni.bytes.Bytes;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class EngineNewPayloadV5 extends AbstractEngineNewPayload {
-
-  private static final Logger LOG = LoggerFactory.getLogger(EngineNewPayloadV5.class);
-
-  private final InclusionListValidator inclusionListValidator;
-  private final Counter validationFailuresCounter;
+  protected final Optional<Long> amsterdamMilestone;
 
   public EngineNewPayloadV5(
       final Vertx vertx,
@@ -63,8 +42,7 @@ public class EngineNewPayloadV5 extends AbstractEngineNewPayload {
       final MergeMiningCoordinator mergeCoordinator,
       final EthPeers ethPeers,
       final EngineCallListener engineCallListener,
-      final MetricsSystem metricsSystem,
-      final InclusionListValidator inclusionListValidator) {
+      final MetricsSystem metricsSystem) {
     super(
         vertx,
         timestampSchedule,
@@ -73,12 +51,7 @@ public class EngineNewPayloadV5 extends AbstractEngineNewPayload {
         ethPeers,
         engineCallListener,
         metricsSystem);
-    this.inclusionListValidator = inclusionListValidator;
-    this.validationFailuresCounter =
-        metricsSystem.createCounter(
-            BesuMetricCategory.RPC,
-            "engine_inclusion_list_validation_failures",
-            "Total number of inclusion list validation failures");
+    this.amsterdamMilestone = timestampSchedule.milestoneFor(AMSTERDAM);
   }
 
   @Override
@@ -86,81 +59,13 @@ public class EngineNewPayloadV5 extends AbstractEngineNewPayload {
     return RpcMethod.ENGINE_NEW_PAYLOAD_V5.getMethodName();
   }
 
-  /**
-   * Validates inclusion list constraints before processing the payload. Per engine-api-eip7805.md:
-   * returns INCLUSION_LIST_UNSATISFIED with latestValidHash=null and validationError=null if the
-   * payload does not satisfy the inclusion list constraints.
-   */
-  @Override
-  public JsonRpcResponse syncResponse(final JsonRpcRequestContext requestContext) {
-    final List<String> inclusionListTxHexStrings = extractInclusionListTransactions(requestContext);
-
-    if (!inclusionListTxHexStrings.isEmpty()) {
-      final EnginePayloadParameter blockParam;
-      try {
-        blockParam = requestContext.getRequiredParameter(0, EnginePayloadParameter.class);
-      } catch (final JsonRpcParameterException e) {
-        return super.syncResponse(requestContext);
-      }
-
-      final List<Bytes> inclusionListTxBytes =
-          inclusionListTxHexStrings.stream().map(Bytes::fromHexString).toList();
-      final List<Bytes> payloadTxBytes =
-          blockParam.getTransactions().stream().map(Bytes::fromHexString).toList();
-
-      LOG.atDebug()
-          .setMessage("IL validation: block={}, IL txs={}, payload txs={}, validator={}")
-          .addArgument(blockParam.getBlockHash())
-          .addArgument(inclusionListTxBytes.size())
-          .addArgument(payloadTxBytes.size())
-          .addArgument(inclusionListValidator.getClass().getSimpleName())
-          .log();
-
-      final Set<Bytes> payloadTxSet = new HashSet<>(payloadTxBytes);
-      final boolean allPresent = inclusionListTxBytes.stream().allMatch(payloadTxSet::contains);
-
-      if (!allPresent) {
-        final InclusionListValidationResult ilResult =
-            inclusionListValidator.validate(payloadTxBytes, inclusionListTxBytes);
-
-        if (ilResult.getStatus() == InclusionListValidationResult.Status.UNSATISFIED) {
-          validationFailuresCounter.inc();
-          LOG.warn(
-              "Inclusion list unsatisfied for block {}: {}",
-              blockParam.getBlockHash(),
-              ilResult.getErrorMessage().orElse("unknown"));
-          // Per spec: latestValidHash MUST be null, validationError MUST be null
-          return new JsonRpcSuccessResponse(
-              requestContext.getRequest().getId(),
-              new EnginePayloadStatusResult(
-                  EngineStatus.INCLUSION_LIST_UNSATISFIED, null, Optional.empty()));
-        }
-
-        if (ilResult.getStatus() == InclusionListValidationResult.Status.INVALID) {
-          validationFailuresCounter.inc();
-          LOG.warn(
-              "Inclusion list invalid for block {}: {}",
-              blockParam.getBlockHash(),
-              ilResult.getErrorMessage().orElse("unknown"));
-        }
-      } else {
-        LOG.atInfo()
-            .setMessage("IL validation passed for block {}: {} IL transactions present")
-            .addArgument(blockParam.getBlockHash())
-            .addArgument(inclusionListTxBytes.size())
-            .log();
-      }
-    }
-
-    return super.syncResponse(requestContext);
-  }
-
   @Override
   protected ValidationResult<RpcErrorType> validateParameters(
       final EnginePayloadParameter payloadParameter,
       final Optional<List<String>> maybeVersionedHashParam,
       final Optional<String> maybeBeaconBlockRootParam,
-      final Optional<List<String>> maybeRequestsParam) {
+      final Optional<List<String>> maybeRequestsParam,
+      final Optional<List<String>> maybeInclusionListTransactions) {
     if (payloadParameter.getBlobGasUsed() == null) {
       return ValidationResult.invalid(
           RpcErrorType.INVALID_BLOB_GAS_USED_PARAMS, "Missing blob gas used field");
@@ -177,6 +82,10 @@ public class EngineNewPayloadV5 extends AbstractEngineNewPayload {
     } else if (maybeRequestsParam.isEmpty()) {
       return ValidationResult.invalid(
           RpcErrorType.INVALID_EXECUTION_REQUESTS_PARAMS, "Missing execution requests field");
+    } else if (payloadParameter.getBlockAccessList() == null
+        || payloadParameter.getBlockAccessList().isEmpty()) {
+      return ValidationResult.invalid(
+          RpcErrorType.INVALID_SLOT_NUMBER_PARAMS, "Missing block access list field");
     } else if (payloadParameter.getSlotNumber() == null) {
       return ValidationResult.invalid(
           RpcErrorType.INVALID_SLOT_NUMBER_PARAMS, "Missing slot number field");
@@ -185,38 +94,12 @@ public class EngineNewPayloadV5 extends AbstractEngineNewPayload {
   }
 
   @Override
-  protected Optional<BlockAccessList> extractBlockAccessList(
-      final EnginePayloadParameter payloadParameter) throws InvalidBlockAccessListException {
-    final String blockAccessList = payloadParameter.getBlockAccessList();
-    if (blockAccessList == null || blockAccessList.isEmpty()) {
-      throw new InvalidBlockAccessListException("Missing block access list field");
-    }
-    final Bytes encoded;
-    try {
-      encoded = Bytes.fromHexString(blockAccessList);
-    } catch (final IllegalArgumentException e) {
-      throw new InvalidBlockAccessListException("Invalid block access list encoding", e);
-    }
-    try {
-      return Optional.of(BlockAccessListDecoder.decode(new BytesValueRLPInput(encoded, false)));
-    } catch (final RuntimeException e) {
-      throw new InvalidBlockAccessListException("Invalid block access list encoding", e);
-    }
-  }
-
-  @Override
   protected ValidationResult<RpcErrorType> validateForkSupported(final long blockTimestamp) {
-    return ForkSupportHelper.validateForkSupported(AMSTERDAM, amsterdamMilestone, blockTimestamp);
-  }
-
-  private List<String> extractInclusionListTransactions(
-      final JsonRpcRequestContext requestContext) {
-    try {
-      final Optional<List<String>> maybeILTxs = requestContext.getOptionalList(4, String.class);
-      return maybeILTxs.orElse(Collections.emptyList());
-    } catch (final JsonRpcParameterException e) {
-      LOG.debug("No inclusion list transactions parameter provided", e);
-      return Collections.emptyList();
-    }
+    return ForkSupportHelper.validateForkSupported(
+        AMSTERDAM,
+        amsterdamMilestone,
+        BOGOTA,
+        protocolSchedule.flatMap(s -> s.milestoneFor(BOGOTA)),
+        blockTimestamp);
   }
 }

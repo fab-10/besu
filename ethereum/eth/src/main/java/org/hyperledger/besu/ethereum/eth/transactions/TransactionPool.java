@@ -40,6 +40,7 @@ import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
+import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.DisabledPendingTransactions;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.TransactionValidationParams;
 import org.hyperledger.besu.ethereum.mainnet.TransactionValidator;
@@ -567,6 +568,11 @@ public class TransactionPool implements BlockAddedObserver {
 
   public Map<Address, SenderPendingTransactionsData> getPendingTransactionsBySender() {
     return pendingTransactions.getPendingTransactionsBySender();
+  }
+
+  public List<PendingTransaction> getInclusionListPendingTransactions(
+      final BlockHeader blockHeader) {
+    return pendingTransactions.getInclusionListPendingTransactions(blockHeader);
   }
 
   public OptionalLong getNextNonceForSender(final Address address) {

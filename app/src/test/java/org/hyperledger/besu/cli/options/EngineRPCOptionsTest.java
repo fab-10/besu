@@ -16,11 +16,11 @@ package org.hyperledger.besu.cli.options;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.hyperledger.besu.ethereum.core.InclusionListConfiguration;
-import org.hyperledger.besu.ethereum.core.InclusionListValidationMode;
-import org.hyperledger.besu.ethereum.core.InclusionListValidator;
-import org.hyperledger.besu.ethereum.core.LenientInclusionListValidator;
-import org.hyperledger.besu.ethereum.core.StrictInclusionListValidator;
+import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListValidationMode;
+import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListValidator;
+import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.LenientInclusionListValidator;
+import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.StrictInclusionListValidator;
 
 import java.util.List;
 
