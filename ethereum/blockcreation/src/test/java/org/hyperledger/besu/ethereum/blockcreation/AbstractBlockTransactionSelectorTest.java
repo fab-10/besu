@@ -104,6 +104,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
@@ -1205,6 +1206,139 @@ public abstract class AbstractBlockTransactionSelectorTest {
 
     selector.get().buildTransactionListForBlock();
     await().atMost(Duration.ofMillis(500)).until(tecIsCancelled::get);
+  }
+
+  /**
+   * When an external thread calls cancel() while the plugin selection task is genuinely running
+   * (sleeping), FutureTask.cancel(true) transitions the task to CANCELLED/INTERRUPTED state and
+   * get() throws CancellationException. The old code re-threw that exception; the new code catches
+   * it, logs at DEBUG, and returns gracefully.
+   */
+  @Test
+  public void externalCancellationDuringPluginSelectionIsHandledGracefully() {
+    final CountDownLatch pluginTaskStarted = new CountDownLatch(1);
+    final AtomicReference<BlockTransactionSelector> selectorRef = new AtomicReference<>();
+
+    final PluginTransactionSelectorFactory transactionSelectorFactory =
+        mock(PluginTransactionSelectorFactory.class);
+    when(transactionSelectorFactory.create(any(), any()))
+        .thenReturn(
+            new PluginTransactionSelector() {
+              @Override
+              public TransactionSelectionResult evaluateTransactionPreProcessing(
+                  final TransactionEvaluationContext evaluationContext) {
+                pluginTaskStarted.countDown();
+                try {
+                  // simulate slow plugin work; will be interrupted by the external cancel()
+                  Thread.sleep(5_000);
+                } catch (InterruptedException e) {
+                  // expected when the task is externally cancelled
+                }
+                return SELECTED;
+              }
+
+              @Override
+              public TransactionSelectionResult evaluateTransactionPostProcessing(
+                  final TransactionEvaluationContext evaluationContext,
+                  final org.hyperledger.besu.plugin.data.TransactionProcessingResult
+                      processingResult) {
+                return SELECTED;
+              }
+            });
+
+    transactionSelectionService.registerPluginTransactionSelectorFactory(
+        transactionSelectorFactory);
+
+    selectorRef.set(
+        createBlockSelectorAndSetupTxPool(
+            createMiningParameters(
+                transactionSelectionService, Wei.ZERO, PositiveNumber.fromInt(10_000)),
+            transactionProcessor,
+            createBlock(301_000),
+            AddressHelpers.ofValue(1),
+            Wei.ZERO,
+            transactionSelectionService));
+
+    final var tx = createTransaction(0, Wei.of(7), 100_000);
+    ensureTransactionIsValid(tx);
+    transactionPool.addRemoteTransactions(List.of(tx));
+
+    // Cancel from an external thread once the plugin task is running
+    CompletableFuture.runAsync(
+        () -> {
+          try {
+            pluginTaskStarted.await();
+            selectorRef.get().cancel();
+          } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+          }
+        });
+
+    // must complete without throwing; the old code propagated CancellationException out of
+    // pluginTimeLimitedSelection, which would bubble up through buildTransactionListForBlock()
+    final var results = selectorRef.get().buildTransactionListForBlock();
+    assertThat(results).isNotNull();
+  }
+
+  /**
+   * When no plugin factory is registered the plugin phase is a no-op, so processTransaction is only
+   * called during internal selection. This test verifies that the CountDownLatch added in
+   * internalTimeLimitedSelection causes buildTransactionListForBlock() to wait for the selection
+   * thread to fully finish before returning, even when cancel() is called mid-processing and the
+   * thread sleeps briefly after the interrupt.
+   */
+  @Test
+  public void internalSelectionLatchEnsuresBuildTransactionListWaitsForSelectionThreadToFinish() {
+    final AtomicBoolean selectionThreadFinished = new AtomicBoolean(false);
+    final AtomicReference<BlockTransactionSelector> selectorRef = new AtomicReference<>();
+
+    final BlockTransactionSelector selector =
+        createBlockSelectorAndSetupTxPool(
+            // no plugin factory registered: plugin phase does nothing
+            createMiningParameters(
+                transactionSelectionService, Wei.ZERO, PositiveNumber.fromInt(5_000)),
+            transactionProcessor,
+            createBlock(500_000),
+            AddressHelpers.ofValue(1),
+            Wei.ZERO,
+            transactionSelectionService);
+    selectorRef.set(selector);
+
+    final var tx = createTransaction(0, Wei.of(7), 100_000);
+    transactionPool.addRemoteTransactions(List.of(tx));
+
+    // On processing: cancel the selector (from within the selection thread), sleep to simulate
+    // work that continues after the interrupt, then mark as finished.
+    final Answer<TransactionProcessingResult> slowCancelAnswer =
+        invocation -> {
+          selectorRef.get().cancel(); // triggers FutureTask.cancel(true) on current task
+          try {
+            Thread.sleep(300); // wakes immediately via InterruptedException
+          } catch (InterruptedException e) {
+            try {
+              Thread.sleep(200); // simulate cleanup still running after interrupt
+            } catch (InterruptedException ie) {
+              Thread.currentThread().interrupt();
+            }
+          }
+          selectionThreadFinished.set(true);
+          return TransactionProcessingResult.invalid(
+              ValidationResult.invalid(EXECUTION_INTERRUPTED));
+        };
+
+    when(transactionProcessor.processTransaction(
+            any(), any(), eq(tx), any(), any(), any(), any(), any()))
+        .thenAnswer(slowCancelAnswer);
+    when(transactionProcessor.processTransaction(
+            any(), any(), eq(tx), any(), any(), any(), any(), any(), any()))
+        .thenAnswer(slowCancelAnswer);
+
+    selector.buildTransactionListForBlock();
+
+    // Without the CountDownLatch, buildTransactionListForBlock() would return immediately after
+    // the CancellationException from get(), while the selection thread is still sleeping.
+    // With the latch, it waits for the thread's finally block to countDown before returning.
+    assertThat(selectionThreadFinished.get()).isTrue();
   }
 
   private void internalBlockSelectionTimeoutSimulation(
