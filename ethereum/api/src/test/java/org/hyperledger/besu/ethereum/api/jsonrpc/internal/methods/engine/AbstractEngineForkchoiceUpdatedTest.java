@@ -103,7 +103,7 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
   protected final BlockHeaderTestFixture blockHeaderBuilder =
       new BlockHeaderTestFixture().baseFeePerGas(Wei.ONE);
 
-  @Mock private ProtocolSpec protocolSpec;
+  @Mock protected ProtocolSpec protocolSpec;
   @Mock protected ProtocolSchedule protocolSchedule;
   @Mock private ProtocolContext protocolContext;
 
@@ -245,6 +245,7 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             String.valueOf(mockHeader.getTimestamp() + 1),
             Bytes32.fromHexStringLenient("0xDEADBEEF").toHexString(),
             Address.ECREC.toString(),
+            null,
             null,
             null,
             null);
@@ -438,6 +439,7 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             Address.ECREC.toString(),
             null,
             null,
+            null,
             null);
 
     var resp =
@@ -476,6 +478,7 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             Address.ECREC.toString(),
             emptyList(),
             null,
+            null,
             null);
 
     var resp =
@@ -502,6 +505,7 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             Address.ECREC.toString(),
             emptyList(),
             null,
+            null,
             null);
 
     var resp =
@@ -526,6 +530,7 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             String.valueOf(mockHeader.getTimestamp() + 1),
             Bytes32.fromHexStringLenient("0xDEADBEEF").toHexString(),
             Address.ECREC.toString(),
+            null,
             null,
             null,
             null);
@@ -567,6 +572,7 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             Address.ECREC.toString(),
             null,
             null,
+            null,
             null);
 
     var resp =
@@ -603,6 +609,7 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             Bytes32.fromHexStringLenient("0xDEADBEEF").toHexString(),
             Address.ECREC.toString(),
             withdrawalParameters,
+            null,
             null,
             null);
 
@@ -646,6 +653,7 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             String.valueOf(mockHeader.getTimestamp() + 1),
             Bytes32.fromHexStringLenient("0xDEADBEEF").toHexString(),
             Address.ECREC.toString(),
+            null,
             null,
             null,
             null);

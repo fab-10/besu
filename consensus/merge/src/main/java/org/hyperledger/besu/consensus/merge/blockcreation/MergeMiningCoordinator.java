@@ -32,6 +32,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
+import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.immutables.value.Value;
 
@@ -59,7 +60,8 @@ public interface MergeMiningCoordinator extends MiningCoordinator {
       Address feeRecipient,
       Optional<List<Withdrawal>> withdrawals,
       Optional<Bytes32> parentBeaconBlockRoot,
-      Optional<Long> slotNumber) {}
+      Optional<Long> slotNumber,
+      Optional<List<Bytes>> inclusionListTransactions) {}
 
   /**
    * Prepare payload identifier.

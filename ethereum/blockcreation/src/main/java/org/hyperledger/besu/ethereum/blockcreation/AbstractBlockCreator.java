@@ -195,6 +195,30 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
       final long timestamp,
       final boolean rewardCoinbase,
       final BlockHeader parentHeader) {
+    return createBlock(
+        maybeTransactions,
+        maybeOmmers,
+        maybeWithdrawals,
+        maybePrevRandao,
+        maybeParentBeaconBlockRoot,
+        maybeSlotNumber,
+        timestamp,
+        rewardCoinbase,
+        parentHeader,
+        List.of());
+  }
+
+  public BlockCreationResult createBlock(
+      final Optional<List<Transaction>> maybeTransactions,
+      final Optional<List<BlockHeader>> maybeOmmers,
+      final Optional<List<Withdrawal>> maybeWithdrawals,
+      final Optional<Bytes32> maybePrevRandao,
+      final Optional<Bytes32> maybeParentBeaconBlockRoot,
+      final Optional<Long> maybeSlotNumber,
+      final long timestamp,
+      final boolean rewardCoinbase,
+      final BlockHeader parentHeader,
+      final List<Transaction> inclusionListTransactions) {
 
     final var timings = new BlockCreationTiming();
 
@@ -261,7 +285,8 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
               pluginTransactionSelector,
               selectorsStateManager,
               parentHeader,
-              blockAccessListBuilder);
+              blockAccessListBuilder,
+              inclusionListTransactions);
       transactionResults.logSelectionStats();
       timings.register("txsSelection");
       timings.registerValue(
@@ -405,8 +430,8 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
       final PluginTransactionSelector pluginTransactionSelector,
       final SelectorsStateManager selectorsStateManager,
       final BlockHeader parentHeader,
-      final Optional<BlockAccessListBuilder> blockAccessListBuilder)
-      throws RuntimeException {
+      final Optional<BlockAccessListBuilder> blockAccessListBuilder,
+      final List<Transaction> inclusionListTransactions) {
     final MainnetTransactionProcessor transactionProcessor = protocolSpec.getTransactionProcessor();
 
     final AbstractBlockProcessor.TransactionReceiptFactory transactionReceiptFactory =
@@ -432,7 +457,8 @@ public abstract class AbstractBlockCreator implements AsyncBlockCreator {
             pluginTransactionSelector,
             ethScheduler,
             selectorsStateManager,
-            blockAccessListBuilder);
+            blockAccessListBuilder,
+            inclusionListTransactions);
 
     if (transactions.isPresent()) {
       return selector.evaluateTransactions(transactions.get());
