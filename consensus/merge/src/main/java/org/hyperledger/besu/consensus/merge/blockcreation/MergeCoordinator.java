@@ -39,8 +39,6 @@ import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.MiningConfiguration;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.Withdrawal;
-import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
-import org.hyperledger.besu.ethereum.core.encoding.TransactionDecoder;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.sync.backwardsync.BackwardSyncContext;
 import org.hyperledger.besu.ethereum.eth.sync.backwardsync.BadChainListener;
@@ -60,7 +58,6 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.concurrent.CancellationException;
@@ -70,10 +67,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
-import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -314,9 +309,6 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
       }
     }
 
-    final List<Transaction> decodedIlTransactions =
-        getInclusionListTransactions(inclusionListTransactions);
-
     // Create the async block building task and store it
     tryToBuildBetterBlock(
         timestamp,
@@ -327,35 +319,9 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
         parentBeaconBlockRoot,
         slotNumber,
         parentHeader,
-        decodedIlTransactions);
+        inclusionListTransactions);
 
     return payloadIdentifier;
-  }
-
-  private static List<Transaction> getInclusionListTransactions(
-      final Optional<List<Bytes>> inclusionListTransactions) {
-    // Decode inclusion list transaction bytes to Transaction objects
-    final List<Transaction> decodedIlTransactions =
-        inclusionListTransactions
-            .map(
-                ilBytes ->
-                    ilBytes.stream()
-                        .map(
-                            bytes -> {
-                              try {
-                                return TransactionDecoder.decodeOpaqueBytes(
-                                    bytes, EncodingContext.BLOCK_BODY);
-                              } catch (final Exception e) {
-                                LOG.warn(
-                                    "Failed to decode inclusion list transaction, skipping: {}",
-                                    e.getMessage());
-                                return null;
-                              }
-                            })
-                        .filter(Objects::nonNull)
-                        .collect(Collectors.toList()))
-            .orElse(List.of());
-    return decodedIlTransactions;
   }
 
   private void cancelAnyExistingBlockCreationTasks(final PayloadIdentifier payloadIdentifier) {
