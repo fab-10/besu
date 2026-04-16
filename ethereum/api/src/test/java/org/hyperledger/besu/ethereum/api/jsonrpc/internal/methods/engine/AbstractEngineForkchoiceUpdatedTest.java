@@ -257,7 +257,8 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             payloadParams.getSuggestedFeeRecipient(),
             Optional.empty(),
             Optional.empty(),
-            Optional.empty());
+            Optional.empty(),
+            List.of());
 
     when(mergeCoordinator.preparePayload(
             new PreparePayloadArgsBuilder()
@@ -543,7 +544,8 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             payloadParams.getSuggestedFeeRecipient(),
             Optional.empty(),
             Optional.empty(),
-            Optional.empty());
+            Optional.empty(),
+            List.of());
 
     when(mergeCoordinator.preparePayload(any(PreparePayloadArgs.class))).thenReturn(mockPayloadId);
 
@@ -627,7 +629,8 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             payloadParams.getSuggestedFeeRecipient(),
             withdrawals,
             Optional.empty(),
-            Optional.empty());
+            Optional.empty(),
+            List.of());
 
     when(mergeCoordinator.preparePayload(any(PreparePayloadArgs.class))).thenReturn(mockPayloadId);
 
@@ -666,7 +669,8 @@ public abstract class AbstractEngineForkchoiceUpdatedTest {
             payloadParams.getSuggestedFeeRecipient(),
             Optional.empty(),
             Optional.empty(),
-            Optional.empty());
+            Optional.empty(),
+            List.of());
 
     when(mergeCoordinator.preparePayload(any(PreparePayloadArgs.class))).thenReturn(mockPayloadId);
 
