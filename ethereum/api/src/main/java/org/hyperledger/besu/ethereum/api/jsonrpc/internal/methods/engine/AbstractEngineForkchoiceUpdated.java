@@ -14,7 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
-import static java.util.stream.Collectors.toList;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.AMSTERDAM;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.CANCUN;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.EngineStatus.INVALID;
@@ -72,9 +71,18 @@ public abstract class AbstractEngineForkchoiceUpdated extends ExecutionEngineJso
     amsterdamMilestone = protocolSchedule.milestoneFor(AMSTERDAM);
   }
 
-  protected ValidationResult<RpcErrorType> validateParameter(
-      final EngineForkchoiceUpdatedParameter forkchoiceUpdatedParameter,
-      final Optional<EnginePayloadAttributesParameter> maybePayloadAttributes) {
+  protected ValidationResult<RpcErrorType> validateForkChoiceParameter(
+      final EngineForkchoiceUpdatedParameter fcuParameter) {
+    if (fcuParameter.getHeadBlockHash() == null) {
+      return ValidationResult.invalid(
+          getInvalidPayloadAttributesError(), "Missing head block hash");
+    } else if (fcuParameter.getSafeBlockHash() == null) {
+      return ValidationResult.invalid(
+          getInvalidPayloadAttributesError(), "Missing safe block hash");
+    } else if (fcuParameter.getFinalizedBlockHash() == null) {
+      return ValidationResult.invalid(
+          getInvalidPayloadAttributesError(), "Missing finalized block hash");
+    }
     return ValidationResult.valid();
   }
 
@@ -105,6 +113,13 @@ public abstract class AbstractEngineForkchoiceUpdated extends ExecutionEngineJso
     }
 
     LOG.debug("Forkchoice parameters {}", forkChoice);
+
+    final ValidationResult<RpcErrorType> parameterValidationResult =
+        validateForkChoiceParameter(forkChoice);
+    if (!parameterValidationResult.isValid()) {
+      return new JsonRpcErrorResponse(requestId, parameterValidationResult);
+    }
+
     mergeContext
         .get()
         .fireNewUnverifiedForkchoiceEvent(
@@ -133,69 +148,52 @@ public abstract class AbstractEngineForkchoiceUpdated extends ExecutionEngineJso
       return syncingResponse(requestId, forkChoice);
     }
 
-    ForkchoiceResult forkchoiceResult = null;
+    final BlockHeader newHead = maybeNewHead.get();
+    final ForkchoiceResult forkchoiceResult;
     if (!isValidForkchoiceState(
-        forkChoice.getSafeBlockHash(), forkChoice.getFinalizedBlockHash(), maybeNewHead.get())) {
+        forkChoice.getSafeBlockHash(), forkChoice.getFinalizedBlockHash(), newHead)) {
       logAtInfoFCUCall(INVALID, forkChoice);
       return new JsonRpcErrorResponse(requestId, RpcErrorType.INVALID_FORKCHOICE_STATE);
     } else {
       forkchoiceResult =
           mergeCoordinator.updateForkChoice(
-              maybeNewHead.get(),
-              forkChoice.getFinalizedBlockHash(),
-              forkChoice.getSafeBlockHash());
+              newHead, forkChoice.getFinalizedBlockHash(), forkChoice.getSafeBlockHash());
     }
 
-    Optional<List<Withdrawal>> withdrawals = Optional.empty();
+    final Optional<List<Withdrawal>> withdrawals;
     if (maybePayloadAttributes.isPresent()) {
       final EnginePayloadAttributesParameter payloadAttributes = maybePayloadAttributes.get();
-      withdrawals =
-          maybePayloadAttributes.flatMap(
-              pa ->
-                  Optional.ofNullable(pa.getWithdrawals())
-                      .map(
-                          ws ->
-                              ws.stream()
-                                  .map(WithdrawalParameter::toWithdrawal)
-                                  .collect(toList())));
-      Optional<JsonRpcErrorResponse> maybeError =
+      logPayload(payloadAttributes);
+
+      final Optional<JsonRpcErrorResponse> maybeValidationError =
           isPayloadAttributesValid(requestId, payloadAttributes);
-      if (maybeError.isPresent()) {
+      if (maybeValidationError.isPresent()) {
         LOG.atWarn()
             .setMessage("RpcError {}: {}")
-            .addArgument(maybeError.get().getErrorType())
-            .addArgument(
-                () ->
-                    maybePayloadAttributes
-                        .map(EnginePayloadAttributesParameter::serialize)
-                        .orElse(null))
+            .addArgument(maybeValidationError.get().getErrorType())
+            .addArgument(payloadAttributes::serialize)
             .log();
-        return maybeError.get();
+        return maybeValidationError.get();
       }
-    }
 
-    final BlockHeader newHead = maybeNewHead.get();
-    if (maybePayloadAttributes.isPresent()) {
-      Optional<JsonRpcErrorResponse> maybeError =
+      final Optional<JsonRpcErrorResponse> maybeError =
           isPayloadAttributeRelevantToNewHead(requestId, maybePayloadAttributes.get(), newHead);
       if (maybeError.isPresent()) {
         return maybeError.get();
       }
+
+      withdrawals =
+          Optional.ofNullable(payloadAttributes.getWithdrawals())
+              .map(ws -> ws.stream().map(WithdrawalParameter::toWithdrawal).toList());
       if (!getWithdrawalsValidator(
               protocolSchedule.get(), newHead, maybePayloadAttributes.get().getTimestamp())
           .validateWithdrawals(withdrawals)) {
         return new JsonRpcErrorResponse(requestId, getInvalidPayloadAttributesError());
       }
+    } else {
+      withdrawals = Optional.empty();
+      LOG.debug("Payload attributes are null");
     }
-
-    ValidationResult<RpcErrorType> parameterValidationResult =
-        validateParameter(forkChoice, maybePayloadAttributes);
-    if (!parameterValidationResult.isValid()) {
-      return new JsonRpcSuccessResponse(requestId, parameterValidationResult);
-    }
-
-    maybePayloadAttributes.ifPresentOrElse(
-        this::logPayload, () -> LOG.debug("Payload attributes are null"));
 
     if (forkchoiceResult.shouldNotProceedToPayloadBuildProcess()) {
       if (ForkchoiceResult.Status.IGNORE_UPDATE_TO_OLD_HEAD.equals(forkchoiceResult.getStatus())) {
