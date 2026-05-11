@@ -43,6 +43,8 @@ import io.vertx.core.Vertx;
 public sealed class EngineForkchoiceUpdatedV2<PA extends PayloadAttributesV2>
     extends EngineForkchoiceUpdatedV1<PA> permits EngineForkchoiceUpdatedV3 {
 
+  private final Optional<Long> shanghaiTimestamp;
+
   public EngineForkchoiceUpdatedV2(
       final Vertx vertx,
       final ProtocolSchedule protocolSchedule,
@@ -59,6 +61,7 @@ public sealed class EngineForkchoiceUpdatedV2<PA extends PayloadAttributesV2>
         engineCallListener,
         minFork,
         maxFork);
+    shanghaiTimestamp = protocolSchedule.milestoneFor(HardforkId.MainnetHardforkId.SHANGHAI);
   }
 
   @Override
@@ -81,13 +84,31 @@ public sealed class EngineForkchoiceUpdatedV2<PA extends PayloadAttributesV2>
 
   private ValidationResult<RpcErrorType> validatePayloadAttributesV2(
       final BlockHeader newHead, final PayloadAttributesV2 attrs) {
-    if (attrs.getWithdrawals() == null) {
-      return ValidationResult.invalid(
-          RpcErrorType.INVALID_PAYLOAD_ATTRIBUTES, "Withdrawals must not be null");
+    // engine_forkchoiceUpdatedV2 is peculiar since it allows 2 different versions of payload
+    // attributes
+    // so we need to check the timestamp for withdrawals validation.
+
+    // Spec: payloadAttributes: instance of PayloadAttributesV1 | PayloadAttributesV2, where:
+    // PayloadAttributesV1 MUST be used to build a payload with the timestamp value lower than the
+    // Shanghai timestamp,
+    // PayloadAttributesV2 MUST be used to build a payload with the timestamp value greater or equal
+    // to the Shanghai timestamp,
+    if (attrs.getTimestamp() < shanghaiTimestamp.orElse(0L)) {
+      if (attrs.getWithdrawals() != null) {
+        return ValidationResult.invalid(
+            RpcErrorType.INVALID_PAYLOAD_ATTRIBUTES,
+            "Withdrawals must be null before Shanghai hardfork");
+      }
+    } else {
+      if (attrs.getWithdrawals() == null) {
+        return ValidationResult.invalid(
+            RpcErrorType.INVALID_PAYLOAD_ATTRIBUTES,
+            "Withdrawals must not be null after Shanghai hardfork");
+      }
     }
     return WithdrawalsValidatorProvider.getWithdrawalsValidator(
                 protocolSchedule.get(), newHead, attrs.getTimestamp())
-            .validateWithdrawals(Optional.of(attrs.getWithdrawals()))
+            .validateWithdrawals(Optional.ofNullable(attrs.getWithdrawals()))
         ? ValidationResult.valid()
         : ValidationResult.invalid(getInvalidPayloadAttributesError(), "Invalid withdrawals");
   }
@@ -96,6 +117,7 @@ public sealed class EngineForkchoiceUpdatedV2<PA extends PayloadAttributesV2>
   protected void setPreparePayloadArgs(
       final PreparePayloadArgsBuilder preparePayloadArgsBuilder, final PA attrs) {
     super.setPreparePayloadArgs(preparePayloadArgsBuilder, attrs);
-    preparePayloadArgsBuilder.withdrawals(attrs.getWithdrawals());
+    if (attrs.getWithdrawals() != null)
+      preparePayloadArgsBuilder.withdrawals(attrs.getWithdrawals());
   }
 }

@@ -50,6 +50,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineN
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineNewPayloadV5;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EnginePreparePayloadDebug;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineQosTimer;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.forkchoiceupdated.EngineForkchoiceUpdatedV2;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.blockcreation.MiningCoordinator;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;

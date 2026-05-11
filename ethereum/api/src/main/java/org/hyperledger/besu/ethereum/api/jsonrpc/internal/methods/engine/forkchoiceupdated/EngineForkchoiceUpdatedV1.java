@@ -68,8 +68,8 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
 
   protected final MergeMiningCoordinator mergeCoordinator;
 
-  private final Optional<Long> minForkMilestone;
-  private final Optional<Long> maxForkMilestone;
+  private final Optional<Long> minForkTimestamp;
+  private final Optional<Long> maxForkTimestamp;
 
   private final HardforkId minSupportedFork;
   private final HardforkId firstUnsupportedFork;
@@ -86,11 +86,11 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
     this.mergeCoordinator = mergeCoordinator;
     this.minSupportedFork = minSupportedFork;
     this.firstUnsupportedFork = firstUnsupportedFork;
-    this.minForkMilestone =
+    this.minForkTimestamp =
         minSupportedFork != null
             ? protocolSchedule.milestoneFor(minSupportedFork)
             : Optional.empty();
-    this.maxForkMilestone =
+    this.maxForkTimestamp =
         firstUnsupportedFork != null
             ? protocolSchedule.milestoneFor(firstUnsupportedFork)
             : Optional.empty();
@@ -339,7 +339,7 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
 
   private ValidationResult<RpcErrorType> validateForkRange(final long timestamp) {
     return ForkSupportHelper.validateForkSupported(
-        minSupportedFork, minForkMilestone, firstUnsupportedFork, maxForkMilestone, timestamp);
+        minSupportedFork, minForkTimestamp, firstUnsupportedFork, maxForkTimestamp, timestamp);
   }
 
   private boolean isValidForkchoiceState(
