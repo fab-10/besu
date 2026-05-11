@@ -84,7 +84,7 @@ public sealed class EngineForkchoiceUpdatedV3<PA extends PayloadAttributesV3>
   }
 
   private ValidationResult<RpcErrorType> validatePayloadAttributesV3(final PA attrs) {
-    if (attrs.getParentBeaconBlockRoot().isEmpty()) {
+    if (attrs.getParentBeaconBlockRoot() == null || attrs.getParentBeaconBlockRoot().isEmpty()) {
       return ValidationResult.invalid(
           getInvalidPayloadAttributesError(), "Missing parentBeaconBlockRoot");
     }

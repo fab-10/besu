@@ -34,7 +34,8 @@ public sealed class PayloadAttributesV3 extends PayloadAttributesV2 permits Payl
       @JsonProperty("withdrawals") final List<Withdrawal> withdrawals,
       @JsonProperty("parentBeaconBlockRoot") final String parentBeaconBlockRoot) {
     super(timestamp, prevRandao, suggestedFeeRecipient, withdrawals);
-    this.parentBeaconBlockRoot = Bytes32.fromHexString(parentBeaconBlockRoot);
+    this.parentBeaconBlockRoot =
+        parentBeaconBlockRoot != null ? Bytes32.fromHexString(parentBeaconBlockRoot) : null;
   }
 
   public Bytes32 getParentBeaconBlockRoot() {

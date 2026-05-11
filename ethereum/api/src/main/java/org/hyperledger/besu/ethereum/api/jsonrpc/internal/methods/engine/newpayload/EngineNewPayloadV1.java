@@ -102,9 +102,9 @@ import org.slf4j.LoggerFactory;
  */
 public sealed class EngineNewPayloadV1<EP extends ExecutionPayloadV1>
     extends ExecutionEngineJsonRpcMethod permits EngineNewPayloadV2 {
+  private static final Logger LOG = LoggerFactory.getLogger(EngineNewPayloadV1.class);
 
   private static final Hash OMMERS_HASH_CONSTANT = Hash.EMPTY_LIST_HASH;
-  private static final Logger LOG = LoggerFactory.getLogger(EngineNewPayloadV1.class);
   private static final BlockHeaderFunctions headerFunctions = new MainnetBlockHeaderFunctions();
   private final MergeMiningCoordinator mergeCoordinator;
   private final EthPeers ethPeers;
@@ -112,8 +112,8 @@ public sealed class EngineNewPayloadV1<EP extends ExecutionPayloadV1>
 
   private final HardforkId minSupportedFork;
   private final HardforkId firstUnsupportedFork;
-  private final Optional<Long> minForkMilestone;
-  private final Optional<Long> maxForkMilestone;
+  private final Optional<Long> minForkTimestamp;
+  private final Optional<Long> maxForkTimestamp;
 
   /**
    * Creates an {@code engine_newPayloadV1} method.
@@ -149,11 +149,11 @@ public sealed class EngineNewPayloadV1<EP extends ExecutionPayloadV1>
 
     this.minSupportedFork = minSupportedFork;
     this.firstUnsupportedFork = firstUnsupportedFork;
-    this.minForkMilestone =
+    this.minForkTimestamp =
         minSupportedFork != null
             ? protocolSchedule.milestoneFor(minSupportedFork)
             : Optional.empty();
-    this.maxForkMilestone =
+    this.maxForkTimestamp =
         firstUnsupportedFork != null
             ? protocolSchedule.milestoneFor(firstUnsupportedFork)
             : Optional.empty();
@@ -690,7 +690,7 @@ public sealed class EngineNewPayloadV1<EP extends ExecutionPayloadV1>
   @Override
   protected ValidationResult<RpcErrorType> validateForkSupported(final long blockTimestamp) {
     return ForkSupportHelper.validateForkSupported(
-        minSupportedFork, minForkMilestone, firstUnsupportedFork, maxForkMilestone, blockTimestamp);
+        minSupportedFork, minForkTimestamp, firstUnsupportedFork, maxForkTimestamp, blockTimestamp);
   }
 
   /**

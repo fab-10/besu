@@ -34,7 +34,7 @@ public final class PayloadAttributesV4 extends PayloadAttributesV3 {
       @JsonProperty("parentBeaconBlockRoot") final String parentBeaconBlockRoot,
       @JsonProperty("slotNumber") final String slotNumber) {
     super(timestamp, prevRandao, suggestedFeeRecipient, withdrawals, parentBeaconBlockRoot);
-    this.slotNumber = Long.decode(slotNumber);
+    this.slotNumber = slotNumber != null ? Long.decode(slotNumber) : null;
   }
 
   public Long getSlotNumber() {

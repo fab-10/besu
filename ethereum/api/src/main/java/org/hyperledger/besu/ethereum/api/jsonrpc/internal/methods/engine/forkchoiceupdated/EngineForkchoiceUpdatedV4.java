@@ -93,7 +93,7 @@ public final class EngineForkchoiceUpdatedV4<PA extends PayloadAttributesV4>
   }
 
   private ValidationResult<RpcErrorType> validatePayloadAttributesV4(final PA attrs) {
-    if (attrs.getSlotNumber() < 0) {
+    if (attrs.getSlotNumber() == null || attrs.getSlotNumber() < 0) {
       return ValidationResult.invalid(
           RpcErrorType.INVALID_SLOT_NUMBER_PARAMS, "Invalid slotNumber");
     }
