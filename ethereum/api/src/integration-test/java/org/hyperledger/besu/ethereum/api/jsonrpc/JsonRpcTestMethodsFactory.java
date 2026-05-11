@@ -230,6 +230,6 @@ public class JsonRpcTestMethodsFactory {
             Optional.empty(),
             transactionSimulator,
             new DeterministicEthScheduler(),
-                false);
+            false);
   }
 }

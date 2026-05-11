@@ -81,6 +81,10 @@ public sealed class EngineForkchoiceUpdatedV2<PA extends PayloadAttributesV2>
 
   private ValidationResult<RpcErrorType> validatePayloadAttributesV2(
       final BlockHeader newHead, final PayloadAttributesV2 attrs) {
+    if (attrs.getWithdrawals() == null) {
+      return ValidationResult.invalid(
+          RpcErrorType.INVALID_PAYLOAD_ATTRIBUTES, "Withdrawals must not be null");
+    }
     return WithdrawalsValidatorProvider.getWithdrawalsValidator(
                 protocolSchedule.get(), newHead, attrs.getTimestamp())
             .validateWithdrawals(Optional.of(attrs.getWithdrawals()))

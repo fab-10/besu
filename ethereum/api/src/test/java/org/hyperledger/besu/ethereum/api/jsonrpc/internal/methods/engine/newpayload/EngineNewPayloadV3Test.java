@@ -239,8 +239,7 @@ public class EngineNewPayloadV3Test extends EngineNewPayloadV2Test {
             .validateParameters(
                 payload,
                 Optional.of(List.of()),
-                Optional.of(
-                    "0x0000000000000000000000000000000000000000000000000000000000000000"),
+                Optional.of("0x0000000000000000000000000000000000000000000000000000000000000000"),
                 Optional.empty());
     assertThat(res.isValid()).isTrue();
   }
@@ -259,8 +258,7 @@ public class EngineNewPayloadV3Test extends EngineNewPayloadV2Test {
             .validateParameters(
                 payload,
                 Optional.of(List.of()),
-                Optional.of(
-                    "0x0000000000000000000000000000000000000000000000000000000000000000"),
+                Optional.of("0x0000000000000000000000000000000000000000000000000000000000000000"),
                 Optional.of(emptyList()));
     assertThat(res.isValid()).isFalse();
     assertThat(res.getInvalidReason()).isEqualTo(RpcErrorType.INVALID_EXECUTION_REQUESTS_PARAMS);
@@ -379,8 +377,7 @@ public class EngineNewPayloadV3Test extends EngineNewPayloadV2Test {
   }
 
   @Override
-  protected ExecutionPayloadV3 mockEnginePayload(
-      final BlockHeader header, final List<String> txs) {
+  protected ExecutionPayloadV3 mockEnginePayload(final BlockHeader header, final List<String> txs) {
     return mockEnginePayload(header, txs, null);
   }
 
@@ -435,7 +432,8 @@ public class EngineNewPayloadV3Test extends EngineNewPayloadV2Test {
 
     try (MockedStatic<ExcessBlobGasCalculator> mocked = mockStatic(ExcessBlobGasCalculator.class)) {
       mocked
-          .when(() -> ExcessBlobGasCalculator.calculateExcessBlobGasForParent(localSpec, localParent))
+          .when(
+              () -> ExcessBlobGasCalculator.calculateExcessBlobGasForParent(localSpec, localParent))
           .thenReturn(expected);
 
       Optional<BlobGas> result = v3.validateExcessBlobGas(localHeader, localParent, localSpec);
@@ -456,7 +454,8 @@ public class EngineNewPayloadV3Test extends EngineNewPayloadV2Test {
 
     try (MockedStatic<ExcessBlobGasCalculator> mocked = mockStatic(ExcessBlobGasCalculator.class)) {
       mocked
-          .when(() -> ExcessBlobGasCalculator.calculateExcessBlobGasForParent(localSpec, localParent))
+          .when(
+              () -> ExcessBlobGasCalculator.calculateExcessBlobGasForParent(localSpec, localParent))
           .thenReturn(calculated);
 
       Optional<BlobGas> result = v3.validateExcessBlobGas(localHeader, localParent, localSpec);
@@ -536,7 +535,8 @@ public class EngineNewPayloadV3Test extends EngineNewPayloadV2Test {
 
     try (MockedStatic<ExcessBlobGasCalculator> mocked = mockStatic(ExcessBlobGasCalculator.class)) {
       mocked
-          .when(() -> ExcessBlobGasCalculator.calculateExcessBlobGasForParent(localSpec, localParent))
+          .when(
+              () -> ExcessBlobGasCalculator.calculateExcessBlobGasForParent(localSpec, localParent))
           .thenReturn(BlobGas.of(1000));
 
       var result =

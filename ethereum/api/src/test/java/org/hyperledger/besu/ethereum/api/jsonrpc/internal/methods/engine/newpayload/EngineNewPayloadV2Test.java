@@ -102,8 +102,7 @@ public class EngineNewPayloadV2Test extends EngineNewPayloadV1Test {
   }
 
   @Override
-  protected ExecutionPayloadV2 mockEnginePayload(
-      final BlockHeader header, final List<String> txs) {
+  protected ExecutionPayloadV2 mockEnginePayload(final BlockHeader header, final List<String> txs) {
     return mockEnginePayload(header, txs, null);
   }
 

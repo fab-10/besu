@@ -403,8 +403,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
    * version's typed payload (covariant return); since {@code ExecutionPayloadVN} extends V1, the
    * inherited tests' calls to this method get the right concrete type at runtime.
    */
-  protected ExecutionPayloadV1 mockEnginePayload(
-      final BlockHeader header, final List<String> txs) {
+  protected ExecutionPayloadV1 mockEnginePayload(final BlockHeader header, final List<String> txs) {
     return new ExecutionPayloadV1(
         header.getHash(),
         header.getParentHash(),

@@ -49,8 +49,8 @@ import org.apache.tuweni.bytes.Bytes;
  *   <li>If V6 introduces new payload fields, add {@code ExecutionPayloadV5 extends
  *       ExecutionPayloadV4} and bump V6's bound. Otherwise V6 reuses {@link ExecutionPayloadV4}.
  *   <li>Create {@code EngineNewPayloadV6 extends EngineNewPayloadV5}.
- *   <li>Update the wiring in {@code ExecutionEngineJsonRpcMethods.createEngineNewPayloadMethods}
- *       to chain {@code .thenFrom(NEXT_FORK, EngineNewPayloadV6.class)}.
+ *   <li>Update the wiring in {@code ExecutionEngineJsonRpcMethods.createEngineNewPayloadMethods} to
+ *       chain {@code .thenFrom(NEXT_FORK, EngineNewPayloadV6.class)}.
  * </ol>
  *
  * @param <EP> the {@link ExecutionPayloadV4} (or subtype) this version accepts as RPC parameter
