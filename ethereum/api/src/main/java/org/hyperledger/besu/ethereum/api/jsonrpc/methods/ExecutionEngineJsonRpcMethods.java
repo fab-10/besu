@@ -43,6 +43,11 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineG
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetPayloadV4;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetPayloadV5;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetPayloadV6;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineNewPayloadV1;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineNewPayloadV2;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineNewPayloadV3;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineNewPayloadV4;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineNewPayloadV5;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EnginePreparePayloadDebug;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineQosTimer;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
@@ -76,6 +81,7 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
   private final String commit;
   private final TransactionPool transactionPool;
   private final MetricsSystem metricsSystem;
+  private final boolean engineNewPayloadUseRefactored;
 
   ExecutionEngineJsonRpcMethods(
       final MiningCoordinator miningCoordinator,
@@ -86,7 +92,8 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
       final String clientVersion,
       final String commit,
       final TransactionPool transactionPool,
-      final MetricsSystem metricsSystem) {
+      final MetricsSystem metricsSystem,
+      final boolean engineNewPayloadUseRefactored) {
     this.mergeCoordinator =
         Optional.ofNullable(miningCoordinator)
             .filter(MiningCoordinator::isCompatibleWithEngineApi)
@@ -99,6 +106,7 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
     this.commit = commit;
     this.transactionPool = transactionPool;
     this.metricsSystem = metricsSystem;
+    this.engineNewPayloadUseRefactored = engineNewPayloadUseRefactored;
   }
 
   @Override
@@ -119,13 +127,25 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
               mergeCoordinator.get(),
               engineQosTimer));
 
-      executionEngineApisSupported.addAll(
-          createEngineNewPayloadMethods(
-              consensusEngineServer,
-              protocolSchedule,
-              protocolContext,
-              mergeCoordinator.get(),
-              engineQosTimer));
+      // Transitional toggle: legacy engine.EngineNewPayloadV{1..5} (default) vs refactored
+      // newpayload.EngineNewPayloadV{1..5} (when --engine-newpayload-use-refactored=true).
+      if (engineNewPayloadUseRefactored) {
+        executionEngineApisSupported.addAll(
+            createEngineNewPayloadMethods(
+                consensusEngineServer,
+                protocolSchedule,
+                protocolContext,
+                mergeCoordinator.get(),
+                engineQosTimer));
+      } else {
+        executionEngineApisSupported.addAll(
+            createLegacyEngineNewPayloadMethods(
+                consensusEngineServer,
+                protocolSchedule,
+                protocolContext,
+                mergeCoordinator.get(),
+                engineQosTimer));
+      }
 
       executionEngineApisSupported.addAll(
           Arrays.asList(
@@ -258,42 +278,101 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
             engineQosTimer);
   }
 
-    private Collection<? extends JsonRpcMethod> createEngineNewPayloadMethods(
-            final Vertx consensusEngineServer,
-            final ProtocolSchedule protocolSchedule,
-            final ProtocolContext protocolContext,
-            final MergeMiningCoordinator mergeMiningCoordinator,
-            final EngineQosTimer engineQosTimer) {
-
-        return VersionScheduler.startsWith(
-                        org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.newpayload
-                                .EngineNewPayloadV1.class)
-                .thenFrom(
-                        SHANGHAI,
-                        org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.newpayload
-                                .EngineNewPayloadV2.class)
-                .thenFrom(
-                        CANCUN,
-                        org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.newpayload
-                                .EngineNewPayloadV3.class)
-                .thenFrom(
-                        PRAGUE,
-                        org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.newpayload
-                                .EngineNewPayloadV4.class)
-                .thenFrom(
-                        AMSTERDAM,
-                        org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.newpayload
-                                .EngineNewPayloadV5.class)
-                .build(
-                        protocolSchedule,
-                        consensusEngineServer,
-                        protocolSchedule,
-                        protocolContext,
-                        mergeMiningCoordinator,
-                        ethPeers,
-                        engineQosTimer,
-                        metricsSystem);
+  private Collection<? extends JsonRpcMethod> createLegacyEngineNewPayloadMethods(
+      final Vertx consensusEngineServer,
+      final ProtocolSchedule protocolSchedule,
+      final ProtocolContext protocolContext,
+      final MergeMiningCoordinator mergeMiningCoordinator,
+      final EngineQosTimer engineQosTimer) {
+    final List<JsonRpcMethod> legacy = new ArrayList<>();
+    legacy.add(
+        new EngineNewPayloadV1(
+            consensusEngineServer,
+            protocolSchedule,
+            protocolContext,
+            mergeMiningCoordinator,
+            ethPeers,
+            engineQosTimer,
+            metricsSystem));
+    legacy.add(
+        new EngineNewPayloadV2(
+            consensusEngineServer,
+            protocolSchedule,
+            protocolContext,
+            mergeMiningCoordinator,
+            ethPeers,
+            engineQosTimer,
+            metricsSystem));
+    legacy.add(
+        new EngineNewPayloadV3(
+            consensusEngineServer,
+            protocolSchedule,
+            protocolContext,
+            mergeMiningCoordinator,
+            ethPeers,
+            engineQosTimer,
+            metricsSystem));
+    if (protocolSchedule.milestoneFor(PRAGUE).isPresent()) {
+      legacy.add(
+          new EngineNewPayloadV4(
+              consensusEngineServer,
+              protocolSchedule,
+              protocolContext,
+              mergeMiningCoordinator,
+              ethPeers,
+              engineQosTimer,
+              metricsSystem));
     }
+    if (protocolSchedule.milestoneFor(AMSTERDAM).isPresent()) {
+      legacy.add(
+          new EngineNewPayloadV5(
+              consensusEngineServer,
+              protocolSchedule,
+              protocolContext,
+              mergeMiningCoordinator,
+              ethPeers,
+              engineQosTimer,
+              metricsSystem));
+    }
+    return legacy;
+  }
+
+  private Collection<? extends JsonRpcMethod> createEngineNewPayloadMethods(
+      final Vertx consensusEngineServer,
+      final ProtocolSchedule protocolSchedule,
+      final ProtocolContext protocolContext,
+      final MergeMiningCoordinator mergeMiningCoordinator,
+      final EngineQosTimer engineQosTimer) {
+
+    return VersionScheduler.startsWith(
+            org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.newpayload
+                .EngineNewPayloadV1.class)
+        .thenFrom(
+            SHANGHAI,
+            org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.newpayload
+                .EngineNewPayloadV2.class)
+        .thenFrom(
+            CANCUN,
+            org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.newpayload
+                .EngineNewPayloadV3.class)
+        .thenFrom(
+            PRAGUE,
+            org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.newpayload
+                .EngineNewPayloadV4.class)
+        .thenFrom(
+            AMSTERDAM,
+            org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.newpayload
+                .EngineNewPayloadV5.class)
+        .build(
+            protocolSchedule,
+            consensusEngineServer,
+            protocolSchedule,
+            protocolContext,
+            mergeMiningCoordinator,
+            ethPeers,
+            engineQosTimer,
+            metricsSystem);
+  }
 
   private static class VersionScheduler {
     final List<MethodVersionBuildData> readyMethods = new ArrayList<>();

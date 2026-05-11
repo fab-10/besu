@@ -87,7 +87,8 @@ public class JsonRpcMethodsFactory {
       final ApiConfiguration apiConfiguration,
       final Optional<EnodeDnsConfiguration> enodeDnsConfiguration,
       final TransactionSimulator transactionSimulator,
-      final EthScheduler ethScheduler) {
+      final EthScheduler ethScheduler,
+      final boolean engineNewPayloadUseRefactored) {
     final Map<String, JsonRpcMethod> enabled = new HashMap<>();
     if (!rpcApis.isEmpty()) {
       final JsonRpcMethod modules = new RpcModules(rpcApis);
@@ -123,7 +124,8 @@ public class JsonRpcMethodsFactory {
                   clientVersion,
                   commit,
                   transactionPool,
-                  metricsSystem),
+                  metricsSystem,
+                  engineNewPayloadUseRefactored),
               new EthJsonRpcMethods(
                   blockchainQueries,
                   synchronizer,

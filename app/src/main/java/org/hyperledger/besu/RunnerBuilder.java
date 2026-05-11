@@ -198,6 +198,7 @@ public class RunnerBuilder {
   private List<IPAddress> allowedSubnets = new ArrayList<>();
   private boolean poaDiscoveryRetryBootnodes = true;
   private TransactionValidatorServiceImpl transactionValidatorService;
+  private boolean engineNewPayloadUseRefactored = false;
 
   /** Instantiates a new Runner builder. */
   public RunnerBuilder() {}
@@ -389,6 +390,21 @@ public class RunnerBuilder {
   public RunnerBuilder engineJsonRpcConfiguration(
       final JsonRpcConfiguration engineJsonRpcConfiguration) {
     this.engineJsonRpcConfiguration = Optional.ofNullable(engineJsonRpcConfiguration);
+    return this;
+  }
+
+  /**
+   * Toggle the refactored sealed-hierarchy {@code engine_newPayload} V1–V5 implementation.
+   *
+   * <p>When {@code false} (default) the legacy {@code engine.EngineNewPayloadV{1..5}} classes are
+   * wired; when {@code true} the refactored {@code newpayload.EngineNewPayloadV{1..5}} classes are
+   * wired. Transitional developer flag for the engine API refactor.
+   *
+   * @param engineNewPayloadUseRefactored true to use the refactored implementation
+   * @return the runner builder
+   */
+  public RunnerBuilder engineNewPayloadUseRefactored(final boolean engineNewPayloadUseRefactored) {
+    this.engineNewPayloadUseRefactored = engineNewPayloadUseRefactored;
     return this;
   }
 
@@ -1381,7 +1397,8 @@ public class RunnerBuilder {
                 apiConfiguration,
                 enodeDnsConfiguration,
                 transactionSimulator,
-                ethScheduler);
+                ethScheduler,
+                engineNewPayloadUseRefactored);
     methods.putAll(besuController.getAdditionalJsonRpcMethods(jsonRpcApis));
 
     final var pluginMethods =

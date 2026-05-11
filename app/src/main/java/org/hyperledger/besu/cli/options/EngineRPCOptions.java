@@ -62,6 +62,15 @@ public class EngineRPCOptions implements CLIOptions<EngineRPCConfiguration> {
   private final JsonRPCAllowlistHostsProperty engineHostsAllowlist =
       new JsonRPCAllowlistHostsProperty();
 
+  @CommandLine.Option(
+      hidden = true,
+      names = {"--engine-newpayload-use-refactored"},
+      description =
+          "Use the refactored sealed-hierarchy engine_newPayload V1–V5 implementation"
+              + " (default: ${DEFAULT-VALUE}). Transitional developer flag for the engine API"
+              + " refactor; will be removed once the refactor is complete.")
+  private final Boolean engineNewPayloadUseRefactored = false;
+
   @Override
   public EngineRPCConfiguration toDomainObject() {
     return new EngineRPCConfiguration(
@@ -69,7 +78,8 @@ public class EngineRPCOptions implements CLIOptions<EngineRPCConfiguration> {
         engineRpcPort,
         engineJwtKeyFile,
         isEngineAuthDisabled,
-        engineHostsAllowlist);
+        engineHostsAllowlist,
+        engineNewPayloadUseRefactored);
   }
 
   @Override

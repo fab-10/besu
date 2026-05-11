@@ -27,10 +27,13 @@ import java.nio.file.Path;
  * @param engineJwtKeyFile Path to file containing shared secret key for JWT signature verification
  * @param isEngineAuthDisabled Disable authentication for Engine APIs
  * @param engineHostsAllowlist List of hosts to allowlist for Engine APIs
+ * @param engineNewPayloadUseRefactored Use the refactored sealed-hierarchy engine_newPayload V1–V5
+ *     implementation. Transitional developer flag for the engine API refactor.
  */
 public record EngineRPCConfiguration(
     Boolean overrideEngineRpcEnabled,
     Integer engineRpcPort,
     Path engineJwtKeyFile,
     Boolean isEngineAuthDisabled,
-    JsonRPCAllowlistHostsProperty engineHostsAllowlist) {}
+    JsonRPCAllowlistHostsProperty engineHostsAllowlist,
+    Boolean engineNewPayloadUseRefactored) {}

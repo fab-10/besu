@@ -35,16 +35,19 @@ import java.util.Map;
 import java.util.Optional;
 
 import io.vertx.core.Vertx;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 class ExecutionEngineJsonRpcMethodsTest {
   /**
    * Ensures that all methods returned by create() are valid and declared "engine_" methods. This
    * protects against accidental omissions from the RpcMethod enum, which is used by
-   * engine_exchangeCapabilities
+   * engine_exchangeCapabilities. Parameterised over the {@code engineNewPayloadUseRefactored}
+   * toggle so both the legacy and refactored ENP wirings are exercised.
    */
-  @Test
-  void testGetSupportedMethods() {
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void testGetSupportedMethods(final boolean engineNewPayloadUseRefactored) {
     MiningCoordinator miningCoordinator = mock(MergeMiningCoordinator.class);
     when(miningCoordinator.isCompatibleWithEngineApi()).thenReturn(true);
     ProtocolSchedule protocolSchedule = mock(ProtocolSchedule.class);
@@ -59,7 +62,8 @@ class ExecutionEngineJsonRpcMethodsTest {
             "testClient",
             "testCommit",
             mock(TransactionPool.class),
-            mock(MetricsSystem.class));
+            mock(MetricsSystem.class),
+            engineNewPayloadUseRefactored);
 
     Map<String, JsonRpcMethod> engineMethods = methods.create();
     List<String> expectedMethodNames =
