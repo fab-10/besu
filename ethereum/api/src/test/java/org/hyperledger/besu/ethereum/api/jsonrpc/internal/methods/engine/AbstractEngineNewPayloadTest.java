@@ -46,7 +46,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.WithdrawalP
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcError;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EnginePayloadStatusResult;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.PayloadStatusV1;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockBody;
@@ -145,7 +145,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
         .thenReturn(Optional.of(mock(BlockHeader.class)));
     var resp = resp(mockEnginePayload(mockHeader, emptyList()));
 
-    EnginePayloadStatusResult res = fromSuccessResp(resp);
+    PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash().get()).isEqualTo(mockHash);
     assertThat(res.getStatusAsString()).isEqualTo(INVALID.name());
     assertThat(res.getError()).isEqualTo("error 42");
@@ -163,7 +163,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
 
     var resp = resp(mockEnginePayload(mockHeader, emptyList()));
 
-    EnginePayloadStatusResult res = fromSuccessResp(resp);
+    PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).isEmpty();
     assertThat(res.getStatusAsString()).isEqualTo(ACCEPTED.name());
     assertThat(res.getError()).isNull();
@@ -194,7 +194,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
 
     var resp = resp(mockEnginePayload(mockHeader, emptyList()));
 
-    EnginePayloadStatusResult res = fromSuccessResp(resp);
+    PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).isEqualTo(Optional.of(latestValidHash));
     assertThat(res.getStatusAsString()).isEqualTo(INVALID.name());
     verify(engineCallListener, times(1)).executionEngineCalled();
@@ -262,7 +262,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
     lenient().when(mockHeader.getHash()).thenReturn(Hash.fromHexStringLenient("0x1337"));
     var resp = resp(mockEnginePayload(mockHeader, emptyList()));
 
-    EnginePayloadStatusResult res = fromSuccessResp(resp);
+    PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getStatusAsString()).isEqualTo(getExpectedInvalidBlockHashStatus().name());
     verify(engineCallListener, times(1)).executionEngineCalled();
   }
@@ -275,7 +275,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
 
     var resp = resp(mockEnginePayload(paramHeader, emptyList()));
 
-    EnginePayloadStatusResult res = fromSuccessResp(resp);
+    PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).isEmpty();
     assertThat(res.getStatusAsString()).isEqualTo(getExpectedInvalidBlockHashStatus().name());
     verify(engineCallListener, times(1)).executionEngineCalled();
@@ -289,7 +289,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
 
     var resp = resp(mockEnginePayload(mockHeader, List.of("0xDEAD", "0xBEEF")));
 
-    EnginePayloadStatusResult res = fromSuccessResp(resp);
+    PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash().get()).isEqualTo(mockHash);
     assertThat(res.getStatusAsString()).isEqualTo(INVALID.name());
     assertThat(res.getError()).isEqualTo("Failed to decode transactions from block parameter");
@@ -302,7 +302,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
     when(mergeContext.isSyncing()).thenReturn(Boolean.TRUE);
     var resp = resp(mockEnginePayload(mockHeader, emptyList()));
 
-    EnginePayloadStatusResult res = fromSuccessResp(resp);
+    PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getError()).isNull();
     assertThat(res.getStatusAsString()).isEqualTo(SYNCING.name());
     assertThat(res.getLatestValidHash()).isEmpty();
@@ -316,7 +316,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
         .thenReturn(CompletableFuture.completedFuture(null));
     var resp = resp(mockEnginePayload(mockHeader, emptyList()));
 
-    EnginePayloadStatusResult res = fromSuccessResp(resp);
+    PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).isEmpty();
     assertThat(res.getStatusAsString()).isEqualTo(SYNCING.name());
     assertThat(res.getError()).isNull();
@@ -356,7 +356,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
 
     var resp = resp(mockEnginePayload(paramHeader, emptyList()));
 
-    EnginePayloadStatusResult res = fromSuccessResp(resp);
+    PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).isEmpty();
     assertThat(res.getStatusAsString()).isEqualTo(INVALID.name());
     assertThat(res.getError()).isEqualTo("Field extraData must not be null");
@@ -370,7 +370,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
     var resp = resp(mockEnginePayload(mockHeader, emptyList()));
     when(protocolSpec.getWithdrawalsValidator())
         .thenReturn(new WithdrawalsValidator.AllowedWithdrawals());
-    EnginePayloadStatusResult res = fromSuccessResp(resp);
+    PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).contains(Hash.ZERO);
     assertThat(res.getStatusAsString()).isEqualTo(INVALID.name());
     assertThat(res.getError()).isEqualTo("Block already present in bad block manager.");
@@ -455,7 +455,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
     return INVALID;
   }
 
-  protected EnginePayloadStatusResult fromSuccessResp(final JsonRpcResponse resp) {
+  protected PayloadStatusV1 fromSuccessResp(final JsonRpcResponse resp) {
     if (resp.getType().equals(RpcResponseType.ERROR)) {
       final JsonRpcError jsonRpcError = fromErrorResp(resp);
       throw new AssertionError(
@@ -465,7 +465,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
     return Optional.of(resp)
         .map(JsonRpcSuccessResponse.class::cast)
         .map(JsonRpcSuccessResponse::getResult)
-        .map(EnginePayloadStatusResult.class::cast)
+        .map(PayloadStatusV1.class::cast)
         .get();
   }
 
@@ -487,7 +487,7 @@ public abstract class AbstractEngineNewPayloadTest extends AbstractScheduledApiT
   }
 
   protected void assertValidResponse(final BlockHeader mockHeader, final JsonRpcResponse resp) {
-    EnginePayloadStatusResult res = fromSuccessResp(resp);
+    PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash().get()).isEqualTo(mockHeader.getHash());
     assertThat(res.getStatusAsString()).isEqualTo(VALID.name());
     assertThat(res.getError()).isNull();
