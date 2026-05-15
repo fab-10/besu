@@ -29,6 +29,8 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngin
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.JsonRpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineExchangeCapabilities;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineExchangeTransitionConfiguration;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineForkchoiceUpdatedV3;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineForkchoiceUpdatedV4;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetBlobsV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetBlobsV2;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetBlobsV3;
@@ -50,6 +52,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineN
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineNewPayloadV5;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EnginePreparePayloadDebug;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineQosTimer;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.forkchoiceupdated.EngineForkchoiceUpdatedV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.forkchoiceupdated.EngineForkchoiceUpdatedV2;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.blockcreation.MiningCoordinator;
@@ -381,6 +384,14 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
     boolean firstSet = false;
 
     static VersionScheduler startsWith(
+        final Class<? extends ExecutionEngineJsonRpcMethod> firstVersion) {
+      final VersionScheduler vs = new VersionScheduler();
+      vs.pendingMethods.add(new MethodVersionBuildData(firstVersion, null, null));
+      vs.firstSet = true;
+      return vs;
+    }
+
+    static VersionScheduler startsWith(
         final Class<? extends ExecutionEngineJsonRpcMethod> firstVersion, final HardforkId to) {
       final VersionScheduler vs = new VersionScheduler();
       vs.readyMethods.add(new MethodVersionBuildData(firstVersion, null, to));
@@ -388,7 +399,8 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
       return vs;
     }
 
-    public VersionScheduler thenAlsoFromBeginning(final Class<EngineForkchoiceUpdatedV2> method) {
+    public VersionScheduler thenAlsoFromBeginning(
+        final Class<? extends ExecutionEngineJsonRpcMethod> method) {
       checkState(
           pendingMethods.isEmpty() || pendingMethods.stream().allMatch(mvbd -> mvbd.to == null),
           "This method can only be called for methods that are active since Paris hardfork");
@@ -440,10 +452,5 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
         return new MethodVersionBuildData(versionClass, from, hardforkId);
       }
     }
-
-    record MethodVersionBuildData(
-        Class<? extends ExecutionEngineJsonRpcMethod> versionClass,
-        HardforkId from,
-        HardforkId to) {}
   }
 }
