@@ -153,16 +153,20 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
         setupValidPayload(
             getMinSupportedTimestamp(),
             new BlockProcessingResult(Optional.of(new BlockProcessingOutputs(null, List.of()))));
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     assertValidResponse(mockHeader, resp);
+  }
+
+  protected Object[] getVersionSpecificParams(final Map<String, Object> payloadParams) {
+    return new Object[] {payloadParams};
   }
 
   @Test
   public void shouldReturnInvalidOnBlockExecutionError() {
     BlockHeader mockHeader =
         setupValidPayload(getMinSupportedTimestamp(), new BlockProcessingResult("error 42"));
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash().get()).isEqualTo(mockHash);
@@ -177,7 +181,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
     when(mergeCoordinator.getLatestValidAncestor(any(BlockHeader.class)))
         .thenReturn(Optional.empty());
 
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).isEmpty();
@@ -193,7 +197,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
 
     when(blockchain.getBlockByHash(any())).thenReturn(Optional.of(mockBlock));
 
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     assertValidResponse(mockHeader, resp);
   }
@@ -207,7 +211,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
     when(mergeCoordinator.getLatestValidHashOfBadBlock(mockHeader.getHash()))
         .thenReturn(Optional.of(latestValidHash));
 
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).isEqualTo(Optional.of(latestValidHash));
@@ -221,7 +225,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
         setupValidPayload(
             getMinSupportedTimestamp(),
             new BlockProcessingResult(Optional.empty(), new StorageException("database bedlam")));
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     fromErrorResp(resp);
     verify(engineCallListener, times(1)).executionEngineCalled();
@@ -234,7 +238,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
             getMinSupportedTimestamp(),
             new BlockProcessingResult(Optional.empty(), new MerkleTrieException("missing leaf")));
 
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     verify(engineCallListener, times(1)).executionEngineCalled();
 
@@ -247,7 +251,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
     when(mergeCoordinator.rememberBlock(any(), any()))
         .thenThrow(new MerkleTrieException("missing leaf"));
 
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     verify(engineCallListener, times(1)).executionEngineCalled();
 
@@ -262,7 +266,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
     when(blockchain.getBlockHeader(mockHeader.getParentHash()))
         .thenReturn(Optional.of(mock(BlockHeader.class)));
     when(mockHeader.getHash()).thenReturn(Hash.fromHexStringLenient("0x1337"));
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getStatusAsString()).isEqualTo(getExpectedInvalidBlockHashStatus().name());
@@ -275,7 +279,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
     BlockHeader paramHeader = spy(realHeader);
     when(paramHeader.getHash()).thenReturn(Hash.fromHexStringLenient("0x1337"));
 
-    var resp = resp(mockEnginePayloadParam(paramHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(paramHeader, emptyList())));
 
     PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).isEmpty();
@@ -289,7 +293,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
 
     var executionPayload = mockEnginePayloadParam(mockHeader, List.of("0xDEAD", "0xBEEF"));
 
-    var resp = resp(executionPayload);
+    var resp = resp(getVersionSpecificParams(executionPayload));
 
     PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).isEmpty();
@@ -302,7 +306,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
   public void shouldRespondWithSyncingDuringForwardSync() {
     BlockHeader mockHeader = setupValidPayload(getMinSupportedTimestamp());
     when(mergeContext.isSyncing()).thenReturn(Boolean.TRUE);
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getError()).isNull();
@@ -316,7 +320,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
     BlockHeader mockHeader = createBlockHeader(getMinSupportedTimestamp());
     when(mergeCoordinator.appendNewPayloadToSync(any()))
         .thenReturn(CompletableFuture.completedFuture(null));
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).isEmpty();
@@ -332,7 +336,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
     when(paramHeader.getHash()).thenReturn(Hash.fromHexStringLenient("0x1337"));
     when(paramHeader.getExtraData().toHexString()).thenReturn(null);
 
-    var resp = resp(mockEnginePayloadParam(paramHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(paramHeader, emptyList())));
 
     final JsonRpcError jsonRpcError = fromErrorResp(resp);
     assertThat(jsonRpcError.getCode()).isEqualTo(INVALID_PARAMS.getCode());
@@ -345,7 +349,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
   public void shouldReturnInvalidWhenBadBlock() {
     when(mergeCoordinator.isBadBlock(any(Hash.class))).thenReturn(true);
     BlockHeader mockHeader = createBlockHeader(getMinSupportedTimestamp());
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
     PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).contains(Hash.ZERO);
     assertThat(res.getStatusAsString()).isEqualTo(INVALID.name());
@@ -360,7 +364,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
             getMaxSupportedTimestamp() + 1,
             new BlockProcessingResult(Optional.of(new BlockProcessingOutputs(null, List.of()))));
 
-    var resp = resp(mockEnginePayloadParam(mockHeader, emptyList()));
+    var resp = resp(getVersionSpecificParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     final JsonRpcError jsonRpcError = fromErrorResp(resp);
     assertThat(jsonRpcError.getCode()).isEqualTo(UNSUPPORTED_FORK.getCode());
