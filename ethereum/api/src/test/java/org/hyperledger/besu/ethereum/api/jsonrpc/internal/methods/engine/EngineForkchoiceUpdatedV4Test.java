@@ -23,6 +23,7 @@ import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.consensus.merge.blockcreation.PayloadIdentifier;
+import org.hyperledger.besu.consensus.merge.blockcreation.PreparePayloadArgsBuilder;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
@@ -131,7 +132,7 @@ public class EngineForkchoiceUpdatedV4Test extends AbstractEngineForkchoiceUpdat
     var forkchoiceRes = (EngineUpdateForkchoiceResult) resp.getResult();
 
     verify(mergeCoordinator, never())
-        .preparePayload(any(), any(), any(), any(), any(), any(), any(), any());
+        .preparePayload(any(MergeMiningCoordinator.PreparePayloadArgs.class));
 
     assertThat(forkchoiceRes.getPayloadStatus().getStatus()).isEqualTo(VALID);
     assertThat(forkchoiceRes.getPayloadStatus().getError()).isNull();
@@ -209,14 +210,16 @@ public class EngineForkchoiceUpdatedV4Test extends AbstractEngineForkchoiceUpdat
             List.of());
 
     when(mergeCoordinator.preparePayload(
-            mockHeader,
-            payloadParams.getTimestamp(),
-            payloadParams.getPrevRandao(),
-            Address.ECREC,
-            Optional.of(List.of()),
-            getParentBeaconBlockRoot(payloadParams),
-            getSlotNumber(payloadParams),
-            List.of()))
+            new PreparePayloadArgsBuilder()
+                .parentHeader(mockHeader)
+                .timestamp(payloadParams.getTimestamp())
+                .prevRandao(payloadParams.getPrevRandao())
+                .feeRecipient(Address.ECREC)
+                .withdrawals(List.of())
+                .parentBeaconBlockRoot(getParentBeaconBlockRoot(payloadParams))
+                .slotNumber(getSlotNumber(payloadParams))
+                .inclusionListTransactions(List.of())
+                .build()))
         .thenReturn(mockPayloadId);
 
     assertSuccessWithPayloadForForkchoiceResult(

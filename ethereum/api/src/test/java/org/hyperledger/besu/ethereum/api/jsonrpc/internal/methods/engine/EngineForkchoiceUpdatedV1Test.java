@@ -32,6 +32,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcRespon
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.apache.tuweni.bytes.Bytes32;
@@ -82,7 +83,8 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractEngineForkchoiceUpdat
             Address.ECREC.toString(),
             null,
             null,
-            null);
+            null,
+            List.of());
 
     final JsonRpcResponse resp =
         resp(
@@ -112,7 +114,8 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractEngineForkchoiceUpdat
             Address.ECREC.toString(),
             null,
             null,
-            null);
+            null,
+            List.of());
 
     final JsonRpcResponse resp =
         resp(

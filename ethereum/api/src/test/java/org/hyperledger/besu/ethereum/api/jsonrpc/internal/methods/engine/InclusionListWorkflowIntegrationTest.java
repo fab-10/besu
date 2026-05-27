@@ -241,8 +241,7 @@ public class InclusionListWorkflowIntegrationTest {
                 .map(Transaction::readFrom)
                 .toList());
 
-    when(mergeCoordinator.preparePayload(
-            any(), anyLong(), any(), any(), any(), any(), any(), any()))
+    when(mergeCoordinator.preparePayload(any(MergeMiningCoordinator.PreparePayloadArgs.class)))
         .thenReturn(mockPayloadId);
 
     final JsonRpcResponse fcuResponse =
@@ -255,8 +254,7 @@ public class InclusionListWorkflowIntegrationTest {
     assertThat(fcuResult.getPayloadId()).isNotNull();
 
     // Verify preparePayload was called with IL transactions
-    verify(mergeCoordinator)
-        .preparePayload(any(), anyLong(), any(), any(), any(), any(), any(), any());
+    verify(mergeCoordinator).preparePayload(any(MergeMiningCoordinator.PreparePayloadArgs.class));
 
     // Step 3: newPayloadV5 - validate payload with empty IL (valid, no constraints)
     final BlockHeader payloadHeader = setupValidPayloadHeader();

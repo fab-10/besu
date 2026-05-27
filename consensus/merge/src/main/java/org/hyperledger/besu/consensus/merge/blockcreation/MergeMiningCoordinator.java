@@ -51,6 +51,7 @@ public interface MergeMiningCoordinator extends MiningCoordinator {
    * @param withdrawals the withdrawals, if present
    * @param parentBeaconBlockRoot the parent beacon block root, if present
    * @param slotNumber the consensus-layer slot number, if present
+   * @param inclusionListTransactions the inclusion list transactions, if present
    */
   @Value.Builder
   record PreparePayloadArgs(

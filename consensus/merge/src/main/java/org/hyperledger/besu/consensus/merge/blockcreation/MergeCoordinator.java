@@ -242,10 +242,11 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
     final Optional<List<Withdrawal>> withdrawals = preparePayloadArgs.withdrawals();
     final Optional<Bytes32> parentBeaconBlockRoot = preparePayloadArgs.parentBeaconBlockRoot();
     final Optional<Long> slotNumber = preparePayloadArgs.slotNumber();
-    final Optional<List<Bytes>> inclusionListTransactions = preparePayloadArgs.inclusionListTransactions();
+    final List<Transaction> inclusionListTransactions =
+        preparePayloadArgs.inclusionListTransactions().orElse(List.of());
 
     // we assume that preparePayload is always called sequentially, since the RPC Engine calls
-    // are sequential, if this assumption changes then more synchronization should be added to
+    // are sequential, if this assumption changes, then more synchronization should be added to
     // shared data structures
 
     final PayloadIdentifier payloadIdentifier =

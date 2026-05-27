@@ -20,6 +20,7 @@ import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.consensus.merge.blockcreation.PayloadIdentifier;
+import org.hyperledger.besu.consensus.merge.blockcreation.PreparePayloadArgsBuilder;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
@@ -168,23 +169,14 @@ public class EngineForkchoiceUpdatedV3Test extends AbstractEngineForkchoiceUpdat
             List.of());
 
     when(mergeCoordinator.preparePayload(
-            mockHeader,
-            payloadParams.getTimestamp(),
-            payloadParams.getPrevRandao(),
-            Address.ECREC,
-            Optional.of(List.of()),
-            Optional.of(parentBeaconBlockRoot),
-            Optional.empty()))
-        .thenReturn(mockPayloadId);
-    when(mergeCoordinator.preparePayload(
-            mockHeader,
-            payloadParams.getTimestamp(),
-            payloadParams.getPrevRandao(),
-            Address.ECREC,
-            Optional.of(List.of()),
-            Optional.of(parentBeaconBlockRoot),
-            Optional.empty(),
-            List.of()))
+            new PreparePayloadArgsBuilder()
+                .parentHeader(mockHeader)
+                .timestamp(payloadParams.getTimestamp())
+                .prevRandao(payloadParams.getPrevRandao())
+                .feeRecipient(Address.ECREC)
+                .withdrawals(List.of())
+                .parentBeaconBlockRoot(parentBeaconBlockRoot)
+                .build()))
         .thenReturn(mockPayloadId);
 
     assertSuccessWithPayloadForForkchoiceResult(
