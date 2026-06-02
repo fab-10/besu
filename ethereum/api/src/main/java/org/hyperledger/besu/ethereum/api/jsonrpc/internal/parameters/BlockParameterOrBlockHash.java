@@ -42,6 +42,21 @@ public class BlockParameterOrBlockHash {
   private final Optional<Hash> blockHash;
   private final boolean requireCanonical;
 
+  /**
+   * A {@link BlockParameterOrBlockHash} representing the "latest" block. Used as the default when an
+   * optional block parameter is omitted from a request (per execution-apis: default 'latest').
+   */
+  public static final BlockParameterOrBlockHash LATEST = createLatest();
+
+  private static BlockParameterOrBlockHash createLatest() {
+    try {
+      return new BlockParameterOrBlockHash("latest");
+    } catch (final JsonProcessingException e) {
+      // "latest" is a constant, always-valid input, so this is unreachable.
+      throw new IllegalStateException(e);
+    }
+  }
+
   @JsonCreator
   public BlockParameterOrBlockHash(final Object value) throws JsonProcessingException {
     if (value instanceof String) {
