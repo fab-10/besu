@@ -121,6 +121,7 @@ class EthGetProofTest {
     final JsonRpcResponse latestResponse = method.response(latest);
 
     Assertions.assertThat(omittedResponse).isInstanceOf(JsonRpcSuccessResponse.class);
+    Assertions.assertThat(latestResponse).isInstanceOf(JsonRpcSuccessResponse.class);
     Assertions.assertThat(((JsonRpcSuccessResponse) omittedResponse).getResult())
         .isEqualTo(((JsonRpcSuccessResponse) latestResponse).getResult());
   }
