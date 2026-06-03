@@ -50,14 +50,7 @@ public class EthGetProof extends AbstractBlockParameterOrBlockHashMethod {
   @Override
   protected BlockParameterOrBlockHash blockParameterOrBlockHash(
       final JsonRpcRequestContext request) {
-    try {
-      return request
-          .getOptionalParameter(2, BlockParameterOrBlockHash.class)
-          .orElse(BlockParameterOrBlockHash.LATEST);
-    } catch (JsonRpcParameterException e) {
-      throw new InvalidJsonRpcParameters(
-          "Invalid block or block hash parameter (index 2)", RpcErrorType.INVALID_BLOCK_PARAMS, e);
-    }
+    return blockParameterOrBlockHashWithLatestDefault(request, 2);
   }
 
   @Override

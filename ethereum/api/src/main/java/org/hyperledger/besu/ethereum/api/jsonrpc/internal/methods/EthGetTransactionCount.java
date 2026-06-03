@@ -53,14 +53,7 @@ public class EthGetTransactionCount extends AbstractBlockParameterOrBlockHashMet
   @Override
   protected BlockParameterOrBlockHash blockParameterOrBlockHash(
       final JsonRpcRequestContext request) {
-    try {
-      return request
-          .getOptionalParameter(1, BlockParameterOrBlockHash.class)
-          .orElse(BlockParameterOrBlockHash.LATEST);
-    } catch (JsonRpcParameterException e) {
-      throw new InvalidJsonRpcParameters(
-          "Invalid block or block hash parameter (index 1)", RpcErrorType.INVALID_BLOCK_PARAMS, e);
-    }
+    return blockParameterOrBlockHashWithLatestDefault(request, 1);
   }
 
   @Override

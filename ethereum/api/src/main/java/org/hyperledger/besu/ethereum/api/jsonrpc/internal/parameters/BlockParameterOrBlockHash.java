@@ -43,18 +43,22 @@ public class BlockParameterOrBlockHash {
   private final boolean requireCanonical;
 
   /**
-   * A {@link BlockParameterOrBlockHash} representing the "latest" block. Used as the default when an
-   * optional block parameter is omitted from a request (per execution-apis: default 'latest').
+   * A {@link BlockParameterOrBlockHash} representing the "latest" block. Used as the default when
+   * an optional block parameter is omitted from a request (per execution-apis: default 'latest').
    */
-  public static final BlockParameterOrBlockHash LATEST = createLatest();
+  public static final BlockParameterOrBlockHash LATEST =
+      new BlockParameterOrBlockHash(
+          BlockParameterType.LATEST, OptionalLong.empty(), Optional.empty(), false);
 
-  private static BlockParameterOrBlockHash createLatest() {
-    try {
-      return new BlockParameterOrBlockHash("latest");
-    } catch (final JsonProcessingException e) {
-      // "latest" is a constant, always-valid input, so this is unreachable.
-      throw new IllegalStateException(e);
-    }
+  private BlockParameterOrBlockHash(
+      final BlockParameterType type,
+      final OptionalLong number,
+      final Optional<Hash> blockHash,
+      final boolean requireCanonical) {
+    this.type = type;
+    this.number = number;
+    this.blockHash = blockHash;
+    this.requireCanonical = requireCanonical;
   }
 
   @JsonCreator
