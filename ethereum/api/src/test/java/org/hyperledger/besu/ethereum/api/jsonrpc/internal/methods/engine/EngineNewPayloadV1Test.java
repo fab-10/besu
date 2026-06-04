@@ -126,12 +126,12 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
 
   protected EngineNewPayloadV1<?, ?> createMethodInstance() {
     return new EngineNewPayloadV1<>(
-        vertx,
         protocolSchedule,
         protocolContext,
+        vertx,
+        engineCallListener,
         mergeCoordinator,
         ethPeers,
-        engineCallListener,
         new NoOpMetricsSystem(),
         null,
         SHANGHAI);
