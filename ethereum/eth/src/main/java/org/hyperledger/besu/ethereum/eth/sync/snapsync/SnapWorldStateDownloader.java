@@ -208,7 +208,7 @@ public class SnapWorldStateDownloader implements WorldStateDownloader {
         ranges.forEach(
             (key, value) ->
                 newDownloadState.enqueueRequest(
-                    createAccountRangeDataRequest(stateRoot, key, value, false)));
+                    createAccountRangeDataRequest(stateRoot, key, value)));
       }
 
       Optional<CompleteTaskStep> maybeCompleteTask =
@@ -219,9 +219,7 @@ public class SnapWorldStateDownloader implements WorldStateDownloader {
               ethContext,
               fastSyncActions,
               snapSyncState,
-              fastSyncActions.getChainDownloaderListener(),
-              snapSyncConfiguration.getPivotBlockWindowValidity(),
-              snapSyncConfiguration.getPivotBlockDistanceBeforeCaching());
+              fastSyncActions.getChainDownloaderListener());
 
       SnapWorldStateDownloadProcess downloadProcess =
           SnapWorldStateDownloadProcess.builder()
