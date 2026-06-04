@@ -17,13 +17,17 @@ package org.hyperledger.besu.ethereum.eth.messages;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
+import org.hyperledger.besu.datatypes.Hash;
+import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
+import org.hyperledger.besu.ethereum.eth.transactions.CellMask;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAnnouncement;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.RawMessage;
 
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
@@ -40,6 +44,20 @@ public class NewPooledTransactionHashesMessageTest {
         msg.pendingTransactionAnnouncements();
     assertThat(pendingAnnouncements)
         .isEqualTo(transactions.stream().map(TransactionAnnouncement::new).toList());
+  }
+
+  @Test
+  public void roundTripEth72NewPooledTransactionHashesMessageWithBlobCellMask() {
+    final TransactionAnnouncement announcement =
+        new TransactionAnnouncement(
+            Hash.ZERO, TransactionType.BLOB, 1L, Optional.of(CellMask.FULL));
+
+    final NewPooledTransactionHashesMessage msg =
+        NewPooledTransactionHashesMessage.createAnnouncements(
+            List.of(announcement), EthProtocol.ETH72);
+
+    assertThat(msg.getCode()).isEqualTo(EthProtocolMessages.NEW_POOLED_TRANSACTION_HASHES);
+    assertThat(msg.pendingTransactionAnnouncements()).containsExactly(announcement);
   }
 
   @Test

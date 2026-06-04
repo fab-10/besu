@@ -22,8 +22,10 @@ import org.hyperledger.besu.ethereum.eth.SnapProtocol;
 import org.hyperledger.besu.ethereum.eth.messages.EthProtocolMessages;
 import org.hyperledger.besu.ethereum.eth.messages.GetBlockBodiesMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetBlockHeadersMessage;
+import org.hyperledger.besu.ethereum.eth.messages.GetCellsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetPooledTransactionsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.StatusMessage;
+import org.hyperledger.besu.ethereum.eth.transactions.CellMask;
 import org.hyperledger.besu.ethereum.eth.messages.snap.GetAccountRangeMessage;
 import org.hyperledger.besu.ethereum.eth.messages.snap.GetBlockAccessListsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.snap.GetByteCodesMessage;
@@ -335,6 +337,13 @@ public class EthPeer implements Comparable<EthPeer> {
     return sendRequest(
         requestManagers.get(EthProtocol.NAME).get(EthProtocolMessages.GET_POOLED_TRANSACTIONS),
         message);
+  }
+
+  public RequestManager.ResponseStream getCells(final List<Hash> hashes, final CellMask cellMask)
+      throws PeerNotConnected {
+    final GetCellsMessage message = GetCellsMessage.create(hashes, cellMask);
+    return sendRequest(
+        requestManagers.get(EthProtocol.NAME).get(EthProtocolMessages.GET_CELLS), message);
   }
 
   public RequestManager.ResponseStream getSnapAccountRange(

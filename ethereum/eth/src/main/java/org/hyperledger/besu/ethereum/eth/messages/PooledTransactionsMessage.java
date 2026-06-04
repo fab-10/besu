@@ -18,7 +18,9 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
 import org.hyperledger.besu.ethereum.core.encoding.TransactionDecoder;
 import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
+import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.AbstractMessageData;
+import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
@@ -42,11 +44,17 @@ public final class PooledTransactionsMessage extends AbstractMessageData {
   }
 
   public static PooledTransactionsMessage create(final List<Transaction> transactions) {
+    return create(transactions, EthProtocol.ETH71);
+  }
+
+  public static PooledTransactionsMessage create(
+      final List<Transaction> transactions, final Capability capability) {
+    final boolean includeBlobPayload = !EthProtocol.isEth72Compatible(capability);
     final BytesValueRLPOutput out = new BytesValueRLPOutput();
     out.writeList(
         transactions,
         (transaction, rlpOutput) -> {
-          TransactionEncoder.encodeRLP(transaction, rlpOutput, EncodingContext.POOLED_TRANSACTION);
+          TransactionEncoder.encodePooledTransaction(transaction, rlpOutput, includeBlobPayload);
         });
     return new PooledTransactionsMessage(out.encoded());
   }

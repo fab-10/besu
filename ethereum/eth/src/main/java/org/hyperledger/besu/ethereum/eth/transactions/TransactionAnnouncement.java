@@ -22,23 +22,43 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
-public record TransactionAnnouncement(Hash hash, TransactionType type, Long size) {
+public record TransactionAnnouncement(
+    Hash hash, TransactionType type, Long size, Optional<CellMask> cellMask) {
   public TransactionAnnouncement(final Transaction transaction) {
     this(
         checkNotNull(transaction, "Transaction cannot be null").getHash(),
         transaction.getType(),
-        (long) transaction.getSizeForAnnouncement());
+        (long) transaction.getSizeForAnnouncement(),
+        cellMaskFor(transaction));
   }
 
   public TransactionAnnouncement(final Hash hash, final TransactionType type, final Long size) {
+    this(hash, type, size, Optional.empty());
+  }
+
+  public TransactionAnnouncement(
+      final Hash hash,
+      final TransactionType type,
+      final Long size,
+      final Optional<CellMask> cellMask) {
     this.hash = checkNotNull(hash, "Hash cannot be null");
     this.type = checkNotNull(type, "Type cannot be null");
     this.size = checkNotNull(size, "Size cannot be null");
+    this.cellMask = checkNotNull(cellMask, "Cell mask optional cannot be null");
   }
 
   public static List<TransactionAnnouncement> create(
       final List<TransactionType> types, final List<Long> sizes, final List<Hash> hashes) {
+    return create(types, sizes, hashes, Optional.empty());
+  }
+
+  public static List<TransactionAnnouncement> create(
+      final List<TransactionType> types,
+      final List<Long> sizes,
+      final List<Hash> hashes,
+      final Optional<CellMask> cellMask) {
     // Check if lists have the same size
     if (!(types.size() == hashes.size() && hashes.size() == sizes.size())) {
       throw new IllegalArgumentException(
@@ -46,7 +66,11 @@ public record TransactionAnnouncement(Hash hash, TransactionType type, Long size
     }
     final List<TransactionAnnouncement> transactions = new ArrayList<>(hashes.size());
     for (int i = 0; i < hashes.size(); i++) {
-      transactions.add(new TransactionAnnouncement(hashes.get(i), types.get(i), sizes.get(i)));
+      final Optional<CellMask> announcementCellMask =
+          types.get(i) == TransactionType.BLOB ? cellMask : Optional.empty();
+      transactions.add(
+          new TransactionAnnouncement(
+              hashes.get(i), types.get(i), sizes.get(i), announcementCellMask));
     }
     return transactions;
   }
@@ -58,5 +82,12 @@ public record TransactionAnnouncement(Hash hash, TransactionType type, Long size
       list.add(announcement);
     }
     return list;
+  }
+
+  private static Optional<CellMask> cellMaskFor(final Transaction transaction) {
+    return transaction.getType() == TransactionType.BLOB
+        && transaction.getBlobsWithCommitments().isPresent()
+        ? Optional.of(CellMask.FULL)
+        : Optional.empty();
   }
 }

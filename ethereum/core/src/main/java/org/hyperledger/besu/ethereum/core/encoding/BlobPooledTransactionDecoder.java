@@ -55,11 +55,21 @@ public class BlobPooledTransactionDecoder {
     if (hasVersionId) {
       versionId = txRlp.readIntScalar();
     }
-    List<Blob> blobs = txRlp.readList(Blob::readFrom);
+    final boolean blobPayloadElided = txRlp.nextIsNull();
+    List<Blob> blobs;
+    if (blobPayloadElided) {
+      txRlp.skipNext();
+      blobs = List.of();
+    } else {
+      blobs = txRlp.readList(Blob::readFrom);
+    }
     List<KZGCommitment> commitments = txRlp.readList(KZGCommitment::readFrom);
     List<KZGProof> proofs = txRlp.readList(KZGProof::readFrom);
     txRlp.leaveList();
 
+    if (blobPayloadElided) {
+      return builder.sizeForAnnouncement(input.size()).build();
+    }
     return builder
         .kzgBlobs(BlobType.of(versionId), commitments, blobs, proofs)
         .sizeForAnnouncement(input.size())

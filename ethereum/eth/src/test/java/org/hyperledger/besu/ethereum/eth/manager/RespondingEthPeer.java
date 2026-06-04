@@ -323,7 +323,10 @@ public class RespondingEthPeer {
         case EthProtocolMessages.GET_POOLED_TRANSACTIONS:
           response =
               EthServer.constructGetPooledTransactionsResponse(
-                  transactionPool, peer, msg, 200, maxMsgSize);
+                  transactionPool, peer, msg, 200, maxMsgSize, cap);
+          break;
+        case EthProtocolMessages.GET_CELLS:
+          response = EthServer.constructGetCellsResponse(transactionPool, msg, 200, maxMsgSize);
           break;
         case EthProtocolMessages.GET_BLOCK_ACCESS_LISTS:
           response =

@@ -23,6 +23,7 @@ import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcApis;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.JsonRpcMethod;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineBlobCustodyUpdatedV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineExchangeCapabilities;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineExchangeTransitionConfiguration;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineForkchoiceUpdatedV1;
@@ -32,6 +33,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineF
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetBlobsV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetBlobsV2;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetBlobsV3;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetBlobsV4;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetClientVersionV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetPayloadBodiesByHashV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetPayloadBodiesByHashV2;
@@ -245,6 +247,20 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
                 engineQosTimer,
                 transactionPool,
                 metricsSystem));
+        executionEngineApisSupported.add(
+            new EngineGetBlobsV4(
+                consensusEngineServer,
+                protocolContext,
+                protocolSchedule,
+                engineQosTimer,
+                transactionPool));
+        executionEngineApisSupported.add(
+            new EngineBlobCustodyUpdatedV1(
+                consensusEngineServer,
+                protocolSchedule,
+                protocolContext,
+                engineQosTimer,
+                transactionPool));
       }
 
       if (protocolSchedule.milestoneFor(AMSTERDAM).isPresent()) {

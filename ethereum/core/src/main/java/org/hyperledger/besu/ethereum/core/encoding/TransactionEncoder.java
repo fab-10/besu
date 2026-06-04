@@ -63,6 +63,21 @@ public class TransactionEncoder {
     encodeRLP(transactionType, opaqueBytes, rlpOutput);
   }
 
+  public static void encodePooledTransaction(
+      final Transaction transaction,
+      final RLPOutput rlpOutput,
+      final boolean includeBlobPayload) {
+    if (includeBlobPayload || !TransactionType.BLOB.equals(getTransactionType(transaction))) {
+      encodeRLP(transaction, rlpOutput, EncodingContext.POOLED_TRANSACTION);
+      return;
+    }
+
+    final BytesValueRLPOutput out = new BytesValueRLPOutput();
+    out.writeByte(transaction.getType().getSerializedType());
+    BlobPooledTransactionEncoder.encode(transaction, out, false);
+    encodeRLP(transaction.getType(), out.encoded(), rlpOutput);
+  }
+
   /**
    * Encodes a transaction into RLP format.
    *

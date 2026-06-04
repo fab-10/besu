@@ -123,6 +123,8 @@ public class TransactionPool implements BlockAddedObserver {
   private final ListMultimap<VersionedHash, BlobProofBundle> mapOfBlobsInTransactionPool =
       Multimaps.synchronizedListMultimap(
           Multimaps.newListMultimap(new HashMap<>(), () -> new ArrayList<>(1)));
+  private final AtomicReference<CellMask> blobCustodyCellMask =
+      new AtomicReference<>(CellMask.EMPTY);
 
   public TransactionPool(
       final Supplier<PendingTransactions> pendingTransactionsSupplier,
@@ -734,6 +736,14 @@ public class TransactionPool implements BlockAddedObserver {
       // do nothing
     }
     return cacheForBlobsOfTransactionsAddedToABlock.get(vh);
+  }
+
+  public CellMask getBlobCustodyCellMask() {
+    return blobCustodyCellMask.get();
+  }
+
+  public void updateBlobCustodyCellMask(final CellMask cellMask) {
+    blobCustodyCellMask.set(cellMask);
   }
 
   public boolean isEnabled() {

@@ -49,6 +49,8 @@ public enum RpcMethod {
   ENGINE_GET_BLOBS_V1("engine_getBlobsV1"),
   ENGINE_GET_BLOBS_V2("engine_getBlobsV2"),
   ENGINE_GET_BLOBS_V3("engine_getBlobsV3"),
+  ENGINE_GET_BLOBS_V4("engine_getBlobsV4"),
+  ENGINE_BLOB_CUSTODY_UPDATED_V1("engine_blobCustodyUpdatedV1"),
   ENGINE_GET_PAYLOAD_V1("engine_getPayloadV1"),
   ENGINE_GET_PAYLOAD_V2("engine_getPayloadV2"),
   ENGINE_GET_PAYLOAD_V3("engine_getPayloadV3"),
