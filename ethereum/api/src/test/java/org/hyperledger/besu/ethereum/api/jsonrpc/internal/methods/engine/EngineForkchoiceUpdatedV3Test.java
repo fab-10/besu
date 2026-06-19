@@ -16,140 +16,136 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.AMSTERDAM;
+import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.CANCUN;
 
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ForkchoiceStateV1;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.PayloadAttributesV4;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.PayloadAttributesV3;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcError;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcErrorResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 
 import java.util.Collections;
 import java.util.Optional;
 import java.util.OptionalLong;
 
 import org.apache.tuweni.bytes.Bytes32;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
-public class EngineForkchoiceUpdatedV4Test extends EngineForkchoiceUpdatedV3Test {
+public class EngineForkchoiceUpdatedV3Test extends EngineForkchoiceUpdatedV2Test {
 
   @Override
   protected EngineForkchoiceUpdatedV1<?> createMethodInstance() {
-    // V4 has no upper bound (null maxFork = open-ended).
-    return new EngineForkchoiceUpdatedV4<>(
+    return new EngineForkchoiceUpdatedV3<>(
         protocolSchedule,
         protocolContext,
         vertx,
         engineCallListener,
         mergeCoordinator,
-        AMSTERDAM,
-        null);
+        CANCUN,
+        AMSTERDAM);
+  }
+
+  @Override
+  @BeforeEach
+  public void before() {
+    super.before();
+    blockHeaderBuilder.timestamp(getMinSupportedTimestamp());
   }
 
   @Override
   protected long getMinSupportedTimestamp() {
-    return amsterdamHardfork.milestone();
+    return cancunHardfork.milestone();
   }
 
   @Override
   protected OptionalLong getMaxSupportedTimestamp() {
-    return OptionalLong.empty();
+    return OptionalLong.of(amsterdamHardfork.milestone() - 1);
   }
 
   @Override
   @Test
   public void shouldReturnExpectedMethodName() {
-    assertThat(method.getName()).isEqualTo("engine_forkchoiceUpdatedV4");
+    assertThat(method.getName()).isEqualTo("engine_forkchoiceUpdatedV3");
   }
 
   @Override
   protected String getMethodName() {
-    return RpcMethod.ENGINE_FORKCHOICE_UPDATED_V4.getMethodName();
+    return RpcMethod.ENGINE_FORKCHOICE_UPDATED_V3.getMethodName();
   }
 
   @Override
   protected Object validPayloadAttributesForBlock(final BlockHeader head) {
-    return new PayloadAttributesV4(
+    return new PayloadAttributesV3(
         String.valueOf(head.getTimestamp() + 1),
         Bytes32.fromHexStringLenient("0xDEADBEEF").toHexString(),
         Address.ECREC.toString(),
         Collections.emptyList(),
-        Bytes32.ZERO.toHexString(),
-        "0x1");
+        Bytes32.ZERO.toHexString());
   }
 
   @Override
   protected Object invalidTimestampPayloadAttributesForBlock(final BlockHeader head) {
-    return new PayloadAttributesV4(
+    return new PayloadAttributesV3(
         String.valueOf(head.getTimestamp()),
         Bytes32.fromHexStringLenient("0xDEADBEEF").toHexString(),
         Address.ECREC.toString(),
         Collections.emptyList(),
-        Bytes32.ZERO.toHexString(),
-        "0x1");
+        Bytes32.ZERO.toHexString());
   }
 
   @Override
   protected Object payloadAttributesWithNullWithdrawalsForBlock(final BlockHeader head) {
-    return new PayloadAttributesV4(
+    return new PayloadAttributesV3(
         String.valueOf(head.getTimestamp() + 1),
         Bytes32.fromHexStringLenient("0xDEADBEEF").toHexString(),
         Address.ECREC.toString(),
         null,
-        Bytes32.ZERO.toHexString(),
-        "0x1");
+        Bytes32.ZERO.toHexString());
   }
 
-  // ---- V4-specific tests ----
+  // ---- V3-specific tests ----
 
   @Test
-  public void shouldReturnInvalidSlotNumberParamsForNegativeSlotNumber() {
-    final BlockHeader mockHeader = setupValidForkchoiceUpdate();
+  public void shouldReturnUnsupportedForkIfBlockTimestampIsBeforeSupportedForkWindow() {
+    getMaxSupportedTimestamp()
+        .ifPresent(
+            timestamp -> {
+              final BlockHeader mockHeader =
+                  setupValidForkchoiceUpdate(bhb -> bhb.timestamp(timestamp + 1));
 
-    final PayloadAttributesV4 payloadWithNegativeSlot =
-        new PayloadAttributesV4(
-            String.valueOf(mockHeader.getTimestamp() + 1),
-            Bytes32.fromHexStringLenient("0xDEADBEEF").toHexString(),
-            Address.ECREC.toString(),
-            Collections.emptyList(),
-            Bytes32.ZERO.toHexString(),
-            "-0x1");
+              final JsonRpcResponse resp =
+                  resp(
+                      new ForkchoiceStateV1(mockHeader.getBlockHash(), Hash.ZERO, Hash.ZERO),
+                      Optional.of(validPayloadAttributesForBlock(mockHeader)));
 
-    final JsonRpcResponse resp =
-        resp(
-            new ForkchoiceStateV1(mockHeader.getBlockHash(), Hash.ZERO, Hash.ZERO),
-            Optional.of(payloadWithNegativeSlot));
-
-    assertThat(resp).isInstanceOf(JsonRpcErrorResponse.class);
-    assertThat(((JsonRpcErrorResponse) resp).getErrorType())
-        .isEqualTo(RpcErrorType.INVALID_SLOT_NUMBER_PARAMS);
+              final JsonRpcError jsonRpcError =
+                  Optional.of(resp)
+                      .map(JsonRpcErrorResponse.class::cast)
+                      .map(JsonRpcErrorResponse::getError)
+                      .get();
+              assertThat(jsonRpcError.getCode()).isEqualTo(RpcErrorType.UNSUPPORTED_FORK.getCode());
+            });
   }
 
-  @Test
-  public void shouldReturnValidForZeroSlotNumber() {
-    final BlockHeader mockHeader = setupValidForkchoiceUpdate();
+  @Override
+  protected void defaultBlockHeaderCustomization(
+      final BlockHeaderTestFixture blockHeaderTestFixture) {
+    super.defaultBlockHeaderCustomization(blockHeaderTestFixture);
+    blockHeaderTestFixture.timestamp(getMinSupportedTimestamp());
+  }
 
-    final PayloadAttributesV4 payloadWithZeroSlot =
-        new PayloadAttributesV4(
-            String.valueOf(mockHeader.getTimestamp() + 1),
-            Bytes32.fromHexStringLenient("0xDEADBEEF").toHexString(),
-            Address.ECREC.toString(),
-            Collections.emptyList(),
-            Bytes32.ZERO.toHexString(),
-            "0x0");
-
-    final JsonRpcResponse resp =
-        resp(
-            new ForkchoiceStateV1(mockHeader.getBlockHash(), Hash.ZERO, Hash.ZERO),
-            Optional.of(payloadWithZeroSlot));
-
-    assertThat(resp).isInstanceOf(JsonRpcSuccessResponse.class);
+  @Override
+  protected long getDefaultTimestamp() {
+    return getMinSupportedTimestamp();
   }
 }
