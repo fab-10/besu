@@ -17,7 +17,9 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.methods;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.AMSTERDAM;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.CANCUN;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.OSAKA;
+import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.PARIS;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.PRAGUE;
+import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.SHANGHAI;
 
 import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.ethereum.ProtocolContext;
@@ -152,24 +154,30 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
                   ethPeers,
                   engineQosTimer,
                   metricsSystem),
-              new EngineForkchoiceUpdatedV1(
-                  consensusEngineServer,
+              new EngineForkchoiceUpdatedV1<>(
                   protocolSchedule,
                   protocolContext,
-                  mergeCoordinator.get(),
-                  engineQosTimer),
-              new EngineForkchoiceUpdatedV2(
                   consensusEngineServer,
+                  engineQosTimer,
+                  mergeCoordinator.get(),
+                  null,
+                  SHANGHAI),
+              new EngineForkchoiceUpdatedV2<>(
                   protocolSchedule,
                   protocolContext,
-                  mergeCoordinator.get(),
-                  engineQosTimer),
-              new EngineForkchoiceUpdatedV3(
                   consensusEngineServer,
+                  engineQosTimer,
+                  mergeCoordinator.get(),
+                  PARIS,
+                  CANCUN),
+              new EngineForkchoiceUpdatedV3<>(
                   protocolSchedule,
                   protocolContext,
+                  consensusEngineServer,
+                  engineQosTimer,
                   mergeCoordinator.get(),
-                  engineQosTimer),
+                  CANCUN,
+                  AMSTERDAM),
               new EngineExchangeTransitionConfiguration(
                   consensusEngineServer, protocolContext, engineQosTimer),
               new EngineGetPayloadBodiesByHashV1(
@@ -272,12 +280,14 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
                 engineQosTimer,
                 metricsSystem));
         executionEngineApisSupported.add(
-            new EngineForkchoiceUpdatedV4(
-                consensusEngineServer,
+            new EngineForkchoiceUpdatedV4<>(
                 protocolSchedule,
                 protocolContext,
+                consensusEngineServer,
+                engineQosTimer,
                 mergeCoordinator.get(),
-                engineQosTimer));
+                AMSTERDAM,
+                null));
       }
 
       return mapOf(executionEngineApisSupported);
