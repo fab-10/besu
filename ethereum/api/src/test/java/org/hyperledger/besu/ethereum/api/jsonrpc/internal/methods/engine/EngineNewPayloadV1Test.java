@@ -26,7 +26,6 @@ import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType.INVALID_PARAMS;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType.UNSUPPORTED_FORK;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -374,30 +373,21 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
             });
   }
 
-  protected Object[] requestParams(final Map<String, Object> payloadParams) {
-    return ArrayUtils.addAll(new Object[] {payloadParams}, getVersionSpecificDefaultParams());
-  }
-
-  protected Object[] getVersionSpecificDefaultParams() {
-    return new Object[0];
-  }
-
-
   @Test
   public void shouldReturnSyncingWhenParentWorldStateNotImmediatelyCached() {
     // Simulates cold-cache after restart: parent header is known to the blockchain but its
     // world state is not in the Bonsai layered cache (requires expensive trie-log replay).
     // We must return SYNCING immediately rather than blocking the worker thread.
-    BlockHeader mockHeader = createBlockHeader(Optional.empty());
+    BlockHeader mockHeader = setupPayloadV1(getMinSupportedTimestamp());
     when(blockchain.getBlockByHash(mockHeader.getHash())).thenReturn(Optional.empty());
     when(blockchain.getBlockHeader(mockHeader.getParentHash()))
-            .thenReturn(Optional.of(mock(BlockHeader.class)));
+        .thenReturn(Optional.of(mock(BlockHeader.class)));
     when(mergeCoordinator.getLatestValidAncestor(any(BlockHeader.class)))
-            .thenReturn(Optional.of(mockHash));
+        .thenReturn(Optional.of(mockHash));
     when(worldStateArchive.isWorldStateImmediatelyCached(mockHeader.getParentHash()))
-            .thenReturn(false);
+        .thenReturn(false);
 
-    var resp = resp(mockEnginePayload(mockHeader, emptyList()));
+    var resp = resp(requestParams(mockEnginePayloadParam(mockHeader, emptyList())));
 
     PayloadStatusV1 res = fromSuccessResp(resp);
     assertThat(res.getLatestValidHash()).isEmpty();
@@ -407,10 +397,18 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
     verify(engineCallListener, times(1)).executionEngineCalled();
   }
 
-    protected JsonRpcResponse resp(final Object... params) {
-        return method.response(
-                new JsonRpcRequestContext(new JsonRpcRequest("2.0", this.method.getName(), params)));
-    }
+  protected Object[] requestParams(final Map<String, Object> payloadParams) {
+    return ArrayUtils.addAll(new Object[] {payloadParams}, getVersionSpecificDefaultParams());
+  }
+
+  protected Object[] getVersionSpecificDefaultParams() {
+    return new Object[0];
+  }
+
+  protected JsonRpcResponse resp(final Object... params) {
+    return method.response(
+        new JsonRpcRequestContext(new JsonRpcRequest("2.0", this.method.getName(), params)));
+  }
 
   protected Map<String, Object> mockEnginePayloadParam(
       final BlockHeader header, final List<String> txs) {
