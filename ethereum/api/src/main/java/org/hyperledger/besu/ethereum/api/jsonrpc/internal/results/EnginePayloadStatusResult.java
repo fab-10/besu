@@ -35,7 +35,7 @@ public class EnginePayloadStatusResult {
   public EnginePayloadStatusResult(
       @JsonProperty("status") final EngineStatus status,
       @JsonProperty("latestValidHash") final Hash latestValidHash,
-      @JsonProperty("errorMessage") final Optional<String> validationError) {
+      @JsonProperty("validationError") final Optional<String> validationError) {
     this.status = status;
     this.latestValidHash = Optional.ofNullable(latestValidHash);
     this.validationError = validationError;

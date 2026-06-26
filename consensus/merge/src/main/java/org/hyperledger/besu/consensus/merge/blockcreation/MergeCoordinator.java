@@ -881,14 +881,14 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
   }
 
   @Override
-  public boolean isAncestorOfFinalized(final BlockHeader candidateBlockHeader) {
+  public boolean isAncestorOfFinalized(final BlockHeader candidateHeadBlockHeader) {
     final Blockchain blockchain = protocolContext.getBlockchain();
     final Optional<Hash> maybeFinalizedHash = blockchain.getFinalized();
     if (maybeFinalizedHash.isEmpty()) {
       return false;
     }
 
-    if (candidateBlockHeader.getHash().equals(maybeFinalizedHash.get())) {
+    if (candidateHeadBlockHeader.getHash().equals(maybeFinalizedHash.get())) {
       return false;
     }
 
@@ -900,7 +900,7 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
                     new IllegalStateException(
                         "Finalized block header missing for hash " + maybeFinalizedHash.get()));
     // candidate is a strict ancestor of finalized iff finalized descends from candidate
-    return isDescendantOf(candidateBlockHeader, finalizedHeader);
+    return isDescendantOf(candidateHeadBlockHeader, finalizedHeader);
   }
 
   @Override

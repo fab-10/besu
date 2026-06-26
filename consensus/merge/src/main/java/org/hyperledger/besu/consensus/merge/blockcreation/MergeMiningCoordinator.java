@@ -120,10 +120,10 @@ public interface MergeMiningCoordinator extends MiningCoordinator {
    * block is known, when the candidate hash cannot be located, or when the candidate IS the
    * finalized block
    *
-   * @param candidateHeadHash the candidate block header hash
+   * @param candidateHeadBlockHeader the candidate block header
    * @return whether the candidate is a strict ancestor of the latest known finalized block
    */
-  boolean isAncestorOfFinalized(BlockHeader candidateHeadHash);
+  boolean isAncestorOfFinalized(BlockHeader candidateHeadBlockHeader);
 
   /**
    * Computes the reorg depth that would result from switching the canonical head to {@code
