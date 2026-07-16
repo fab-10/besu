@@ -24,6 +24,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 public final class PayloadAttributesV4 extends PayloadAttributesV3 {
 
   private final Long slotNumber;
+  private final Long targetGasLimit;
 
   @JsonCreator
   public PayloadAttributesV4(
@@ -32,12 +33,18 @@ public final class PayloadAttributesV4 extends PayloadAttributesV3 {
       @JsonProperty("suggestedFeeRecipient") final String suggestedFeeRecipient,
       @JsonProperty("withdrawals") final List<Withdrawal> withdrawals,
       @JsonProperty("parentBeaconBlockRoot") final String parentBeaconBlockRoot,
-      @JsonProperty("slotNumber") final String slotNumber) {
+      @JsonProperty("slotNumber") final String slotNumber,
+      @JsonProperty("targetGasLimit") final String targetGasLimit) {
     super(timestamp, prevRandao, suggestedFeeRecipient, withdrawals, parentBeaconBlockRoot);
     this.slotNumber = slotNumber != null ? Long.decode(slotNumber) : null;
+    this.targetGasLimit = targetGasLimit != null ? Long.decode(targetGasLimit) : null;
   }
 
   public Long getSlotNumber() {
     return slotNumber;
+  }
+
+  public Long getTargetGasLimit() {
+    return targetGasLimit;
   }
 }

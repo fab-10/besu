@@ -16,7 +16,9 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.AMSTERDAM;
+import static org.mockito.Mockito.verify;
 
+import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
@@ -35,6 +37,7 @@ import java.util.OptionalLong;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 @ExtendWith(MockitoExtension.class)
@@ -82,7 +85,8 @@ public class EngineForkchoiceUpdatedV4Test extends EngineForkchoiceUpdatedV3Test
         Address.ECREC.toString(),
         Collections.emptyList(),
         Bytes32.ZERO.toHexString(),
-        "0x1");
+        "0x1",
+        "0x1C9C380");
   }
 
   @Override
@@ -93,7 +97,8 @@ public class EngineForkchoiceUpdatedV4Test extends EngineForkchoiceUpdatedV3Test
         Address.ECREC.toString(),
         Collections.emptyList(),
         Bytes32.ZERO.toHexString(),
-        "0x1");
+        "0x1",
+        null);
   }
 
   @Override
@@ -104,7 +109,8 @@ public class EngineForkchoiceUpdatedV4Test extends EngineForkchoiceUpdatedV3Test
         Address.ECREC.toString(),
         null,
         Bytes32.ZERO.toHexString(),
-        "0x1");
+        "0x1",
+        null);
   }
 
   // ---- V4-specific tests ----
@@ -120,7 +126,8 @@ public class EngineForkchoiceUpdatedV4Test extends EngineForkchoiceUpdatedV3Test
             Address.ECREC.toString(),
             Collections.emptyList(),
             Bytes32.ZERO.toHexString(),
-            "-0x1");
+            "-0x1",
+            null);
 
     final JsonRpcResponse resp =
         resp(
@@ -143,7 +150,8 @@ public class EngineForkchoiceUpdatedV4Test extends EngineForkchoiceUpdatedV3Test
             Address.ECREC.toString(),
             Collections.emptyList(),
             Bytes32.ZERO.toHexString(),
-            "0x0");
+            "0x0",
+            "0x1C9C380");
 
     final JsonRpcResponse resp =
         resp(
@@ -151,5 +159,53 @@ public class EngineForkchoiceUpdatedV4Test extends EngineForkchoiceUpdatedV3Test
             Optional.of(payloadWithZeroSlot));
 
     assertThat(resp).isInstanceOf(JsonRpcSuccessResponse.class);
+  }
+
+  @Test
+  public void shouldReturnInvalidTargetGasLimitParamsWhenTargetGasLimitMissing() {
+    final BlockHeader mockHeader = setupValidForkchoiceUpdate();
+
+    final PayloadAttributesV4 payloadWithMissingTargetGasLimit =
+        new PayloadAttributesV4(
+            String.valueOf(mockHeader.getTimestamp() + 1),
+            Bytes32.fromHexStringLenient("0xDEADBEEF").toHexString(),
+            Address.ECREC.toString(),
+            Collections.emptyList(),
+            Bytes32.ZERO.toHexString(),
+            "0x1",
+            null);
+
+    final JsonRpcResponse resp =
+        resp(
+            new ForkchoiceStateV1(mockHeader.getBlockHash(), Hash.ZERO, Hash.ZERO),
+            Optional.of(payloadWithMissingTargetGasLimit));
+
+    assertThat(resp).isInstanceOf(JsonRpcErrorResponse.class);
+    assertThat(((JsonRpcErrorResponse) resp).getErrorType())
+        .isEqualTo(RpcErrorType.INVALID_TARGET_GAS_LIMIT_PARAMS);
+  }
+
+  @Test
+  public void shouldForwardTargetGasLimitToPreparePayload() {
+    final BlockHeader mockHeader = setupValidForkchoiceUpdate();
+    final long targetGasLimitValue = 30_000_000L;
+
+    final PayloadAttributesV4 attrs =
+        new PayloadAttributesV4(
+            String.valueOf(mockHeader.getTimestamp() + 1),
+            Bytes32.fromHexStringLenient("0xDEADBEEF").toHexString(),
+            Address.ECREC.toString(),
+            Collections.emptyList(),
+            Bytes32.ZERO.toHexString(),
+            "0x1",
+            "0x" + Long.toHexString(targetGasLimitValue));
+
+    resp(
+        new ForkchoiceStateV1(mockHeader.getBlockHash(), Hash.ZERO, Hash.ZERO), Optional.of(attrs));
+
+    final ArgumentCaptor<MergeMiningCoordinator.PreparePayloadArgs> captor =
+        ArgumentCaptor.forClass(MergeMiningCoordinator.PreparePayloadArgs.class);
+    verify(mergeCoordinator).preparePayload(captor.capture());
+    assertThat(captor.getValue().targetGasLimit()).contains(targetGasLimitValue);
   }
 }
