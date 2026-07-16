@@ -26,6 +26,8 @@ import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
 import io.vertx.core.Vertx;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@code engine_forkchoiceUpdatedV4} — Amsterdam (EIP-7843 Slot Number).
@@ -47,6 +49,13 @@ import io.vertx.core.Vertx;
  */
 public final class EngineForkchoiceUpdatedV4<PA extends PayloadAttributesV4>
     extends EngineForkchoiceUpdatedV3<PA> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(EngineForkchoiceUpdatedV4.class);
+
+  @Override
+  protected Logger logger() {
+    return LOG;
+  }
 
   public EngineForkchoiceUpdatedV4(
       final ProtocolSchedule protocolSchedule,

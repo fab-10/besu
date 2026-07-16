@@ -26,6 +26,8 @@ import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
 import io.vertx.core.Vertx;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@code engine_forkchoiceUpdatedV3} — Cancun (Beacon Block Root).
@@ -37,6 +39,8 @@ import io.vertx.core.Vertx;
  */
 public sealed class EngineForkchoiceUpdatedV3<PA extends PayloadAttributesV3>
     extends EngineForkchoiceUpdatedV2<PA> permits EngineForkchoiceUpdatedV4 {
+
+  private static final Logger LOG = LoggerFactory.getLogger(EngineForkchoiceUpdatedV3.class);
 
   public EngineForkchoiceUpdatedV3(
       final ProtocolSchedule protocolSchedule,
@@ -54,6 +58,11 @@ public sealed class EngineForkchoiceUpdatedV3<PA extends PayloadAttributesV3>
         mergeCoordinator,
         minFork,
         maxFork);
+  }
+
+  @Override
+  protected Logger logger() {
+    return LOG;
   }
 
   @Override
