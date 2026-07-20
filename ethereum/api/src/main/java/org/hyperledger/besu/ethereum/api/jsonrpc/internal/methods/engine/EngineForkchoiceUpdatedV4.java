@@ -25,6 +25,8 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
+import java.util.Optional;
+
 import io.vertx.core.Vertx;
 
 /**
@@ -96,6 +98,10 @@ public final class EngineForkchoiceUpdatedV4<PA extends PayloadAttributesV4>
       return ValidationResult.invalid(
           RpcErrorType.INVALID_SLOT_NUMBER_PARAMS, "Invalid slotNumber");
     }
+    if (attrs.getTargetGasLimit() == null) {
+      return ValidationResult.invalid(
+          RpcErrorType.INVALID_TARGET_GAS_LIMIT_PARAMS, "Missing target gas limit field");
+    }
     return ValidationResult.valid();
   }
 
@@ -104,5 +110,6 @@ public final class EngineForkchoiceUpdatedV4<PA extends PayloadAttributesV4>
       final PreparePayloadArgsBuilder preparePayloadArgsBuilder, final PA attrs) {
     super.setPreparePayloadArgs(preparePayloadArgsBuilder, attrs);
     preparePayloadArgsBuilder.slotNumber(attrs.getSlotNumber());
+    preparePayloadArgsBuilder.targetGasLimit(Optional.ofNullable(attrs.getTargetGasLimit()));
   }
 }
