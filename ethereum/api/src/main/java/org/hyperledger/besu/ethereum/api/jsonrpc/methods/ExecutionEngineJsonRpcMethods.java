@@ -61,7 +61,6 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
-import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -69,9 +68,9 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Stream;
 
 import io.vertx.core.Vertx;
-import org.apache.commons.lang3.ArrayUtils;
 
 public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
 
@@ -290,29 +289,26 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
     // special case at the first hardfork (Shanghai), before it was possible to call either V1 or V2
     // so both versions are scheduled at the beginning, and only V1 must be stopped at Shanghai
     // timestamp
-    return VersionScheduler.startsWith(EngineForkchoiceUpdatedV1.class, SHANGHAI)
+    return VersionScheduler.startsFromBeginningUntil(EngineForkchoiceUpdatedV1.class, SHANGHAI)
         .thenAlsoFromBeginning(EngineForkchoiceUpdatedV2.class)
         .thenFrom(CANCUN, EngineForkchoiceUpdatedV3.class)
         .thenFrom(AMSTERDAM, EngineForkchoiceUpdatedV4.class)
         .build(
             protocolSchedule,
-            consensusEngineServer,
-            protocolSchedule,
             protocolContext,
-            mergeMiningCoordinator,
-            engineQosTimer);
+            consensusEngineServer,
+            engineQosTimer,
+            mergeMiningCoordinator);
   }
 
   private static class VersionScheduler {
     final List<MethodVersionBuildData> readyMethods = new ArrayList<>();
     List<MethodVersionBuildData> pendingMethods = new ArrayList<>();
-    boolean firstSet = false;
 
-    static VersionScheduler startsWith(
+    static VersionScheduler startsFromBeginningUntil(
         final Class<? extends ExecutionEngineJsonRpcMethod> firstVersion, final HardforkId to) {
       final VersionScheduler vs = new VersionScheduler();
-      vs.readyMethods.add(new MethodVersionBuildData(firstVersion, null, to));
-      vs.firstSet = true;
+      vs.readyMethods.add(new MethodVersionBuildData(firstVersion, false, null, to));
       return vs;
     }
 
@@ -321,17 +317,20 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
       checkState(
           pendingMethods.isEmpty() || pendingMethods.stream().allMatch(mvbd -> mvbd.to == null),
           "This method can only be called for methods that are active since Paris hardfork");
-      pendingMethods.add(new MethodVersionBuildData(method, null, null));
+      pendingMethods.add(new MethodVersionBuildData(method, false, null, null));
       return this;
     }
 
-    VersionScheduler thenFrom(
+    @SafeVarargs
+    final VersionScheduler thenFrom(
         final HardforkId hardforkId,
-        final Class<? extends ExecutionEngineJsonRpcMethod> nextVersion) {
-      checkState(firstSet, "Must set initial method first");
+        final Class<? extends ExecutionEngineJsonRpcMethod>... methods) {
       pendingMethods.forEach(mvbd -> readyMethods.add(mvbd.withTo(hardforkId)));
       pendingMethods = new ArrayList<>();
-      pendingMethods.add(new MethodVersionBuildData(nextVersion, hardforkId, null));
+      Arrays.stream(methods)
+          .forEach(
+              method ->
+                  pendingMethods.add(new MethodVersionBuildData(method, false, hardforkId, null)));
       return this;
     }
 
@@ -346,11 +345,19 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
                 try {
                   @SuppressWarnings("unchecked")
                   final var constructor =
-                      (Constructor<? extends ExecutionEngineJsonRpcMethod>)
+                      (java.lang.reflect.Constructor<? extends ExecutionEngineJsonRpcMethod>)
                           mv.versionClass.getDeclaredConstructors()[0];
                   constructor.setAccessible(true);
-                  return constructor.newInstance(
-                      ArrayUtils.addAll(constructorArgs, mv.from, mv.to));
+
+                  final Object[] constructorArgsFull =
+                      Stream.concat(
+                              Stream.of(protocolSchedule),
+                              Stream.concat(
+                                  Arrays.stream(constructorArgs),
+                                  mv.alwaysActive ? Stream.empty() : Stream.of(mv.from, mv.to)))
+                          .toArray();
+
+                  return constructor.newInstance(constructorArgsFull);
                 } catch (InstantiationException
                     | IllegalAccessException
                     | InvocationTargetException e) {
@@ -362,11 +369,12 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
 
     record MethodVersionBuildData(
         Class<? extends ExecutionEngineJsonRpcMethod> versionClass,
+        boolean alwaysActive,
         HardforkId from,
         HardforkId to) {
 
       MethodVersionBuildData withTo(final HardforkId hardforkId) {
-        return new MethodVersionBuildData(versionClass, from, hardforkId);
+        return new MethodVersionBuildData(versionClass, false, from, hardforkId);
       }
     }
   }
