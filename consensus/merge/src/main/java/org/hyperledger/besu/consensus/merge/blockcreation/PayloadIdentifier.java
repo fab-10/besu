@@ -76,6 +76,8 @@ public class PayloadIdentifier implements Quantity {
 
     final long slotNumberPart = preparePayloadArgs.slotNumber().orElse(-1L);
 
+    final long targetGasLimitPart = preparePayloadArgs.targetGasLimit().orElse(-1L);
+
     // we finally spread all the values over 64bit, rotating only values where the shift could lose
     // bits
     return new PayloadIdentifier(
@@ -87,7 +89,9 @@ public class PayloadIdentifier implements Quantity {
             ^ slotNumberPart << 40
             ^ slotNumberPart >> 24
             ^ withdrawalPart << 48
-            ^ withdrawalPart >> 16);
+            ^ withdrawalPart >> 16
+            ^ targetGasLimitPart << 56
+            ^ targetGasLimitPart >> 8);
   }
 
   @Override

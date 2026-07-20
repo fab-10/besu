@@ -20,6 +20,7 @@ import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.AMSTER
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.PRAGUE;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.EngineStatus.INVALID;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineTestSupport.fromErrorResp;
+import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType.INVALID_ENGINE_NEW_PAYLOAD_PARAMS;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType.INVALID_EXECUTION_REQUESTS_PARAMS;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType.INVALID_PARAMS;
 import static org.mockito.ArgumentMatchers.any;
@@ -106,6 +107,20 @@ public class EngineNewPayloadV4Test extends EngineNewPayloadV3Test {
   @Override
   protected OptionalLong getMaxSupportedTimestamp() {
     return OptionalLong.of(amsterdamHardfork.milestone() - 1);
+  }
+
+  @Test
+  public void shouldReturnInvalidParamsIfBlockAccessListPresentOnV4() {
+    final BlockHeader header = createValidBlockHeader(Optional.empty());
+    final EnginePayloadParameter payload = mockEnginePayload(header, emptyList(), null, "0xc0");
+
+    var resp = resp(payload);
+
+    final JsonRpcError jsonRpcError = fromErrorResp(resp);
+    assertThat(jsonRpcError.getCode()).isEqualTo(INVALID_PARAMS.getCode());
+    assertThat(jsonRpcError.getMessage()).isEqualTo(INVALID_ENGINE_NEW_PAYLOAD_PARAMS.getMessage());
+    assertThat(jsonRpcError.getData()).isEqualTo("Unexpected block access list field");
+    verify(engineCallListener, times(1)).executionEngineCalled();
   }
 
   @Test

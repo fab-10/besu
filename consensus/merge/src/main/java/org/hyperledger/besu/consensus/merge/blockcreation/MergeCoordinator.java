@@ -263,6 +263,7 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
             preparePayloadArgs.withdrawals(),
             preparePayloadArgs.parentBeaconBlockRoot(),
             preparePayloadArgs.slotNumber(),
+            preparePayloadArgs.targetGasLimit(),
             preparePayloadArgs.parentHeader());
     final Block emptyBlock = emptyBlockResult.getBlock();
 
@@ -299,6 +300,7 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
         preparePayloadArgs.withdrawals(),
         preparePayloadArgs.parentBeaconBlockRoot(),
         preparePayloadArgs.slotNumber(),
+        preparePayloadArgs.targetGasLimit(),
         preparePayloadArgs.parentHeader());
 
     return payloadIdentifier;
@@ -402,6 +404,7 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
       final Optional<List<Withdrawal>> withdrawals,
       final Optional<Bytes32> parentBeaconBlockRoot,
       final Optional<Long> slotNumber,
+      final Optional<Long> targetGasLimit,
       final BlockHeader parentHeader) {
 
     final Supplier<BlockCreationResult> blockCreator =
@@ -413,6 +416,7 @@ public class MergeCoordinator implements MergeMiningCoordinator, BadChainListene
                 withdrawals,
                 parentBeaconBlockRoot,
                 slotNumber,
+                targetGasLimit,
                 parentHeader);
 
     LOG.debug(
