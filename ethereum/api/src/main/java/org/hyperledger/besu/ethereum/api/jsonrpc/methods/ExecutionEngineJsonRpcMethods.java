@@ -61,6 +61,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -345,7 +346,7 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
                 try {
                   @SuppressWarnings("unchecked")
                   final var constructor =
-                      (java.lang.reflect.Constructor<? extends ExecutionEngineJsonRpcMethod>)
+                      (Constructor<? extends ExecutionEngineJsonRpcMethod>)
                           mv.versionClass.getDeclaredConstructors()[0];
                   constructor.setAccessible(true);
                   return constructor.newInstance(
