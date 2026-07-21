@@ -14,10 +14,8 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
-import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.ethereum.BlockProcessingResult;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV4;
@@ -27,41 +25,22 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcRespon
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeaderBuilder;
-import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.mainnet.BodyValidation;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
-import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.util.Optional;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
-import io.vertx.core.Vertx;
 
 public final class EngineNewPayloadV5<
         EP extends ExecutionPayloadV4, NPRP extends NewPayloadRequestParametersV3<? extends EP>>
     extends EngineNewPayloadV4<EP, NPRP> {
 
   public EngineNewPayloadV5(
-      final ProtocolSchedule timestampSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
-      final MergeMiningCoordinator mergeCoordinator,
-      final EthPeers ethPeers,
-      final MetricsSystem metricsSystem,
+      final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(
-        timestampSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeCoordinator,
-        ethPeers,
-        metricsSystem,
-        minSupportedFork,
-        firstUnsupportedFork);
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
   }
 
   @Override

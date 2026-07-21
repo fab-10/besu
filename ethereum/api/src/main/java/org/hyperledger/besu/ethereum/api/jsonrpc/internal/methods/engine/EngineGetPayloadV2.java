@@ -15,45 +15,26 @@
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import org.hyperledger.besu.consensus.merge.PayloadWrapper;
-import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.datatypes.HardforkId;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV2;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetPayloadResultV2;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockBody;
 import org.hyperledger.besu.ethereum.core.Withdrawal;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
 import java.util.List;
 import java.util.Optional;
-
-import io.vertx.core.Vertx;
 
 public sealed class EngineGetPayloadV2 extends EngineGetPayloadV1 permits EngineGetPayloadV3 {
   private final Optional<Long> shanghaiTimestamp;
 
   public EngineGetPayloadV2(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
-      final MergeMiningCoordinator mergeMiningCoordinator,
-      final BlockResultFactory blockResultFactory,
+      final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeMiningCoordinator,
-        blockResultFactory,
-        minSupportedFork,
-        firstUnsupportedFork);
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
     shanghaiTimestamp = protocolSchedule.milestoneFor(HardforkId.MainnetHardforkId.SHANGHAI);
   }
 

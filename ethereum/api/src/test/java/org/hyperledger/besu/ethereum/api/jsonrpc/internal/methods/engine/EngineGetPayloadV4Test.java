@@ -26,6 +26,7 @@ import org.hyperledger.besu.consensus.merge.blockcreation.PreparePayloadArgsBuil
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.RequestType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetPayloadResultV4;
 import org.hyperledger.besu.ethereum.core.Block;
@@ -51,12 +52,15 @@ public class EngineGetPayloadV4Test extends EngineGetPayloadV3Test {
   @Override
   protected EngineGetPayloadV1 createMethodInstance() {
     return new EngineGetPayloadV4(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeMiningCoordinator,
-        factory,
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .mergeCoordinator(mergeMiningCoordinator)
+            .blockResultFactory(factory)
+            .maxRequestBlocks(0)
+            .build(),
         PRAGUE,
         OSAKA);
   }

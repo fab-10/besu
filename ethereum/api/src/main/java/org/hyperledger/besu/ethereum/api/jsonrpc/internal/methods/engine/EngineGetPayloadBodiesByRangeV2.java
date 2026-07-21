@@ -14,26 +14,21 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
-import org.hyperledger.besu.ethereum.ProtocolContext;
+import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.ExecutionPayloadBodiesV2;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockBody;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.block.access.list.BlockAccessList;
-
-import io.vertx.core.Vertx;
 
 public final class EngineGetPayloadBodiesByRangeV2<EPB extends ExecutionPayloadBodiesV2>
     extends EngineGetPayloadBodiesByRangeV1<EPB> {
 
   public EngineGetPayloadBodiesByRangeV2(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
-      final int maxRequestBlocks) {
-    super(protocolSchedule, protocolContext, vertx, engineCallListener, maxRequestBlocks);
+      final ConstructorArguments constructorArguments,
+      final HardforkId minSupportedFork,
+      final HardforkId firstUnsupportedFork) {
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
   }
 
   @Override

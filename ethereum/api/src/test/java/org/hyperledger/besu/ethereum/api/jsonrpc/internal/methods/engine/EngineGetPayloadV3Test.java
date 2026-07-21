@@ -20,6 +20,7 @@ import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.PRAGUE
 
 import org.hyperledger.besu.datatypes.BlobGas;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV3;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetPayloadResultV3;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
@@ -36,12 +37,15 @@ public class EngineGetPayloadV3Test extends EngineGetPayloadV2Test {
   @Override
   protected EngineGetPayloadV1 createMethodInstance() {
     return new EngineGetPayloadV3(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeMiningCoordinator,
-        factory,
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .mergeCoordinator(mergeMiningCoordinator)
+            .blockResultFactory(factory)
+            .maxRequestBlocks(0)
+            .build(),
         CANCUN,
         PRAGUE);
   }

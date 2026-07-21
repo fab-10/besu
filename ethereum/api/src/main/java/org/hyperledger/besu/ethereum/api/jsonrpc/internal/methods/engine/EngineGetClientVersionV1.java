@@ -14,19 +14,15 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetClientVersionResultV1;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
 import java.util.Collections;
 import java.util.List;
-
-import io.vertx.core.Vertx;
 
 public class EngineGetClientVersionV1 extends ExecutionEngineJsonRpcMethod {
   private static final String ENGINE_CLIENT_CODE = "BU";
@@ -36,13 +32,10 @@ public class EngineGetClientVersionV1 extends ExecutionEngineJsonRpcMethod {
   private final String commit;
 
   public EngineGetClientVersionV1(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
+      final ConstructorArguments constructorArguments,
       final String clientVersion,
       final String commit) {
-    super(protocolSchedule, protocolContext, vertx, engineCallListener);
+    super(constructorArguments, null, null);
     this.clientVersion = clientVersion;
     this.commit = commit;
   }

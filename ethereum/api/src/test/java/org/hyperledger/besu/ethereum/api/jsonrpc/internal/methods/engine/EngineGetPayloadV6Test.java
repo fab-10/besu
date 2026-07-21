@@ -23,6 +23,7 @@ import org.hyperledger.besu.datatypes.StorageSlotKey;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcObjectMapperFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV4;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetPayloadResultV6;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
@@ -53,18 +54,20 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 public class EngineGetPayloadV6Test extends EngineGetPayloadV5Test {
 
-  private static final ObjectMapper OBJECT_MAPPER =
-      JsonRpcObjectMapperFactory.createResponseMapper();
+  private static final ObjectMapper OBJECT_MAPPER = JsonRpcObjectMapperFactory.getResponseMapper();
 
   @Override
   protected EngineGetPayloadV1 createMethodInstance() {
     return new EngineGetPayloadV6(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeMiningCoordinator,
-        factory,
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .mergeCoordinator(mergeMiningCoordinator)
+            .blockResultFactory(factory)
+            .maxRequestBlocks(0)
+            .build(),
         AMSTERDAM,
         null);
   }

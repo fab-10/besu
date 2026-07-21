@@ -27,7 +27,6 @@ import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.BlockProcessingResult;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.exception.InvalidJsonRpcRequestException;
@@ -50,11 +49,9 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.mainnet.BodyValidation;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import org.hyperledger.besu.ethereum.trie.MerkleTrieException;
-import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.exception.StorageException;
 
 import java.util.ArrayList;
@@ -65,7 +62,6 @@ import java.util.Optional;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.google.common.base.Preconditions;
-import io.vertx.core.Vertx;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -84,30 +80,20 @@ public sealed class EngineNewPayloadV1<
   protected final MergeMiningCoordinator mergeCoordinator;
 
   public EngineNewPayloadV1(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
-      final MergeMiningCoordinator mergeCoordinator,
-      final EthPeers ethPeers,
-      final MetricsSystem metricsSystem,
+      final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        minSupportedFork,
-        firstUnsupportedFork);
-    this.mergeCoordinator = mergeCoordinator;
-    this.ethPeers = ethPeers;
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    this.mergeCoordinator = constructorArguments.mergeCoordinator();
+    this.ethPeers = constructorArguments.ethPeers();
 
-    metricsSystem.createLongGauge(
-        BLOCK_PROCESSING,
-        "execution_time_head",
-        "The execution time of the last block (head)",
-        this::getLastExecutionTime);
+    constructorArguments
+        .metricsSystem()
+        .createLongGauge(
+            BLOCK_PROCESSING,
+            "execution_time_head",
+            "The execution time of the last block (head)",
+            this::getLastExecutionTime);
   }
 
   @Override
@@ -257,22 +243,6 @@ public sealed class EngineNewPayloadV1<
     //    ancestors of a payload are known and comprise a well-formed chain.
     if (maybeLatestValidAncestor.isEmpty()) {
       return respondWith(reqId, blockParam, null, ACCEPTED);
-    }
-
-    // If the parent world state is not immediately in the Bonsai layered cache, executing
-    // this block would require expensive trie-log replay on the vert.x worker thread,
-    // potentially blocking for tens of seconds and accumulating unbounded LayeredKeyValueStorage
-    // chains. Return SYNCING so the CL retries after sending FCU, which fills the cache.
-    if (!protocolContext
-        .getWorldStateArchive()
-        .isWorldStateImmediatelyCached(blockParam.getParentHash())) {
-      LOG.atDebug()
-          .setMessage(
-              "Parent world state not immediately cached for block {}, parentHash={}, returning SYNCING")
-          .addArgument(blockParam::getBlockHash)
-          .addArgument(blockParam::getParentHash)
-          .log();
-      return respondWith(reqId, blockParam, null, SYNCING);
     }
 
     final Hash latestValidAncestor = maybeLatestValidAncestor.get();

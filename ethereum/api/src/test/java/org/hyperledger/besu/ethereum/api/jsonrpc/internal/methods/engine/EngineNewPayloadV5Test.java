@@ -28,6 +28,7 @@ import org.hyperledger.besu.datatypes.BlobGas;
 import org.hyperledger.besu.datatypes.StorageSlotKey;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.BlockProcessingResult;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
@@ -45,13 +46,12 @@ import java.util.function.UnaryOperator;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.units.bigints.UInt256;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 public class EngineNewPayloadV5Test extends EngineNewPayloadV4Test {
 
   private static final BlockAccessList BLOCK_ACCESS_LIST = createSampleBlockAccessList();
-  //  private static final String ENCODED_BLOCK_ACCESS_LIST =
-  // encodeBlockAccessList(BLOCK_ACCESS_LIST);
   private static final String INVALID_BLOCK_ACCESS_LIST_ENCODING = "0xzz";
   private static final String INVALID_BLOCK_ACCESS_LIST_RLP = "0x01";
 
@@ -64,13 +64,16 @@ public class EngineNewPayloadV5Test extends EngineNewPayloadV4Test {
   @Override
   protected EngineNewPayloadV1<?, ?> createMethodInstance() {
     return new EngineNewPayloadV5<>(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeCoordinator,
-        ethPeers,
-        new NoOpMetricsSystem(),
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .mergeCoordinator(mergeCoordinator)
+            .ethPeers(ethPeers)
+            .metricsSystem(new NoOpMetricsSystem())
+            .maxRequestBlocks(0)
+            .build(),
         AMSTERDAM,
         BOGOTA);
   }
@@ -80,6 +83,11 @@ public class EngineNewPayloadV5Test extends EngineNewPayloadV4Test {
   public void shouldReturnExpectedMethodName() {
     assertThat(method.getName()).isEqualTo("engine_newPayloadV5");
   }
+
+  @Override
+  @Test
+  @Disabled("blockAccessList becomes a required field from V5 (engine_newPayloadV5) onward")
+  public void shouldReturnInvalidParamsIfBlockAccessListPresent() {}
 
   @Override
   protected long getMinSupportedTimestamp() {

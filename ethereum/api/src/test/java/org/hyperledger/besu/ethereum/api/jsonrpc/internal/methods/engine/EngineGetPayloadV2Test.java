@@ -23,6 +23,7 @@ import static org.mockito.Mockito.verify;
 import org.hyperledger.besu.consensus.merge.blockcreation.PayloadIdentifier;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV2;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
@@ -47,12 +48,15 @@ public class EngineGetPayloadV2Test extends EngineGetPayloadV1Test {
   @Override
   protected EngineGetPayloadV1 createMethodInstance() {
     return new EngineGetPayloadV2(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeMiningCoordinator,
-        factory,
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .mergeCoordinator(mergeMiningCoordinator)
+            .blockResultFactory(factory)
+            .maxRequestBlocks(0)
+            .build(),
         null,
         CANCUN);
   }

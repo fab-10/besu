@@ -27,6 +27,7 @@ import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.ethereum.BlockProcessingOutputs;
 import org.hyperledger.besu.ethereum.BlockProcessingResult;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.WithdrawalParameter;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcError;
@@ -57,13 +58,16 @@ public class EngineNewPayloadV2Test extends EngineNewPayloadV1Test {
   @Override
   protected EngineNewPayloadV1<?, ?> createMethodInstance() {
     return new EngineNewPayloadV2<>(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeCoordinator,
-        ethPeers,
-        new NoOpMetricsSystem(),
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .mergeCoordinator(mergeCoordinator)
+            .ethPeers(ethPeers)
+            .metricsSystem(new NoOpMetricsSystem())
+            .maxRequestBlocks(0)
+            .build(),
         null,
         CANCUN);
   }

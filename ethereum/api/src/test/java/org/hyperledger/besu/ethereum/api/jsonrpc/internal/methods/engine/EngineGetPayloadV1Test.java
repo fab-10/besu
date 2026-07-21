@@ -39,6 +39,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcObjectMapperFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcError;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcErrorResponse;
@@ -81,8 +82,7 @@ public class EngineGetPayloadV1Test extends AbstractScheduledApiTest {
   private static final SignatureAlgorithm SIGNATURE_ALGORITHM =
       SignatureAlgorithmFactory.getInstance();
   protected static final KeyPair senderKeys = SIGNATURE_ALGORITHM.generateKeyPair();
-  private static final ObjectMapper OBJECT_MAPPER =
-      JsonRpcObjectMapperFactory.createResponseMapper();
+  private static final ObjectMapper OBJECT_MAPPER = JsonRpcObjectMapperFactory.getResponseMapper();
 
   protected EngineGetPayloadV1 method;
 
@@ -117,12 +117,15 @@ public class EngineGetPayloadV1Test extends AbstractScheduledApiTest {
 
   protected EngineGetPayloadV1 createMethodInstance() {
     return new EngineGetPayloadV1(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeMiningCoordinator,
-        factory,
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .mergeCoordinator(mergeMiningCoordinator)
+            .blockResultFactory(factory)
+            .maxRequestBlocks(0)
+            .build(),
         null,
         SHANGHAI);
   }

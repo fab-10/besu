@@ -25,6 +25,7 @@ import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.ExecutionPayloadBodiesV2;
@@ -50,7 +51,15 @@ public class EngineGetPayloadBodiesByRangeV2Test extends EngineGetPayloadBodiesB
   @Override
   protected EngineGetPayloadBodiesByRangeV1<?> createMethodInstance(final int maxRequestBlocks) {
     return new EngineGetPayloadBodiesByRangeV2<>(
-        protocolSchedule, protocolContext, vertx, engineCallListener, maxRequestBlocks);
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .maxRequestBlocks(maxRequestBlocks)
+            .build(),
+        null,
+        null);
   }
 
   @Override

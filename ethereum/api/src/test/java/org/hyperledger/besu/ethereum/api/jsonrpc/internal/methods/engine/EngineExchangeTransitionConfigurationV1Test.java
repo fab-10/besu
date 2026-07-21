@@ -30,6 +30,7 @@ import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.TransitionConfigurationV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
@@ -81,7 +82,15 @@ public class EngineExchangeTransitionConfigurationV1Test extends AbstractSchedul
 
     this.method =
         new EngineExchangeTransitionConfigurationV1(
-            protocolSchedule, protocolContext, vertx, engineCallListener, null, CANCUN);
+            new ConstructorArgumentsBuilder()
+                .protocolSchedule(protocolSchedule)
+                .protocolContext(protocolContext)
+                .vertx(vertx)
+                .engineCallListener(engineCallListener)
+                .maxRequestBlocks(0)
+                .build(),
+            null,
+            CANCUN);
   }
 
   @Test

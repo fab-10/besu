@@ -17,7 +17,6 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod.ENGINE_EXCHANGE_CAPABILITIES;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod.ENGINE_PREPARE_PAYLOAD_DEBUG;
 
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.exception.InvalidJsonRpcParameters;
@@ -26,25 +25,19 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.JsonRpcPara
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class EngineExchangeCapabilities extends ExecutionEngineJsonRpcMethod {
   private static final Logger LOG = LoggerFactory.getLogger(EngineExchangeCapabilities.class);
 
-  public EngineExchangeCapabilities(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener) {
-    super(protocolSchedule, protocolContext, vertx, engineCallListener);
+  public EngineExchangeCapabilities(final ConstructorArguments constructorArguments) {
+    super(constructorArguments, null, null);
   }
 
   @Override

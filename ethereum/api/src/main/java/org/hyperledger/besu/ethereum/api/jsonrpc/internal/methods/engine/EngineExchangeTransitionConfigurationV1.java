@@ -19,7 +19,6 @@ import static org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod.ENGINE_EXCHANG
 import org.hyperledger.besu.consensus.merge.MergeContext;
 import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.exception.InvalidJsonRpcParameters;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod;
@@ -32,7 +31,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineExchangeTransitionConfigurationResult;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Difficulty;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
 import java.util.Optional;
@@ -41,7 +39,6 @@ import java.util.function.Supplier;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.common.base.Suppliers;
-import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,13 +60,10 @@ public class EngineExchangeTransitionConfigurationV1 extends ExecutionEngineJson
   private final HardforkId firstUnsupportedFork;
 
   public EngineExchangeTransitionConfigurationV1(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
+      final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(protocolSchedule, protocolContext, vertx, engineCallListener);
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
     this.minSupportedFork = minSupportedFork;
     this.firstUnsupportedFork = firstUnsupportedFork;
     this.minForkTimestamp =

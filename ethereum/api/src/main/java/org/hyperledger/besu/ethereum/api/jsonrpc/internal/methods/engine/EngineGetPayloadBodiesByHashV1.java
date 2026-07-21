@@ -14,8 +14,8 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
+import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.exception.InvalidJsonRpcParameters;
@@ -28,13 +28,11 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.ExecutionPayloadBodiesV1;
 import org.hyperledger.besu.ethereum.chain.Blockchain;
 import org.hyperledger.besu.ethereum.core.BlockBody;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,13 +43,11 @@ public sealed class EngineGetPayloadBodiesByHashV1<EPB extends ExecutionPayloadB
   protected final Blockchain blockchain;
 
   public EngineGetPayloadBodiesByHashV1(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
-      final int maxRequestBlocks) {
-    super(protocolSchedule, protocolContext, vertx, engineCallListener);
-    this.maxRequestBlocks = maxRequestBlocks;
+      final ConstructorArguments constructorArguments,
+      final HardforkId minSupportedFork,
+      final HardforkId firstUnsupportedFork) {
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    this.maxRequestBlocks = constructorArguments.maxRequestBlocks();
     this.blockchain = protocolContext.getBlockchain();
   }
 

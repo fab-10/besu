@@ -17,7 +17,6 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.datatypes.VersionedHash;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.exception.InvalidJsonRpcParameters;
@@ -30,7 +29,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlobAndProofV1;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -41,7 +39,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-import io.vertx.core.Vertx;
 import jakarta.validation.constraints.NotNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -82,23 +79,13 @@ public sealed class EngineGetBlobsV1<BAP extends BlobAndProofV1>
   private final LabelledMetric<Counter> emptyCounter;
 
   public EngineGetBlobsV1(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
-      final TransactionPool transactionPool,
-      final MetricsSystem metricsSystem,
+      final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        minSupportedFork,
-        firstUnsupportedFork);
-    this.transactionPool = transactionPool;
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    this.transactionPool = constructorArguments.transactionPool();
 
+    final MetricsSystem metricsSystem = constructorArguments.metricsSystem();
     // create counters
     this.requestedCounter =
         metricsSystem.createLabelledCounter(

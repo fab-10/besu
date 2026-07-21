@@ -16,9 +16,7 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.EngineStatus.INVALID;
 
-import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.datatypes.HardforkId;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV2;
@@ -28,18 +26,13 @@ import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockBody;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.BlockHeaderBuilder;
-import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.mainnet.BodyValidation;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
-import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
-
-import io.vertx.core.Vertx;
 
 public sealed class EngineNewPayloadV2<
         EP extends ExecutionPayloadV2, NPRP extends NewPayloadRequestParametersV1<? extends EP>>
@@ -48,25 +41,10 @@ public sealed class EngineNewPayloadV2<
   private final Optional<Long> shanghaiTimestamp;
 
   public EngineNewPayloadV2(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
-      final MergeMiningCoordinator mergeCoordinator,
-      final EthPeers ethPeers,
-      final MetricsSystem metricsSystem,
+      final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeCoordinator,
-        ethPeers,
-        metricsSystem,
-        minSupportedFork,
-        firstUnsupportedFork);
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
     shanghaiTimestamp = protocolSchedule.milestoneFor(HardforkId.MainnetHardforkId.SHANGHAI);
   }
 

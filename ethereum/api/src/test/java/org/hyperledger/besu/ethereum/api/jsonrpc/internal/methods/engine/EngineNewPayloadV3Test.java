@@ -41,6 +41,7 @@ import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.BlockProcessingOutputs;
 import org.hyperledger.besu.ethereum.BlockProcessingResult;
 import org.hyperledger.besu.ethereum.GasLimitCalculator;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcError;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.PayloadStatusV1;
 import org.hyperledger.besu.ethereum.core.BlobTestFixture;
@@ -99,13 +100,16 @@ public class EngineNewPayloadV3Test extends EngineNewPayloadV2Test {
   @Override
   protected EngineNewPayloadV1<?, ?> createMethodInstance() {
     return new EngineNewPayloadV3<>(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeCoordinator,
-        ethPeers,
-        new NoOpMetricsSystem(),
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .mergeCoordinator(mergeCoordinator)
+            .ethPeers(ethPeers)
+            .metricsSystem(new NoOpMetricsSystem())
+            .maxRequestBlocks(0)
+            .build(),
         CANCUN,
         PRAGUE);
   }

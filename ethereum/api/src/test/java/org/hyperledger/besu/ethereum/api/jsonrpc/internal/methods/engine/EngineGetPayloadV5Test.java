@@ -19,6 +19,7 @@ import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.AMSTER
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.OSAKA;
 
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlobsBundleV2;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetPayloadResultV5;
 import org.hyperledger.besu.ethereum.core.Request;
@@ -36,12 +37,15 @@ public class EngineGetPayloadV5Test extends EngineGetPayloadV4Test {
   @Override
   protected EngineGetPayloadV1 createMethodInstance() {
     return new EngineGetPayloadV5(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeMiningCoordinator,
-        factory,
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .mergeCoordinator(mergeMiningCoordinator)
+            .blockResultFactory(factory)
+            .maxRequestBlocks(0)
+            .build(),
         OSAKA,
         AMSTERDAM);
   }

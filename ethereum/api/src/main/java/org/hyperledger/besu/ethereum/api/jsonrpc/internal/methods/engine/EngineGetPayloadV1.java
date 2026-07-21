@@ -18,7 +18,6 @@ import org.hyperledger.besu.consensus.merge.PayloadWrapper;
 import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.consensus.merge.blockcreation.PayloadIdentifier;
 import org.hyperledger.besu.datatypes.HardforkId;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.exception.InvalidJsonRpcParameters;
@@ -34,12 +33,10 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetPaylo
 import org.hyperledger.besu.ethereum.blockcreation.BlockCreationTiming;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockWithReceipts;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
 import java.util.Optional;
 
-import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -52,23 +49,12 @@ public sealed class EngineGetPayloadV1 extends ExecutionEngineJsonRpcMethod
   protected final BlockResultFactory blockResultFactory;
 
   public EngineGetPayloadV1(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
-      final MergeMiningCoordinator mergeMiningCoordinator,
-      final BlockResultFactory blockResultFactory,
+      final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        minSupportedFork,
-        firstUnsupportedFork);
-    this.mergeMiningCoordinator = mergeMiningCoordinator;
-    this.blockResultFactory = blockResultFactory;
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    this.mergeMiningCoordinator = constructorArguments.mergeCoordinator();
+    this.blockResultFactory = constructorArguments.blockResultFactory();
   }
 
   @Override

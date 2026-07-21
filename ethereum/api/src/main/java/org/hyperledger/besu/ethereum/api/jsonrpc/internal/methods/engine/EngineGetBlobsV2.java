@@ -17,41 +17,23 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.datatypes.VersionedHash;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlobAndProofV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlobAndProofV2;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
-import org.hyperledger.besu.plugin.services.MetricsSystem;
 
 import java.util.List;
 
-import io.vertx.core.Vertx;
 import org.jspecify.annotations.Nullable;
 
 public sealed class EngineGetBlobsV2<BAP extends BlobAndProofV2> extends EngineGetBlobsV1<BAP>
     permits EngineGetBlobsV3 {
 
   public EngineGetBlobsV2(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
-      final TransactionPool transactionPool,
-      final MetricsSystem metricsSystem,
+      final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        transactionPool,
-        metricsSystem,
-        minSupportedFork,
-        firstUnsupportedFork);
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
   }
 
   @Override

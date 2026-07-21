@@ -37,6 +37,7 @@ import org.hyperledger.besu.ethereum.BlockProcessingOutputs;
 import org.hyperledger.besu.ethereum.BlockProcessingResult;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcError;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -82,13 +83,16 @@ public class EngineNewPayloadV4Test extends EngineNewPayloadV3Test {
   @Override
   protected EngineNewPayloadV1<?, ?> createMethodInstance() {
     return new EngineNewPayloadV4<>(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeCoordinator,
-        ethPeers,
-        new NoOpMetricsSystem(),
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .mergeCoordinator(mergeCoordinator)
+            .ethPeers(ethPeers)
+            .metricsSystem(new NoOpMetricsSystem())
+            .maxRequestBlocks(0)
+            .build(),
         PRAGUE,
         AMSTERDAM);
   }
@@ -111,15 +115,21 @@ public class EngineNewPayloadV4Test extends EngineNewPayloadV3Test {
 
   @Test
   public void shouldReturnInvalidParamsIfBlockAccessListPresentOnV4() {
-    final BlockHeader header = createValidBlockHeader(Optional.empty());
-    final EnginePayloadParameter payload = mockEnginePayload(header, emptyList(), null, "0xc0");
+    BlockHeader blockHeader =
+        setupPayloadV4(
+            getMinSupportedTimestamp(),
+            new BlockProcessingResult(Optional.of(new BlockProcessingOutputs(null, List.of()))),
+            VALID_REQUESTS);
 
-    var resp = resp(payload);
+    final Map<String, Object> payloadParam = mockEnginePayloadParam(blockHeader, emptyList());
+    payloadParam.put("blockAccessList", "0xc0");
+
+    var resp = respV4(payloadParam, requestsAsParam(VALID_REQUESTS));
 
     final JsonRpcError jsonRpcError = fromErrorResp(resp);
     assertThat(jsonRpcError.getCode()).isEqualTo(INVALID_PARAMS.getCode());
     assertThat(jsonRpcError.getMessage()).isEqualTo(INVALID_ENGINE_NEW_PAYLOAD_PARAMS.getMessage());
-    assertThat(jsonRpcError.getData()).isEqualTo("Unexpected block access list field");
+    assertThat(jsonRpcError.getData()).startsWith("Failed to decode block parameter");
     verify(engineCallListener, times(1)).executionEngineCalled();
   }
 

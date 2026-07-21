@@ -21,7 +21,6 @@ import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.Executi
 import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.consensus.merge.blockcreation.PayloadIdentifier;
 import org.hyperledger.besu.consensus.merge.blockcreation.PreparePayloadArgsBuilder;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.exception.InvalidJsonRpcParameters;
@@ -35,25 +34,18 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSucces
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EnginePreparePayloadResult;
 import org.hyperledger.besu.ethereum.core.Withdrawal;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
 import java.util.List;
 import java.util.Optional;
 
 import graphql.VisibleForTesting;
-import io.vertx.core.Vertx;
 
 public class EnginePreparePayloadDebug extends ExecutionEngineJsonRpcMethod {
   private final MergeMiningCoordinator mergeCoordinator;
 
-  public EnginePreparePayloadDebug(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
-      final MergeMiningCoordinator mergeCoordinator) {
-    super(protocolSchedule, protocolContext, vertx, engineCallListener);
-    this.mergeCoordinator = mergeCoordinator;
+  public EnginePreparePayloadDebug(final ConstructorArguments constructorArguments) {
+    super(constructorArguments, null, null);
+    this.mergeCoordinator = constructorArguments.mergeCoordinator();
   }
 
   @Override

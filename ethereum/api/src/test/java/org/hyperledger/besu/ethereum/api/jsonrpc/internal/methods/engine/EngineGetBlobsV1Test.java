@@ -36,6 +36,7 @@ import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
@@ -103,12 +104,15 @@ public class EngineGetBlobsV1Test extends AbstractScheduledApiTest {
     this.method =
         spy(
             new EngineGetBlobsV1<>(
-                protocolSchedule,
-                protocolContext,
-                vertx,
-                engineCallListener,
-                transactionPool,
-                metricsSystem,
+                new ConstructorArgumentsBuilder()
+                    .protocolSchedule(protocolSchedule)
+                    .protocolContext(protocolContext)
+                    .vertx(vertx)
+                    .engineCallListener(engineCallListener)
+                    .transactionPool(transactionPool)
+                    .metricsSystem(metricsSystem)
+                    .maxRequestBlocks(0)
+                    .build(),
                 CANCUN,
                 OSAKA));
   }

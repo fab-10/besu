@@ -22,6 +22,7 @@ import static org.mockito.Mockito.verify;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
@@ -52,7 +53,13 @@ public class EngineExchangeCapabilitiesTest {
   public void setUp() {
     this.method =
         new EngineExchangeCapabilities(
-            protocolSchedule, protocolContext, vertx, engineCallListener);
+            new ConstructorArgumentsBuilder()
+                .protocolSchedule(protocolSchedule)
+                .protocolContext(protocolContext)
+                .vertx(vertx)
+                .engineCallListener(engineCallListener)
+                .maxRequestBlocks(0)
+                .build());
   }
 
   @Test

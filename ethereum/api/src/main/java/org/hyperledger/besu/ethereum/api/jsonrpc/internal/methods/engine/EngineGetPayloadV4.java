@@ -15,40 +15,21 @@
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import org.hyperledger.besu.consensus.merge.PayloadWrapper;
-import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.datatypes.HardforkId;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetPayloadResultV4;
 import org.hyperledger.besu.ethereum.core.Request;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 
 import java.util.Comparator;
 import java.util.List;
 
-import io.vertx.core.Vertx;
-
 public sealed class EngineGetPayloadV4 extends EngineGetPayloadV3 permits EngineGetPayloadV5 {
 
   public EngineGetPayloadV4(
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final Vertx vertx,
-      final EngineCallListener engineCallListener,
-      final MergeMiningCoordinator mergeMiningCoordinator,
-      final BlockResultFactory blockResultFactory,
+      final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeMiningCoordinator,
-        blockResultFactory,
-        minSupportedFork,
-        firstUnsupportedFork);
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
   }
 
   @Override

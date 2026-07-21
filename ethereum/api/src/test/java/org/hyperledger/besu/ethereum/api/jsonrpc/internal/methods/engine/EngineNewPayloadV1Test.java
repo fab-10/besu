@@ -41,6 +41,7 @@ import org.hyperledger.besu.ethereum.BlockProcessingResult;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcError;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
@@ -113,7 +114,6 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
     when(protocolContext.getBlockchain()).thenReturn(blockchain);
     when(protocolSchedule.getByBlockHeader(any())).thenReturn(protocolSpec);
     when(protocolContext.getWorldStateArchive()).thenReturn(worldStateArchive);
-    when(worldStateArchive.isWorldStateImmediatelyCached(any())).thenReturn(true);
     when(ethPeers.peerCount()).thenReturn(1);
     createMethod();
   }
@@ -125,13 +125,16 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
 
   protected EngineNewPayloadV1<?, ?> createMethodInstance() {
     return new EngineNewPayloadV1<>(
-        protocolSchedule,
-        protocolContext,
-        vertx,
-        engineCallListener,
-        mergeCoordinator,
-        ethPeers,
-        new NoOpMetricsSystem(),
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .mergeCoordinator(mergeCoordinator)
+            .ethPeers(ethPeers)
+            .metricsSystem(new NoOpMetricsSystem())
+            .maxRequestBlocks(0)
+            .build(),
         null,
         SHANGHAI);
   }
@@ -371,30 +374,6 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
               assertThat(jsonRpcError.getCode()).isEqualTo(UNSUPPORTED_FORK.getCode());
               verify(engineCallListener, times(1)).executionEngineCalled();
             });
-  }
-
-  @Test
-  public void shouldReturnSyncingWhenParentWorldStateNotImmediatelyCached() {
-    // Simulates cold-cache after restart: parent header is known to the blockchain but its
-    // world state is not in the Bonsai layered cache (requires expensive trie-log replay).
-    // We must return SYNCING immediately rather than blocking the worker thread.
-    BlockHeader mockHeader = setupPayloadV1(getMinSupportedTimestamp());
-    when(blockchain.getBlockByHash(mockHeader.getHash())).thenReturn(Optional.empty());
-    when(blockchain.getBlockHeader(mockHeader.getParentHash()))
-        .thenReturn(Optional.of(mock(BlockHeader.class)));
-    when(mergeCoordinator.getLatestValidAncestor(any(BlockHeader.class)))
-        .thenReturn(Optional.of(mockHash));
-    when(worldStateArchive.isWorldStateImmediatelyCached(mockHeader.getParentHash()))
-        .thenReturn(false);
-
-    var resp = resp(requestParams(mockEnginePayloadParam(mockHeader, emptyList())));
-
-    PayloadStatusV1 res = fromSuccessResp(resp);
-    assertThat(res.getLatestValidHash()).isEmpty();
-    assertThat(res.getStatusAsString()).isEqualTo(SYNCING.name());
-    assertThat(res.getError()).isNull();
-    verify(mergeCoordinator, times(0)).rememberBlock(any(), any());
-    verify(engineCallListener, times(1)).executionEngineCalled();
   }
 
   protected Object[] requestParams(final Map<String, Object> payloadParams) {
