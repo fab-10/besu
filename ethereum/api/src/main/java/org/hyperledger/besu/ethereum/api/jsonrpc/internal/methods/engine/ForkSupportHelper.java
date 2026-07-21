@@ -89,7 +89,7 @@ public class ForkSupportHelper {
     if (maybeFirstSupportedForkMilestone.isEmpty()) {
       if (firstSupportedHardforkId != null && !firstSupportedHardforkId.equals(PARIS)) {
         return ValidationResult.invalid(
-            RpcErrorType.UNSUPPORTED_FORK, firstUnsupportedHardforkId.name() + " not configured");
+            RpcErrorType.UNSUPPORTED_FORK, firstSupportedHardforkId.name() + " not configured");
       }
     }
 

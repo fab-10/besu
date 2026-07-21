@@ -69,6 +69,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
+import com.google.common.annotations.VisibleForTesting;
 import io.vertx.core.Vertx;
 
 public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
@@ -300,7 +301,8 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
             mergeMiningCoordinator);
   }
 
-  private static class VersionScheduler {
+  @VisibleForTesting
+  static class VersionScheduler {
     final List<MethodVersionBuildData> readyMethods = new ArrayList<>();
     List<MethodVersionBuildData> pendingMethods = new ArrayList<>();
 
