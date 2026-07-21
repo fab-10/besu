@@ -174,6 +174,21 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
   }
 
   @Test
+  public void shouldProceedWithForkChoiceWhenHeadKnownEvenIfSyncing() {
+    // isSyncing() is not checked in FCU; if the head block is found, we proceed.
+    final BlockHeader mockHeader = blockHeaderBuilder.buildHeader();
+    when(mergeCoordinator.getOrSyncHeadByHash(mockHeader.getHash(), Hash.ZERO))
+        .thenReturn(Optional.of(mockHeader));
+    when(mergeContext.isSyncing()).thenReturn(true);
+
+    assertSuccessWithPayloadForForkchoiceResult(
+        new ForkchoiceStateV1(mockHeader.getHash(), Hash.ZERO, Hash.ZERO),
+        Optional.empty(),
+        ForkchoiceResult.withResult(Optional.empty(), Optional.of(mockHeader)),
+        VALID);
+  }
+
+  @Test
   public void shouldReturnSyncingIfMissingNewHead() {
     assertSuccessWithPayloadForForkchoiceResult(
         mockFcuParam, Optional.empty(), mock(ForkchoiceResult.class), SYNCING);

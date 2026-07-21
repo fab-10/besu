@@ -67,6 +67,11 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
 
   protected final MergeMiningCoordinator mergeCoordinator;
 
+  @Override
+  protected Logger logger() {
+    return LOG;
+  }
+
   public EngineForkchoiceUpdatedV1(
       final ProtocolSchedule protocolSchedule,
       final ProtocolContext protocolContext,
@@ -111,7 +116,7 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
           e);
     }
 
-    LOG.debug("Forkchoice parameters {}", forkChoice);
+    logger().debug("Forkchoice parameters {}", forkChoice);
 
     final Optional<PA> maybePayloadAttributes;
     try {
@@ -119,11 +124,11 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
           requestContext.getOptionalParameter(
               1, getPayloadAttributesClass(), FAIL_ON_UNKNOWN_BUT_NULL);
     } catch (JsonRpcParameter.JsonRpcParameterException e) {
-      LOG.debug("Invalid payload attributes parameter", e);
+      logger().debug("Invalid payload attributes parameter", e);
       return new JsonRpcErrorResponse(requestId, getInvalidPayloadAttributesError());
     }
 
-    LOG.debug("Payload attributes {}", maybePayloadAttributes);
+    logger().debug("Payload attributes {}", maybePayloadAttributes);
 
     // Structural parameter check (-32602) — must happen before any FCU processing.
     final ValidationResult<RpcErrorType> structResult = validateForkchoiceStateParams(forkChoice);
@@ -159,23 +164,33 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
         mergeCoordinator.getOrSyncHeadByHash(
             forkChoice.getHeadBlockHash(), forkChoice.getFinalizedBlockHash());
 
-    if (maybeNewHead.isEmpty() || mergeContext.get().isSyncing()) {
+    if (maybeNewHead.isEmpty()) {
       return syncingResponse(requestId, forkChoice);
     }
 
     final BlockHeader newHead = maybeNewHead.get();
 
+    // 5. Client software MUST return -38002: Invalid forkchoice state error if the payload
+    // referenced by forkchoiceState.headBlockHash is VALID and a payload referenced by either
+    // forkchoiceState.finalizedBlockHash or forkchoiceState.safeBlockHash does not belong to the
+    // chain defined by forkchoiceState.headBlockHash.
+    if (!isValidForkchoiceState(
+        forkChoice.getSafeBlockHash(), forkChoice.getFinalizedBlockHash(), newHead)) {
+      logFCU(INVALID, forkChoice);
+      return new JsonRpcErrorResponse(requestId, RpcErrorType.INVALID_FORKCHOICE_STATE);
+    }
+
     // 2. Client software MAY skip an update of the forkchoice state and MUST NOT begin a payload
     // build process if there is a known finalizedBlockHash and forkchoiceState.headBlockHash
     // references a VALID ancestor of the latest known finalized block, i.e. the ancestor passed
-    // payload validation process and deemed VALID. In the case of such an event, client software
+    // payload validation process and deemed VALID.
     if (mergeCoordinator.isAncestorOfFinalized(newHead)) {
       logFCU(VALID, forkChoice);
       return new JsonRpcSuccessResponse(
           requestId, new ForkchoiceUpdatedResultV1(VALID, forkChoice.getHeadBlockHash()));
     }
 
-    // 3. TODO? [SKIPPED] If forkchoiceState.headBlockHash references a PoW block, client software
+    // 3. If forkchoiceState.headBlockHash references a PoW block, client software
     // MUST validate
     // this block with respect to terminal block conditions according to EIP-3675. This check maps
     // to the transition block validity section of the EIP. Additionally, if this validation fails,
@@ -188,24 +203,15 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
     // If the validation process fails, client software MUST NOT update the forkchoice state and
     // MUST NOT begin a payload build process.
 
-    // Step 4 is implicit since newHead is present, it means it has been already validated
+    // Steps 3 & 4 are implicit since if newHead is present, it means it has been already validated
     // in the previous newPayload call
-
-    // 5. Client software MUST return -38002: Invalid forkchoice state error if the payload
-    // referenced by forkchoiceState.headBlockHash is VALID and a payload referenced by either
-    // forkchoiceState.finalizedBlockHash or forkchoiceState.safeBlockHash does not belong to the
-    // chain defined by forkchoiceState.headBlockHash.
-    if (!isValidForkchoiceState(
-        forkChoice.getSafeBlockHash(), forkChoice.getFinalizedBlockHash(), newHead)) {
-      logFCU(INVALID, forkChoice);
-      return new JsonRpcErrorResponse(requestId, RpcErrorType.INVALID_FORKCHOICE_STATE);
-    }
 
     // 6. Client software MUST return -38006: Too deep reorg error if the depth of reorg to
     // forkchoiceState.headBlockHash exceeds the limitation specific to the client software.
     final OptionalLong reorgDepth = mergeCoordinator.computeReorgDepth(newHead);
     if (reorgDepth.isPresent() && reorgDepth.getAsLong() > MergeMiningCoordinator.MAX_REORG_DEPTH) {
-      LOG.atWarn()
+      logger()
+          .atWarn()
           .setMessage("Rejecting FCU: reorg depth {} exceeds limit {}")
           .addArgument(reorgDepth::getAsLong)
           .addArgument(MergeMiningCoordinator.MAX_REORG_DEPTH)
@@ -215,8 +221,7 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
     }
 
     // 7. Client software MUST update its forkchoice state if payloads referenced by
-    // forkchoiceState.headBlockHash and forkchoiceState.finalizedBlockHash are VALID. The update is
-    // specified as follows:
+    // forkchoiceState.headBlockHash and forkchoiceState.finalizedBlockHash are VALID.
     final MergeMiningCoordinator.ForkchoiceResult forkchoiceResult =
         mergeCoordinator.updateForkChoice(
             newHead, forkChoice.getFinalizedBlockHash(), forkChoice.getSafeBlockHash());
@@ -236,7 +241,7 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
       // Version-specific payload field checks.
       final ValidationResult<RpcErrorType> attrResult = validatePayloadAttributes(newHead, attrs);
       if (!attrResult.isValid()) {
-        LOG.warn("Invalid payload attributes: {}", attrResult.getErrorMessage());
+        logger().warn("Invalid payload attributes: {}", attrResult.getErrorMessage());
         return new JsonRpcErrorResponse(requestId, attrResult);
       }
 
@@ -252,7 +257,8 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
       setPreparePayloadArgs(preparePayloadArgsBuilder, attrs);
       payloadId = mergeCoordinator.preparePayload(preparePayloadArgsBuilder.build());
 
-      LOG.atDebug()
+      logger()
+          .atDebug()
           .setMessage("Payload identifier {} for timestamp {}")
           .addArgument(payloadId::toHexString)
           .addArgument(() -> Long.toHexString(attrs.getTimestamp()))
@@ -371,22 +377,24 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
 
   private JsonRpcResponse syncingResponse(
       final Object requestId, final ForkchoiceStateV1 forkChoice) {
-    LOG.debug(
-        "FCU({}) | head: {} | safe: {} | finalized: {}",
-        SYNCING.name(),
-        forkChoice.getHeadBlockHash(),
-        forkChoice.getSafeBlockHash(),
-        forkChoice.getFinalizedBlockHash());
+    logger()
+        .debug(
+            "FCU({}) | head: {} | safe: {} | finalized: {}",
+            SYNCING.name(),
+            forkChoice.getHeadBlockHash(),
+            forkChoice.getSafeBlockHash(),
+            forkChoice.getFinalizedBlockHash());
     return new JsonRpcSuccessResponse(
         requestId, new ForkchoiceUpdatedResultV1(SYNCING, null, null, Optional.empty()));
   }
 
   private void logFCU(final EngineStatus status, final ForkchoiceStateV1 forkChoice) {
-    LOG.info(
-        "FCU({}) | head: {} | safe: {} | finalized: {}",
-        status.name(),
-        forkChoice.getHeadBlockHash().toShortLogString(),
-        forkChoice.getSafeBlockHash().toShortLogString(),
-        forkChoice.getFinalizedBlockHash().toShortLogString());
+    logger()
+        .info(
+            "FCU({}) | head: {} | safe: {} | finalized: {}",
+            status.name(),
+            forkChoice.getHeadBlockHash().toShortLogString(),
+            forkChoice.getSafeBlockHash().toShortLogString(),
+            forkChoice.getFinalizedBlockHash().toShortLogString());
   }
 }

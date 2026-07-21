@@ -25,8 +25,6 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
-import java.util.Optional;
-
 import io.vertx.core.Vertx;
 
 /**
@@ -49,6 +47,13 @@ import io.vertx.core.Vertx;
  */
 public final class EngineForkchoiceUpdatedV4<PA extends PayloadAttributesV4>
     extends EngineForkchoiceUpdatedV3<PA> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(EngineForkchoiceUpdatedV4.class);
+
+  @Override
+  protected Logger logger() {
+    return LOG;
+  }
 
   public EngineForkchoiceUpdatedV4(
       final ProtocolSchedule protocolSchedule,
@@ -110,6 +115,6 @@ public final class EngineForkchoiceUpdatedV4<PA extends PayloadAttributesV4>
       final PreparePayloadArgsBuilder preparePayloadArgsBuilder, final PA attrs) {
     super.setPreparePayloadArgs(preparePayloadArgsBuilder, attrs);
     preparePayloadArgsBuilder.slotNumber(attrs.getSlotNumber());
-    preparePayloadArgsBuilder.targetGasLimit(Optional.ofNullable(attrs.getTargetGasLimit()));
+    preparePayloadArgsBuilder.targetGasLimit(attrs.getTargetGasLimit());
   }
 }

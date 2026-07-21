@@ -1,5 +1,5 @@
 /*
- * Copyright contributors to Hyperledger Besu.
+ * Copyright contributors to Besu.
  *
  * Licensed under the Apache License, Version 2.0 (the "License"); you may not use this file except in compliance with
  * the License. You may obtain a copy of the License at
@@ -24,6 +24,7 @@ import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
+// TODO: duplicate of PayloadStatusV1 — remove once EngineNewPayloadV* methods are refactored
 @JsonPropertyOrder({"status", "latestValidHash", "validationError"})
 public class PayloadStatusV1 {
   EngineStatus status;
@@ -34,7 +35,7 @@ public class PayloadStatusV1 {
   public PayloadStatusV1(
       @JsonProperty("status") final EngineStatus status,
       @JsonProperty("latestValidHash") final Hash latestValidHash,
-      @JsonProperty("errorMessage") final Optional<String> validationError) {
+      @JsonProperty("validationError") final Optional<String> validationError) {
     this.status = status;
     this.latestValidHash = Optional.ofNullable(latestValidHash);
     this.validationError = validationError;

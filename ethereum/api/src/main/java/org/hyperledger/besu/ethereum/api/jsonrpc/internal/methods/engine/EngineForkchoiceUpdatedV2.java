@@ -28,6 +28,8 @@ import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import java.util.Optional;
 
 import io.vertx.core.Vertx;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * {@code engine_forkchoiceUpdatedV2} — Shanghai (Withdrawals).
@@ -40,6 +42,8 @@ import io.vertx.core.Vertx;
  */
 public sealed class EngineForkchoiceUpdatedV2<PA extends PayloadAttributesV2>
     extends EngineForkchoiceUpdatedV1<PA> permits EngineForkchoiceUpdatedV3 {
+
+  private static final Logger LOG = LoggerFactory.getLogger(EngineForkchoiceUpdatedV2.class);
 
   private final Optional<Long> shanghaiTimestamp;
 
@@ -60,6 +64,11 @@ public sealed class EngineForkchoiceUpdatedV2<PA extends PayloadAttributesV2>
         minFork,
         maxFork);
     shanghaiTimestamp = protocolSchedule.milestoneFor(HardforkId.MainnetHardforkId.SHANGHAI);
+  }
+
+  @Override
+  protected Logger logger() {
+    return LOG;
   }
 
   @Override
