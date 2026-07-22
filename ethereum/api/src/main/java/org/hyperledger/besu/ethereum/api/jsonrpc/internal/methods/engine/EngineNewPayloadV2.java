@@ -34,9 +34,14 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public sealed class EngineNewPayloadV2<
         EP extends ExecutionPayloadV2, NPRP extends NewPayloadRequestParametersV1<? extends EP>>
     extends EngineNewPayloadV1<EP, NPRP> permits EngineNewPayloadV3 {
+
+  private static final Logger LOG = LoggerFactory.getLogger(EngineNewPayloadV2.class);
 
   private final Optional<Long> shanghaiTimestamp;
 
@@ -46,6 +51,11 @@ public sealed class EngineNewPayloadV2<
       final HardforkId firstUnsupportedFork) {
     super(constructorArguments, minSupportedFork, firstUnsupportedFork);
     shanghaiTimestamp = protocolSchedule.milestoneFor(HardforkId.MainnetHardforkId.SHANGHAI);
+  }
+
+  @Override
+  protected Logger logger() {
+    return LOG;
   }
 
   @Override
