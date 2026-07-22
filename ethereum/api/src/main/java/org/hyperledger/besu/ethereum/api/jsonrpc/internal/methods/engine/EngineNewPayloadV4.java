@@ -53,6 +53,11 @@ public sealed class EngineNewPayloadV4<
   }
 
   @Override
+  protected Logger logger() {
+    return LOG;
+  }
+
+  @Override
   public String getName() {
     return RpcMethod.ENGINE_NEW_PAYLOAD_V4.getMethodName();
   }
@@ -124,8 +129,10 @@ public sealed class EngineNewPayloadV4<
             maybeRequestTypeEx.get().getMessage());
       } else {
         // payload parameter should be present in this case, so treat this as an internal error
-        LOG.error(
-            "Internal error: we expected payload parameter to not be null, please report this", e);
+        logger()
+            .error(
+                "Internal error: we expected payload parameter to not be null, please report this",
+                e);
         return new JsonRpcErrorResponse(reqId, RpcErrorType.INTERNAL_ERROR);
       }
     }

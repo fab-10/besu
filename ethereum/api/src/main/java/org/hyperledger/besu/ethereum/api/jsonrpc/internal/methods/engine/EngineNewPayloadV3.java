@@ -45,16 +45,25 @@ import java.util.Optional;
 
 import com.google.common.annotations.VisibleForTesting;
 import org.apache.tuweni.bytes.Bytes32;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public sealed class EngineNewPayloadV3<
         EP extends ExecutionPayloadV3, NPRP extends NewPayloadRequestParametersV2<? extends EP>>
     extends EngineNewPayloadV2<EP, NPRP> permits EngineNewPayloadV4 {
+
+  private static final Logger LOG = LoggerFactory.getLogger(EngineNewPayloadV3.class);
 
   public EngineNewPayloadV3(
       final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
     super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+  }
+
+  @Override
+  protected Logger logger() {
+    return LOG;
   }
 
   @Override
