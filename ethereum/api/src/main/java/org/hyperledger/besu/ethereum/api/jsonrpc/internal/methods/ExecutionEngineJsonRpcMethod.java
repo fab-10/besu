@@ -39,7 +39,6 @@ import java.util.function.Supplier;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import io.vertx.core.Vertx;
 import org.immutables.value.Value;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,10 +54,6 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
   // Fields used by migrated series (currently engine_forkchoiceUpdatedV* and engine_newPayloadV*
   // — see the package README's migration status table). Not-yet-migrated series keep using the
   // TRANSITIONAL SHIM constructors below instead of this record.
-  //
-  // ethPeers/metricsSystem are only read by engine_newPayloadV*, not engine_forkchoiceUpdatedV*,
-  // so they are nullable to keep FCU-only construction (production and tests) from having to
-  // populate fields it will never use.
   @Value.Builder
   public record ConstructorArguments(
       ProtocolSchedule protocolSchedule,
@@ -66,8 +61,8 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
       Vertx vertx,
       EngineCallListener engineCallListener,
       MergeMiningCoordinator mergeCoordinator,
-      @Nullable EthPeers ethPeers,
-      @Nullable MetricsSystem metricsSystem) {}
+      EthPeers ethPeers,
+      MetricsSystem metricsSystem) {}
 
   private static final Logger LOG = LoggerFactory.getLogger(ExecutionEngineJsonRpcMethod.class);
   public static final long ENGINE_API_LOGGING_THRESHOLD = 60000L;
