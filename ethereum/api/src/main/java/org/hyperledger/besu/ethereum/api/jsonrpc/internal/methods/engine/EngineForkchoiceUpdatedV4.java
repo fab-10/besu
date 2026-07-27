@@ -17,11 +17,19 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 import org.hyperledger.besu.consensus.merge.blockcreation.PreparePayloadArgsBuilder;
 import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.JsonRpcParameter;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.PayloadAttributesV4;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcErrorResponse;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
+import java.util.Optional;
+
+import org.apache.tuweni.bytes.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,6 +55,9 @@ public final class EngineForkchoiceUpdatedV4<PA extends PayloadAttributesV4>
     extends EngineForkchoiceUpdatedV3<PA> {
 
   private static final Logger LOG = LoggerFactory.getLogger(EngineForkchoiceUpdatedV4.class);
+  private static final int CUSTODY_COLUMNS_BYTE_LENGTH = 16;
+
+  private final TransactionPool transactionPool;
 
   @Override
   protected Logger logger() {
@@ -58,11 +69,56 @@ public final class EngineForkchoiceUpdatedV4<PA extends PayloadAttributesV4>
       final HardforkId minFork,
       final HardforkId maxFork) {
     super(constructorArguments, minFork, maxFork);
+    this.transactionPool = constructorArguments.transactionPool();
   }
 
   @Override
   public String getName() {
     return RpcMethod.ENGINE_FORKCHOICE_UPDATED_V4.getMethodName();
+  }
+
+  /**
+   * V4 adds an optional {@code custodyColumns} 3rd parameter (Amsterdam / EIP-8070). Its validation
+   * and adoption is handled here, independently of and before the rest of the FCU flow, then
+   * delegates to V1's {@code syncResponse} unchanged.
+   */
+  @Override
+  public JsonRpcResponse syncResponse(final JsonRpcRequestContext requestContext) {
+    final ValidationResult<RpcErrorType> custodyColumnsResult =
+        validateAndApplyCustodyColumns(requestContext);
+    if (!custodyColumnsResult.isValid()) {
+      return new JsonRpcErrorResponse(requestContext.getRequest().getId(), custodyColumnsResult);
+    }
+    return super.syncResponse(requestContext);
+  }
+
+  private ValidationResult<RpcErrorType> validateAndApplyCustodyColumns(
+      final JsonRpcRequestContext requestContext) {
+    final Optional<Bytes> custodyColumns;
+    try {
+      custodyColumns = requestContext.getOptionalParameter(2, Bytes.class);
+    } catch (JsonRpcParameter.JsonRpcParameterException e) {
+      return ValidationResult.invalid(
+          RpcErrorType.INVALID_CUSTODY_COLUMNS_PARAMS,
+          "Invalid custodyColumns parameter (index 2)");
+    }
+    if (custodyColumns.isEmpty()) {
+      return ValidationResult.valid();
+    }
+    final Bytes bytes = custodyColumns.get();
+    if (bytes.size() != CUSTODY_COLUMNS_BYTE_LENGTH) {
+      return ValidationResult.invalid(
+          RpcErrorType.INVALID_CUSTODY_COLUMNS_PARAMS,
+          "custodyColumns must be %d bytes, got %d"
+              .formatted(CUSTODY_COLUMNS_BYTE_LENGTH, bytes.size()));
+    }
+    // Custody set adoption MUST NOT affect the main forkchoice-update processing flow.
+    try {
+      transactionPool.updateBlobCustodyColumns(bytes);
+    } catch (final RuntimeException e) {
+      logger().warn("Failed to adopt updated blob custody columns", e);
+    }
+    return ValidationResult.valid();
   }
 
   @Override

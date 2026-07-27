@@ -58,6 +58,7 @@ public class EngineForkchoiceUpdatedV3Test extends EngineForkchoiceUpdatedV2Test
             .mergeCoordinator(mergeCoordinator)
             .ethPeers(mock(EthPeers.class))
             .metricsSystem(new NoOpMetricsSystem())
+            .transactionPool(transactionPool)
             .build(),
         CANCUN,
         AMSTERDAM);
