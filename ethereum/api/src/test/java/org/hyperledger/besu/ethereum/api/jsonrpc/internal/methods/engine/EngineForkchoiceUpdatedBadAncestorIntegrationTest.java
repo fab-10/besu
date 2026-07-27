@@ -143,6 +143,7 @@ public class EngineForkchoiceUpdatedBadAncestorIntegrationTest {
                 .mergeCoordinator(mergeCoordinator)
                 .ethPeers(mock(EthPeers.class))
                 .metricsSystem(new NoOpMetricsSystem())
+                .transactionPool(transactionPool)
                 .build(),
             CANCUN,
             AMSTERDAM);
