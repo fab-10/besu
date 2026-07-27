@@ -51,6 +51,7 @@ import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.plugin.services.rpc.RpcResponseType;
@@ -91,6 +92,7 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
   @Mock protected MergeMiningCoordinator mergeCoordinator;
   @Mock protected MutableBlockchain blockchain;
   @Mock protected EngineCallListener engineCallListener;
+  @Mock protected TransactionPool transactionPool;
 
   @Override
   @BeforeEach
@@ -114,6 +116,7 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
             .mergeCoordinator(mergeCoordinator)
             .ethPeers(mock(EthPeers.class))
             .metricsSystem(new NoOpMetricsSystem())
+            .transactionPool(transactionPool)
             .build(),
         null,
         SHANGHAI);
