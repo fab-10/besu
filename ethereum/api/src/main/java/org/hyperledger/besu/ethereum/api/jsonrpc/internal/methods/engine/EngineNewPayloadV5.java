@@ -31,16 +31,25 @@ import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import java.util.Optional;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public final class EngineNewPayloadV5<
         EP extends ExecutionPayloadV4, NPRP extends NewPayloadRequestParametersV3<? extends EP>>
     extends EngineNewPayloadV4<EP, NPRP> {
+
+  private static final Logger LOG = LoggerFactory.getLogger(EngineNewPayloadV5.class);
 
   public EngineNewPayloadV5(
       final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
     super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+  }
+
+  @Override
+  protected Logger logger() {
+    return LOG;
   }
 
   @Override

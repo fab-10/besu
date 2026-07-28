@@ -44,6 +44,9 @@ public class EngineGetPayloadV5Test extends EngineGetPayloadV4Test {
             .engineCallListener(engineCallListener)
             .mergeCoordinator(mergeMiningCoordinator)
             .blockResultFactory(factory)
+            .transactionPool(transactionPool)
+            .ethPeers(ethPeers)
+            .metricsSystem(metricsSystem)
             .maxRequestBlocks(0)
             .build(),
         OSAKA,

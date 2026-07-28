@@ -16,14 +16,19 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetClientVersionResultV1;
+import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 
 import java.util.List;
 
@@ -51,6 +56,11 @@ class EngineGetClientVersionV1Test {
                 .protocolContext(Mockito.mock(ProtocolContext.class))
                 .vertx(Mockito.mock(Vertx.class))
                 .engineCallListener(Mockito.mock(EngineCallListener.class))
+                .mergeCoordinator(Mockito.mock(MergeMiningCoordinator.class))
+                .blockResultFactory(Mockito.mock(BlockResultFactory.class))
+                .transactionPool(Mockito.mock(TransactionPool.class))
+                .ethPeers(Mockito.mock(EthPeers.class))
+                .metricsSystem(new NoOpMetricsSystem())
                 .maxRequestBlocks(0)
                 .build(),
             CLIENT_VERSION,

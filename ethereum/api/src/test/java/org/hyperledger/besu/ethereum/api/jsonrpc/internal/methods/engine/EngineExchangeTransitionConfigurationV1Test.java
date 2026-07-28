@@ -22,6 +22,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.consensus.merge.MergeContext;
+import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.datatypes.Address;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.LogsBloomFilter;
@@ -34,6 +35,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArg
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.TransitionConfigurationV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineExchangeTransitionConfigurationResult;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -41,6 +43,9 @@ import org.hyperledger.besu.ethereum.core.BlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.ParsedExtraData;
+import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.plugin.services.rpc.RpcResponseType;
 
 import java.math.BigInteger;
@@ -72,6 +77,10 @@ public class EngineExchangeTransitionConfigurationV1Test extends AbstractSchedul
   @Mock protected MutableBlockchain blockchain;
   @Mock private EngineCallListener engineCallListener;
   @Mock private BlockHeader blockHeader;
+  @Mock private MergeMiningCoordinator mergeCoordinator;
+  @Mock private BlockResultFactory blockResultFactory;
+  @Mock private TransactionPool transactionPool;
+  @Mock private EthPeers ethPeers;
 
   @BeforeEach
   public void setUp() {
@@ -87,6 +96,11 @@ public class EngineExchangeTransitionConfigurationV1Test extends AbstractSchedul
                 .protocolContext(protocolContext)
                 .vertx(vertx)
                 .engineCallListener(engineCallListener)
+                .mergeCoordinator(mergeCoordinator)
+                .blockResultFactory(blockResultFactory)
+                .transactionPool(transactionPool)
+                .ethPeers(ethPeers)
+                .metricsSystem(new NoOpMetricsSystem())
                 .maxRequestBlocks(0)
                 .build(),
             null,

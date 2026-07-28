@@ -44,6 +44,9 @@ public class EngineGetPayloadV3Test extends EngineGetPayloadV2Test {
             .engineCallListener(engineCallListener)
             .mergeCoordinator(mergeMiningCoordinator)
             .blockResultFactory(factory)
+            .transactionPool(transactionPool)
+            .ethPeers(ethPeers)
+            .metricsSystem(metricsSystem)
             .maxRequestBlocks(0)
             .build(),
         CANCUN,

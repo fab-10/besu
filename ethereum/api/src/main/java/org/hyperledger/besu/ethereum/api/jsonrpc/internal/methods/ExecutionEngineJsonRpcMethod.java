@@ -41,7 +41,6 @@ import java.util.function.Supplier;
 import com.fasterxml.jackson.databind.JsonMappingException;
 import io.vertx.core.Vertx;
 import org.immutables.value.Value;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,11 +63,11 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
       ProtocolContext protocolContext,
       Vertx vertx,
       EngineCallListener engineCallListener,
-      @Nullable MergeMiningCoordinator mergeCoordinator,
-      @Nullable BlockResultFactory blockResultFactory,
-      @Nullable TransactionPool transactionPool,
-      @Nullable EthPeers ethPeers,
-      @Nullable MetricsSystem metricsSystem,
+      MergeMiningCoordinator mergeCoordinator,
+      BlockResultFactory blockResultFactory,
+      TransactionPool transactionPool,
+      EthPeers ethPeers,
+      MetricsSystem metricsSystem,
       int maxRequestBlocks) {}
 
   private static final Logger LOG = LoggerFactory.getLogger(ExecutionEngineJsonRpcMethod.class);

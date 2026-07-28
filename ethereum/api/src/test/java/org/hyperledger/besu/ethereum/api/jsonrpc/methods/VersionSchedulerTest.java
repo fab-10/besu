@@ -22,14 +22,19 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.ConstructorArguments;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineCallListener;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.methods.ExecutionEngineJsonRpcMethods.VersionScheduler;
+import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 
 import java.util.List;
 import java.util.Optional;
@@ -46,6 +51,11 @@ class VersionSchedulerTest {
           .protocolContext(mock(ProtocolContext.class))
           .vertx(mock(Vertx.class))
           .engineCallListener(mock(EngineCallListener.class))
+          .mergeCoordinator(mock(MergeMiningCoordinator.class))
+          .blockResultFactory(mock(BlockResultFactory.class))
+          .transactionPool(mock(TransactionPool.class))
+          .ethPeers(mock(EthPeers.class))
+          .metricsSystem(new NoOpMetricsSystem())
           .maxRequestBlocks(0)
           .build();
 

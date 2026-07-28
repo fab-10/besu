@@ -79,6 +79,11 @@ public sealed class EngineNewPayloadV1<
   private long lastInvalidWarn = 0L;
   protected final MergeMiningCoordinator mergeCoordinator;
 
+  @Override
+  protected Logger logger() {
+    return LOG;
+  }
+
   public EngineNewPayloadV1(
       final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
@@ -154,7 +159,7 @@ public sealed class EngineNewPayloadV1<
           String.format(
               "Computed block hash %s does not match block hash parameter %s",
               newBlockHeader.getBlockHash(), blockParam.getBlockHash());
-      LOG.debug(errorMessage);
+      logger().debug(errorMessage);
       // 6. Client software MUST respond to this method call in the following way:
       // {status: INVALID_BLOCK_HASH, latestValidHash: null, validationError: errorMessage | null}
       // if the blockHash validation has failed
@@ -180,8 +185,11 @@ public sealed class EngineNewPayloadV1<
     // 3. Client software MAY initiate a sync process if requisite data for payload validation is
     // missing. Sync process is specified in the Sync section.
     final boolean needsSync = maybeParentHeader.isEmpty();
-    if (needsSync) {
-      LOG.atDebug()
+    final boolean syncInProgress = mergeContext.get().isSyncing();
+    // Only start backward sync when we're not already syncing
+    if (needsSync && !syncInProgress) {
+      logger()
+          .atDebug()
           .setMessage("Parent of block {} is not present, append it to backward sync")
           .addArgument(unvalidatedBlock::toLogString)
           .log();
@@ -214,7 +222,8 @@ public sealed class EngineNewPayloadV1<
 
     // do we already have this payload?
     if (protocolContext.getBlockchain().getBlockByHash(block.getHash()).isPresent()) {
-      LOG.atDebug()
+      logger()
+          .atDebug()
           .setMessage("block {} already present")
           .addArgument(newBlockHeader::toLogString)
           .log();
@@ -228,8 +237,8 @@ public sealed class EngineNewPayloadV1<
       return respondWith(reqId, blockParam, null, SYNCING);
     }
 
-    if (mergeContext.get().isSyncing()) {
-      LOG.debug("We are syncing");
+    if (syncInProgress) {
+      logger().debug("We are syncing");
       return respondWith(reqId, blockParam, null, SYNCING);
     }
 
@@ -259,7 +268,7 @@ public sealed class EngineNewPayloadV1<
           block, lastExecutionTimeInNs, executionResult.getNbParallelizedTransactions());
       return respondWith(reqId, blockParam, newBlockHeader.getHash(), VALID);
     } else {
-      LOG.debug("New payload is invalid: {}", executionResult);
+      logger().debug("New payload is invalid: {}", executionResult);
       if (executionResult.causedBy().isPresent()) {
         Throwable causedBy = executionResult.causedBy().get();
         if (causedBy instanceof StorageException || causedBy instanceof MerkleTrieException) {
@@ -318,7 +327,8 @@ public sealed class EngineNewPayloadV1<
               .scheduleComputationTask(
                   () -> {
                     final var sender = transaction.getSender();
-                    LOG.atTrace()
+                    logger()
+                        .atTrace()
                         .setMessage("The sender for transaction {} is calculated : {}")
                         .addArgument(transaction::getHash)
                         .addArgument(sender)
@@ -341,7 +351,8 @@ public sealed class EngineNewPayloadV1<
           .scheduleComputationTask(
               () -> {
                 final var authority = codeDelegation.authorizer();
-                LOG.atTrace()
+                logger()
+                    .atTrace()
                     .setMessage(
                         "The code delegation authority at index {} for transaction {} is calculated : {}")
                     .addArgument(constIndex)
@@ -362,7 +373,8 @@ public sealed class EngineNewPayloadV1<
       throw new IllegalArgumentException(
           "Don't call respondWith() with invalid status of " + status);
     }
-    LOG.atDebug()
+    logger()
+        .atDebug()
         .setMessage(
             "New payload: number: {}, hash: {}, parentHash: {}, latestValidHash: {}, status: {}")
         .addArgument(param::getBlockNumber)
@@ -400,11 +412,11 @@ public sealed class EngineNewPayloadV1<
             invalidStatus.name(),
             validationError);
     // always log invalid at DEBUG
-    LOG.debug(invalidBlockLogMessage);
+    logger().debug(invalidBlockLogMessage);
     // periodically log at WARN
     if (lastInvalidWarn + ENGINE_API_LOGGING_THRESHOLD < System.currentTimeMillis()) {
       lastInvalidWarn = System.currentTimeMillis();
-      LOG.warn(invalidBlockLogMessage);
+      logger().warn(invalidBlockLogMessage);
     }
     return new JsonRpcSuccessResponse(
         requestId,
@@ -503,7 +515,7 @@ public sealed class EngineNewPayloadV1<
             timeOverOrEq1second ? timeInMs / 1_000 : timeInMs,
             mgasPerSec,
             ethPeers.peerCount()));
-    LOG.info(String.format(message.toString(), messageArgs.toArray()));
+    logger().info(String.format(message.toString(), messageArgs.toArray()));
   }
 
   protected void appendVersionSpecificLogInfo(

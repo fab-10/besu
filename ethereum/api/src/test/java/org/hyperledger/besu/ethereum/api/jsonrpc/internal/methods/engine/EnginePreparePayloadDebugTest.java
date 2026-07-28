@@ -31,8 +31,12 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArg
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.EnginePreparePayloadParameter;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.JsonRpcParameter.JsonRpcParameterException;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EnginePreparePayloadResult;
+import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 
 import java.util.Optional;
 
@@ -53,6 +57,9 @@ public class EnginePreparePayloadDebugTest {
   @Mock private EngineCallListener engineCallListener;
   @Mock private MergeMiningCoordinator mergeCoordinator;
   @Mock private MergeContext mergeContext;
+  @Mock private BlockResultFactory blockResultFactory;
+  @Mock private TransactionPool transactionPool;
+  @Mock private EthPeers ethPeers;
 
   @Mock(answer = Answers.RETURNS_DEEP_STUBS)
   private JsonRpcRequestContext requestContext;
@@ -74,6 +81,10 @@ public class EnginePreparePayloadDebugTest {
                     .vertx(vertx)
                     .engineCallListener(engineCallListener)
                     .mergeCoordinator(mergeCoordinator)
+                    .blockResultFactory(blockResultFactory)
+                    .transactionPool(transactionPool)
+                    .ethPeers(ethPeers)
+                    .metricsSystem(new NoOpMetricsSystem())
                     .maxRequestBlocks(0)
                     .build()));
   }

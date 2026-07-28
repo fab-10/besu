@@ -66,6 +66,9 @@ public class EngineGetPayloadV6Test extends EngineGetPayloadV5Test {
             .engineCallListener(engineCallListener)
             .mergeCoordinator(mergeMiningCoordinator)
             .blockResultFactory(factory)
+            .transactionPool(transactionPool)
+            .ethPeers(ethPeers)
+            .metricsSystem(metricsSystem)
             .maxRequestBlocks(0)
             .build(),
         AMSTERDAM,
