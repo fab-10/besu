@@ -48,7 +48,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 public class EngineForkchoiceUpdatedV3Test extends EngineForkchoiceUpdatedV2Test {
 
   @Override
-  protected EngineForkchoiceUpdatedV1<?> createMethodInstance() {
+  protected EngineForkchoiceUpdatedV1<?, ?> createMethodInstance() {
     return new EngineForkchoiceUpdatedV3<>(
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
