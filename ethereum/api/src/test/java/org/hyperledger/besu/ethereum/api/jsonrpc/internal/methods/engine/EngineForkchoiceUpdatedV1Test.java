@@ -75,7 +75,7 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
   protected static final Consumer<BlockHeaderTestFixture> NO_OP = bhb -> {};
-  protected EngineForkchoiceUpdatedV1<?> method;
+  protected EngineForkchoiceUpdatedV1<?, ?> method;
 
   protected static final Vertx vertx = Vertx.vertx();
   protected static final Hash mockHash = Hash.hash(Bytes32.fromHexStringLenient("0x1337deadbeef"));
@@ -106,7 +106,7 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
   }
 
   /** Returns the method factory for the version under test. Overridden by each subclass. */
-  protected EngineForkchoiceUpdatedV1<?> createMethodInstance() {
+  protected EngineForkchoiceUpdatedV1<?, ?> createMethodInstance() {
     return new EngineForkchoiceUpdatedV1<>(
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
