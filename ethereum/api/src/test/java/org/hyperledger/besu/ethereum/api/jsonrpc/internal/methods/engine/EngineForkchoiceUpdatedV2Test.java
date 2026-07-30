@@ -55,7 +55,7 @@ public class EngineForkchoiceUpdatedV2Test extends EngineForkchoiceUpdatedV1Test
   private final long withdrawalsEnabledTimestamp = shanghaiHardfork.milestone();
 
   @Override
-  protected EngineForkchoiceUpdatedV1<?> createMethodInstance() {
+  protected EngineForkchoiceUpdatedV1<?, ?> createMethodInstance() {
     return new EngineForkchoiceUpdatedV2<>(
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
