@@ -55,7 +55,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineN
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineNewPayloadV5;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EnginePreparePayloadDebug;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineQosTimer;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.blockcreation.MiningCoordinator;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
@@ -74,7 +73,7 @@ import io.vertx.core.Vertx;
 
 public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
 
-  private final BlockResultFactory blockResultFactory = new BlockResultFactory();
+  private static final int GET_PAYLOAD_BODIES_MAX_REQUEST_SIZE = 1024;
 
   private final Optional<MergeMiningCoordinator> mergeCoordinator;
   private final ProtocolSchedule protocolSchedule;
@@ -127,22 +126,23 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
               engineQosTimer,
               mergeCoordinator.get(),
               ethPeers,
-              metricsSystem);
+              metricsSystem,
+              GET_PAYLOAD_BODIES_MAX_REQUEST_SIZE);
 
       List<JsonRpcMethod> executionEngineApisSupported = new ArrayList<>();
       executionEngineApisSupported.addAll(
           createEngineForkchoiceUpdatedMethods(constructorArguments));
       executionEngineApisSupported.addAll(createEngineNewPayloadMethods(constructorArguments));
       executionEngineApisSupported.addAll(createEngineGetPayloadMethods(constructorArguments));
+      executionEngineApisSupported.addAll(
+          createGetPayloadBodiesByHashMethods(constructorArguments));
+      executionEngineApisSupported.addAll(
+          createGetPayloadBodiesByRangeMethods(constructorArguments));
 
       executionEngineApisSupported.addAll(
           Arrays.asList(
               new EngineExchangeTransitionConfiguration(
                   consensusEngineServer, protocolContext, engineQosTimer),
-              new EngineGetPayloadBodiesByHashV1(
-                  consensusEngineServer, protocolContext, blockResultFactory, engineQosTimer),
-              new EngineGetPayloadBodiesByRangeV1(
-                  consensusEngineServer, protocolContext, blockResultFactory, engineQosTimer),
               new EngineExchangeCapabilities(
                   consensusEngineServer, protocolContext, engineQosTimer),
               new EnginePreparePayloadDebug(
@@ -173,15 +173,6 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
                 engineQosTimer,
                 transactionPool,
                 metricsSystem));
-      }
-
-      if (protocolSchedule.milestoneFor(AMSTERDAM).isPresent()) {
-        executionEngineApisSupported.add(
-            new EngineGetPayloadBodiesByHashV2(
-                consensusEngineServer, protocolContext, blockResultFactory, engineQosTimer));
-        executionEngineApisSupported.add(
-            new EngineGetPayloadBodiesByRangeV2(
-                consensusEngineServer, protocolContext, blockResultFactory, engineQosTimer));
       }
 
       return mapOf(executionEngineApisSupported);
@@ -228,6 +219,25 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
         .thenFrom(PRAGUE, EngineGetPayloadV4::new)
         .thenFrom(OSAKA, EngineGetPayloadV5::new)
         .thenFrom(AMSTERDAM, EngineGetPayloadV6::new)
+        .build(constructorArguments);
+  }
+
+  // V1 has no upper bound (still valid post-Amsterdam); V2 only adds the blockAccessList field,
+  // so it's gated the same way EngineGetPayloadV6/EngineNewPayloadV5 are.
+  private Collection<? extends JsonRpcMethod> createGetPayloadBodiesByHashMethods(
+      final ConstructorArguments constructorArguments) {
+
+    return VersionScheduler.startsFromBeginningUntil(EngineGetPayloadBodiesByHashV1::new, null)
+        .thenFrom(AMSTERDAM, EngineGetPayloadBodiesByHashV2::new)
+        .build(constructorArguments);
+  }
+
+  // See createGetPayloadBodiesByHashMethods: same V1/V2 fork-window shape.
+  private Collection<? extends JsonRpcMethod> createGetPayloadBodiesByRangeMethods(
+      final ConstructorArguments constructorArguments) {
+
+    return VersionScheduler.startsFromBeginningUntil(EngineGetPayloadBodiesByRangeV1::new, null)
+        .thenFrom(AMSTERDAM, EngineGetPayloadBodiesByRangeV2::new)
         .build(constructorArguments);
   }
 

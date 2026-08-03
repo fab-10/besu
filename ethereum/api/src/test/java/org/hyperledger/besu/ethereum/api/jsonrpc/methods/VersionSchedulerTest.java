@@ -52,6 +52,7 @@ class VersionSchedulerTest {
           .mergeCoordinator(mock(MergeMiningCoordinator.class))
           .ethPeers(mock(EthPeers.class))
           .metricsSystem(new NoOpMetricsSystem())
+          .maxRequestBlocks(0)
           .build();
 
   private final RecordingFactory v1 = new RecordingFactory();
