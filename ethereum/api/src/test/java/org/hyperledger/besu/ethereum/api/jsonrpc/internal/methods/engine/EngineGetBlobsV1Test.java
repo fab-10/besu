@@ -43,7 +43,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcRespon
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlobAndProofV1;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlobTestFixture;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -114,7 +113,6 @@ public class EngineGetBlobsV1Test extends AbstractScheduledApiTest {
                     .vertx(vertx)
                     .engineCallListener(engineCallListener)
                     .mergeCoordinator(mock(MergeMiningCoordinator.class))
-                    .blockResultFactory(mock(BlockResultFactory.class))
                     .transactionPool(transactionPool)
                     .ethPeers(mock(EthPeers.class))
                     .metricsSystem(metricsSystem)

@@ -23,7 +23,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetClientVersionResultV1;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
@@ -57,7 +56,6 @@ class EngineGetClientVersionV1Test {
                 .vertx(Mockito.mock(Vertx.class))
                 .engineCallListener(Mockito.mock(EngineCallListener.class))
                 .mergeCoordinator(Mockito.mock(MergeMiningCoordinator.class))
-                .blockResultFactory(Mockito.mock(BlockResultFactory.class))
                 .transactionPool(Mockito.mock(TransactionPool.class))
                 .ethPeers(Mockito.mock(EthPeers.class))
                 .metricsSystem(new NoOpMetricsSystem())

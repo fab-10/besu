@@ -26,7 +26,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
@@ -54,7 +53,6 @@ public class EngineExchangeCapabilitiesTest {
 
   @Mock private EngineCallListener engineCallListener;
   @Mock private MergeMiningCoordinator mergeCoordinator;
-  @Mock private BlockResultFactory blockResultFactory;
   @Mock private TransactionPool transactionPool;
   @Mock private EthPeers ethPeers;
 
@@ -68,7 +66,6 @@ public class EngineExchangeCapabilitiesTest {
                 .vertx(vertx)
                 .engineCallListener(engineCallListener)
                 .mergeCoordinator(mergeCoordinator)
-                .blockResultFactory(blockResultFactory)
                 .transactionPool(transactionPool)
                 .ethPeers(ethPeers)
                 .metricsSystem(new NoOpMetricsSystem())

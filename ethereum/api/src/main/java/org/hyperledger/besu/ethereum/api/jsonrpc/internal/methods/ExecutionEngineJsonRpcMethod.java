@@ -24,7 +24,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.ForkSup
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcErrorResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
@@ -64,7 +63,6 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
       Vertx vertx,
       EngineCallListener engineCallListener,
       MergeMiningCoordinator mergeCoordinator,
-      BlockResultFactory blockResultFactory,
       TransactionPool transactionPool,
       EthPeers ethPeers,
       MetricsSystem metricsSystem,

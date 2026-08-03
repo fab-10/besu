@@ -25,7 +25,17 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 
 import java.util.List;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public sealed class EngineGetPayloadV3 extends EngineGetPayloadV2 permits EngineGetPayloadV4 {
+
+  private static final Logger LOG = LoggerFactory.getLogger(EngineGetPayloadV3.class);
+
+  @Override
+  protected Logger logger() {
+    return LOG;
+  }
 
   public EngineGetPayloadV3(
       final ConstructorArguments constructorArguments,

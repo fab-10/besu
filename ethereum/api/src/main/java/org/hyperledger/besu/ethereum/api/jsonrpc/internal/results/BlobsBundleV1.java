@@ -72,15 +72,14 @@ public sealed class BlobsBundleV1 permits BlobsBundleV2 {
             .flatMap(List::stream)
             .toList();
 
-    LOG.atDebug()
-        .setMessage(
-            "BlobsBundleV1: totalTxs: {}, blobTxs: {}, commitments: {}, proofs: {}, blobs: {}")
-        .addArgument(transactions::size)
-        .addArgument(blobsWithCommitments::size)
-        .addArgument(commitments::size)
-        .addArgument(proofs::size)
-        .addArgument(blobs::size)
-        .log();
+    LOG.debug(
+        "{}: totalTxs: {}, blobTxs: {}, commitments: {}, proofs: {}, blobs: {}",
+        getClass().getSimpleName(),
+        transactions.size(),
+        blobsWithCommitments.size(),
+        commitments.size(),
+        proofs.size(),
+        blobs.size());
   }
 
   @JsonGetter("commitments")

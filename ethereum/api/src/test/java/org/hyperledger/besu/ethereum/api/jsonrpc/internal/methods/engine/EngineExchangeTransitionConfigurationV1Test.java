@@ -35,7 +35,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArg
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.TransitionConfigurationV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineExchangeTransitionConfigurationResult;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -78,7 +77,6 @@ public class EngineExchangeTransitionConfigurationV1Test extends AbstractSchedul
   @Mock private EngineCallListener engineCallListener;
   @Mock private BlockHeader blockHeader;
   @Mock private MergeMiningCoordinator mergeCoordinator;
-  @Mock private BlockResultFactory blockResultFactory;
   @Mock private TransactionPool transactionPool;
   @Mock private EthPeers ethPeers;
 
@@ -97,7 +95,6 @@ public class EngineExchangeTransitionConfigurationV1Test extends AbstractSchedul
                 .vertx(vertx)
                 .engineCallListener(engineCallListener)
                 .mergeCoordinator(mergeCoordinator)
-                .blockResultFactory(blockResultFactory)
                 .transactionPool(transactionPool)
                 .ethPeers(ethPeers)
                 .metricsSystem(new NoOpMetricsSystem())

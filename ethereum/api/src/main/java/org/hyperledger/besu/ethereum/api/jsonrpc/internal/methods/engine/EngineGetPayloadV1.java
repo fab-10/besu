@@ -28,7 +28,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcErrorR
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlockResultFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetPayloadResultV1;
 import org.hyperledger.besu.ethereum.blockcreation.BlockCreationTiming;
 import org.hyperledger.besu.ethereum.core.Block;
@@ -45,8 +44,12 @@ public sealed class EngineGetPayloadV1 extends ExecutionEngineJsonRpcMethod
 
   private static final Logger LOG = LoggerFactory.getLogger(EngineGetPayloadV1.class);
 
+  @Override
+  protected Logger logger() {
+    return LOG;
+  }
+
   private final MergeMiningCoordinator mergeMiningCoordinator;
-  protected final BlockResultFactory blockResultFactory;
 
   public EngineGetPayloadV1(
       final ConstructorArguments constructorArguments,
@@ -54,7 +57,6 @@ public sealed class EngineGetPayloadV1 extends ExecutionEngineJsonRpcMethod
       final HardforkId firstUnsupportedFork) {
     super(constructorArguments, minSupportedFork, firstUnsupportedFork);
     this.mergeMiningCoordinator = constructorArguments.mergeCoordinator();
-    this.blockResultFactory = constructorArguments.blockResultFactory();
   }
 
   @Override
@@ -76,20 +78,24 @@ public sealed class EngineGetPayloadV1 extends ExecutionEngineJsonRpcMethod
 
     Optional<PayloadWrapper> maybePayload = mergeContext.get().retrievePayloadById(payloadId);
 
+    // Client software MAY stop the corresponding build process after serving this call.
     mergeMiningCoordinator.finalizeProposalById(payloadId);
 
     if (maybePayload.isPresent() && hasOnlyEmptyBlock(maybePayload.get())) {
-      LOG.debug(
-          "Only empty block available for payload {}, waiting for block building to complete",
-          payloadId);
+      logger()
+          .debug(
+              "Only empty block available for payload {}, waiting for block building to complete",
+              payloadId);
       mergeMiningCoordinator.awaitCurrentBuildCompletion(payloadId);
       maybePayload = mergeContext.get().retrievePayloadById(payloadId);
     }
 
     if (maybePayload.isPresent()) {
+      // Given the payloadId client software MUST return the most recent version of the payload that
+      // is available in the corresponding build process at the time of receiving the call.
       final PayloadWrapper payload = maybePayload.get();
       final BlockWithReceipts proposal = payload.blockWithReceipts();
-      LOG.trace("assembledBlock with receipts {}", proposal);
+      logger().trace("assembledBlock with receipts {}", proposal);
       ValidationResult<RpcErrorType> forkValidationResult =
           validateForkSupported(proposal.getHeader().getTimestamp());
       if (!forkValidationResult.isValid()) {
@@ -101,6 +107,8 @@ public sealed class EngineGetPayloadV1 extends ExecutionEngineJsonRpcMethod
           payload.payloadIdentifier());
       return new JsonRpcSuccessResponse(request.getRequest().getId(), createResponse(payload));
     }
+    // The call MUST return -38001: Unknown payload error if the build process identified by the
+    // payloadId does not exist.
     return new JsonRpcErrorResponse(request.getRequest().getId(), RpcErrorType.UNKNOWN_PAYLOAD);
   }
 
@@ -112,18 +120,19 @@ public sealed class EngineGetPayloadV1 extends ExecutionEngineJsonRpcMethod
       final Block block,
       final BlockCreationTiming blockCreationTiming,
       final PayloadIdentifier payloadIdentifier) {
-    LOG.info(
-        String.format(
-            "Produced #%,d  (%s)| %4d tx%s | %,d (%01.1f%%) gas in %01.3fs | Timing(%s) | PayloadId %s",
-            block.getHeader().getNumber(),
-            block.getHash().toShortLogString(),
-            block.getBody().getTransactions().size(),
-            versionSpecificLogInfo(block),
-            block.getHeader().getGasUsed(),
-            (block.getHeader().getGasUsed() * 100.0) / block.getHeader().getGasLimit(),
-            blockCreationTiming.end("awaitingRetrieval").toMillis() / 1000.0,
-            blockCreationTiming,
-            payloadIdentifier.toHexString()));
+    logger()
+        .info(
+            String.format(
+                "Produced #%,d  (%s)| %4d tx%s | %,d (%01.1f%%) gas in %01.3fs | Timing(%s) | PayloadId %s",
+                block.getHeader().getNumber(),
+                block.getHash().toShortLogString(),
+                block.getBody().getTransactions().size(),
+                versionSpecificLogInfo(block),
+                block.getHeader().getGasUsed(),
+                (block.getHeader().getGasUsed() * 100.0) / block.getHeader().getGasLimit(),
+                blockCreationTiming.end("awaitingRetrieval").toMillis() / 1000.0,
+                blockCreationTiming,
+                payloadIdentifier.toHexString()));
   }
 
   protected String versionSpecificLogInfo(final Block block) {

@@ -22,7 +22,17 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetPaylo
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.mainnet.block.access.list.BlockAccessList;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public final class EngineGetPayloadV6 extends EngineGetPayloadV5 {
+
+  private static final Logger LOG = LoggerFactory.getLogger(EngineGetPayloadV6.class);
+
+  @Override
+  protected Logger logger() {
+    return LOG;
+  }
 
   public EngineGetPayloadV6(
       final ConstructorArguments constructorArguments,

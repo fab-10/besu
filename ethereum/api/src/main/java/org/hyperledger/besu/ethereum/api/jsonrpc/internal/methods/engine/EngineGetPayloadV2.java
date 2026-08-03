@@ -27,8 +27,18 @@ import org.hyperledger.besu.ethereum.core.Withdrawal;
 import java.util.List;
 import java.util.Optional;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 public sealed class EngineGetPayloadV2 extends EngineGetPayloadV1 permits EngineGetPayloadV3 {
   private final Optional<Long> shanghaiTimestamp;
+
+  private static final Logger LOG = LoggerFactory.getLogger(EngineGetPayloadV2.class);
+
+  @Override
+  protected Logger logger() {
+    return LOG;
+  }
 
   public EngineGetPayloadV2(
       final ConstructorArguments constructorArguments,
