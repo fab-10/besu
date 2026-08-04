@@ -222,22 +222,17 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
         .build(constructorArguments);
   }
 
-  // V1 has no upper bound (still valid post-Amsterdam); V2 only adds the blockAccessList field,
-  // so it's gated the same way EngineGetPayloadV6/EngineNewPayloadV5 are.
   private Collection<? extends JsonRpcMethod> createGetPayloadBodiesByHashMethods(
       final ConstructorArguments constructorArguments) {
-
-    return VersionScheduler.startsFromBeginningUntil(EngineGetPayloadBodiesByHashV1::new, null)
-        .thenFrom(AMSTERDAM, EngineGetPayloadBodiesByHashV2::new)
+    return VersionScheduler.alwaysActive(
+            EngineGetPayloadBodiesByHashV1::new, EngineGetPayloadBodiesByHashV2::new)
         .build(constructorArguments);
   }
 
-  // See createGetPayloadBodiesByHashMethods: same V1/V2 fork-window shape.
   private Collection<? extends JsonRpcMethod> createGetPayloadBodiesByRangeMethods(
       final ConstructorArguments constructorArguments) {
-
-    return VersionScheduler.startsFromBeginningUntil(EngineGetPayloadBodiesByRangeV1::new, null)
-        .thenFrom(AMSTERDAM, EngineGetPayloadBodiesByRangeV2::new)
+    return VersionScheduler.alwaysActive(
+            EngineGetPayloadBodiesByRangeV1::new, EngineGetPayloadBodiesByRangeV2::new)
         .build(constructorArguments);
   }
 
@@ -260,7 +255,14 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
     static VersionScheduler startsFromBeginningUntil(
         final EngineMethodFactory firstVersion, final HardforkId to) {
       final VersionScheduler vs = new VersionScheduler();
-      vs.readyMethods.add(new MethodVersionBuildData(firstVersion, null, to));
+      vs.readyMethods.add(new MethodVersionBuildData(firstVersion, false, null, to));
+      return vs;
+    }
+
+    static VersionScheduler alwaysActive(final EngineMethodFactory... methods) {
+      final VersionScheduler vs = new VersionScheduler();
+      Arrays.stream(methods)
+          .forEach(mvbd -> vs.readyMethods.add(MethodVersionBuildData.alwaysActive(mvbd)));
       return vs;
     }
 
@@ -268,7 +270,7 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
       checkState(
           pendingMethods.isEmpty() || pendingMethods.stream().allMatch(mvbd -> mvbd.to == null),
           "This method can only be called for methods that are active since Paris hardfork");
-      pendingMethods.add(new MethodVersionBuildData(method, null, null));
+      pendingMethods.add(new MethodVersionBuildData(method, false, null, null));
       return this;
     }
 
@@ -277,7 +279,8 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
       pendingMethods = new ArrayList<>();
       Arrays.stream(methods)
           .forEach(
-              method -> pendingMethods.add(new MethodVersionBuildData(method, hardforkId, null)));
+              method ->
+                  pendingMethods.add(new MethodVersionBuildData(method, false, hardforkId, null)));
       return this;
     }
 
@@ -294,10 +297,15 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
           .toList();
     }
 
-    record MethodVersionBuildData(EngineMethodFactory factory, HardforkId from, HardforkId to) {
+    record MethodVersionBuildData(
+        EngineMethodFactory factory, boolean alwaysActive, HardforkId from, HardforkId to) {
 
       MethodVersionBuildData withTo(final HardforkId hardforkId) {
-        return new MethodVersionBuildData(factory, from, hardforkId);
+        return new MethodVersionBuildData(factory, false, from, hardforkId);
+      }
+
+      static MethodVersionBuildData alwaysActive(final EngineMethodFactory factory) {
+        return new MethodVersionBuildData(factory, true, null, null);
       }
     }
   }

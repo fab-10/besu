@@ -86,7 +86,7 @@ public sealed class EngineGetPayloadBodiesByRangeV1<EPB extends ExecutionPayload
 
     if (count < 1) {
       throw new InvalidJsonRpcParameters(
-          "count %d < 1".formatted(startBlockNumber), RpcErrorType.INVALID_BLOCK_COUNT_PARAMS);
+          "count %d < 1".formatted(count), RpcErrorType.INVALID_BLOCK_COUNT_PARAMS);
     }
 
     if (count > maxRequestBlocks) {
