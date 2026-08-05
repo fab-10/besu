@@ -101,11 +101,13 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
     final SignatureAlgorithm sig = SignatureAlgorithmFactory.getInstance();
     final Block block1 =
         blockWithBody(
+            123L,
             new BlockBody(
                 List.of(new TransactionTestFixture().createTransaction(sig.generateKeyPair())),
                 Collections.emptyList()));
     final Block block2 =
         blockWithBody(
+            124L,
             new BlockBody(
                 List.of(
                     new TransactionTestFixture().createTransaction(sig.generateKeyPair()),
@@ -113,6 +115,7 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
                 Collections.emptyList()));
     final Block block3 =
         blockWithBody(
+            125L,
             new BlockBody(
                 List.of(
                     new TransactionTestFixture().createTransaction(sig.generateKeyPair()),
@@ -120,9 +123,9 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
                     new TransactionTestFixture().createTransaction(sig.generateKeyPair())),
                 Collections.emptyList()));
     when(blockchain.getChainHeadBlockNumber()).thenReturn(130L);
-    when(blockchain.getBlockByNumber(123)).thenReturn(Optional.of(block1));
-    when(blockchain.getBlockByNumber(124)).thenReturn(Optional.of(block2));
-    when(blockchain.getBlockByNumber(125)).thenReturn(Optional.of(block3));
+    stubBlock(123, block1);
+    stubBlock(124, block2);
+    stubBlock(125, block3);
 
     final List<ExecutionPayloadBodiesV1> result = fromSuccessResp(resp("0x7b", "0x3"));
     assertThat(result.size()).isEqualTo(3);
@@ -134,7 +137,7 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
   @Test
   public void shouldReturnNullForUnknownNumber() {
     when(blockchain.getChainHeadBlockNumber()).thenReturn(130L);
-    // blockchain.getBlockByNumber returns Optional.empty() by default
+    // blockchain.getBlockHashByNumber returns Optional.empty() by default
 
     final List<ExecutionPayloadBodiesV1> result = fromSuccessResp(resp("0x7b", "0x3"));
     assertThat(result.size()).isEqualTo(3);
@@ -148,11 +151,13 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
     final SignatureAlgorithm sig = SignatureAlgorithmFactory.getInstance();
     final Block block1 =
         blockWithBody(
+            123L,
             new BlockBody(
                 List.of(new TransactionTestFixture().createTransaction(sig.generateKeyPair())),
                 Collections.emptyList()));
     final Block block3 =
         blockWithBody(
+            125L,
             new BlockBody(
                 List.of(
                     new TransactionTestFixture().createTransaction(sig.generateKeyPair()),
@@ -160,8 +165,8 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
                     new TransactionTestFixture().createTransaction(sig.generateKeyPair())),
                 Collections.emptyList()));
     when(blockchain.getChainHeadBlockNumber()).thenReturn(130L);
-    when(blockchain.getBlockByNumber(123)).thenReturn(Optional.of(block1));
-    when(blockchain.getBlockByNumber(125)).thenReturn(Optional.of(block3));
+    stubBlock(123, block1);
+    stubBlock(125, block3);
 
     final List<ExecutionPayloadBodiesV1> result = fromSuccessResp(resp("0x7b", "0x3"));
     assertThat(result.size()).isEqualTo(3);
@@ -175,6 +180,7 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
     final SignatureAlgorithm sig = SignatureAlgorithmFactory.getInstance();
     final Block block1 =
         blockWithBody(
+            123L,
             new BlockBody(
                 List.of(
                     new TransactionTestFixture().createTransaction(sig.generateKeyPair()),
@@ -183,13 +189,14 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
                 Collections.emptyList()));
     final Block block2 =
         blockWithBody(
+            124L,
             new BlockBody(
                 List.of(new TransactionTestFixture().createTransaction(sig.generateKeyPair())),
                 Collections.emptyList(),
                 Optional.empty()));
     when(blockchain.getChainHeadBlockNumber()).thenReturn(130L);
-    when(blockchain.getBlockByNumber(123)).thenReturn(Optional.of(block1));
-    when(blockchain.getBlockByNumber(124)).thenReturn(Optional.of(block2));
+    stubBlock(123, block1);
+    stubBlock(124, block2);
 
     final List<ExecutionPayloadBodiesV1> result = fromSuccessResp(resp("0x7b", "0x2"));
     assertThat(result.size()).isEqualTo(2);
@@ -208,6 +215,7 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
         new Withdrawal(UInt64.ONE, UInt64.ONE, Address.fromHexString("0x2"), GWei.ONE);
     final Block block1 =
         blockWithBody(
+            123L,
             new BlockBody(
                 List.of(
                     new TransactionTestFixture().createTransaction(sig.generateKeyPair()),
@@ -217,13 +225,14 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
                 Optional.of(List.of(withdrawal))));
     final Block block2 =
         blockWithBody(
+            124L,
             new BlockBody(
                 List.of(new TransactionTestFixture().createTransaction(sig.generateKeyPair())),
                 Collections.emptyList(),
                 Optional.of(List.of(withdrawal2))));
     when(blockchain.getChainHeadBlockNumber()).thenReturn(130L);
-    when(blockchain.getBlockByNumber(123)).thenReturn(Optional.of(block1));
-    when(blockchain.getBlockByNumber(124)).thenReturn(Optional.of(block2));
+    stubBlock(123, block1);
+    stubBlock(124, block2);
 
     final List<ExecutionPayloadBodiesV1> result = fromSuccessResp(resp("0x7b", "0x2"));
     assertThat(result.size()).isEqualTo(2);
@@ -240,6 +249,7 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
         new Withdrawal(UInt64.ONE, UInt64.ONE, Address.fromHexString("0x1"), GWei.ONE);
     final Block block1 =
         blockWithBody(
+            123L,
             new BlockBody(
                 List.of(
                     new TransactionTestFixture().createTransaction(sig.generateKeyPair()),
@@ -248,7 +258,7 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
                 Collections.emptyList(),
                 Optional.of(List.of(withdrawal))));
     when(blockchain.getChainHeadBlockNumber()).thenReturn(123L);
-    when(blockchain.getBlockByNumber(123)).thenReturn(Optional.of(block1));
+    stubBlock(123, block1);
 
     final List<ExecutionPayloadBodiesV1> result = fromSuccessResp(resp("0x7b", "0x3"));
     assertThat(result.size()).isEqualTo(1);
@@ -261,14 +271,15 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
         new Withdrawal(UInt64.ONE, UInt64.ONE, Address.fromHexString("0x1"), GWei.ONE);
     final Block block =
         blockWithBody(
+            123L,
             new BlockBody(
                 List.of(new TransactionTestFixture().createTransaction(sig.generateKeyPair())),
                 Collections.emptyList(),
                 Optional.of(List.of(withdrawal))));
     when(blockchain.getChainHeadBlockNumber()).thenReturn(125L);
-    when(blockchain.getBlockByNumber(123)).thenReturn(Optional.of(block));
-    when(blockchain.getBlockByNumber(124)).thenReturn(Optional.of(block));
-    when(blockchain.getBlockByNumber(125)).thenReturn(Optional.of(block));
+    stubBlock(123, block);
+    stubBlock(124, block);
+    stubBlock(125, block);
 
     final List<ExecutionPayloadBodiesV1> result = fromSuccessResp(resp("0x7b", "0x3"));
     assertThat(result.size()).isEqualTo(3);
@@ -298,8 +309,13 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
     assertThat(fromErrorResp(resp("0x539", "0x0")).getCode()).isEqualTo(INVALID_PARAMS.getCode());
   }
 
-  private static Block blockWithBody(final BlockBody body) {
-    return new Block(new BlockHeaderTestFixture().buildHeader(), body);
+  static Block blockWithBody(final long blockNumber, final BlockBody body) {
+    return new Block(new BlockHeaderTestFixture().number(blockNumber).buildHeader(), body);
+  }
+
+  void stubBlock(final long blockNumber, final Block block) {
+    when(blockchain.getBlockHashByNumber(blockNumber)).thenReturn(Optional.of(block.getHash()));
+    when(blockchain.getBlockBody(block.getHash())).thenReturn(Optional.of(block.getBody()));
   }
 
   private JsonRpcResponse resp(final String startBlockNumber, final String range) {
