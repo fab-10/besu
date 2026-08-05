@@ -1056,6 +1056,18 @@ public class MergeCoordinatorTest implements MergeGenesisConfigHelper {
     assertThat(res).isNotPresent();
   }
 
+  @Test
+  public void assertGetOrSyncForBlockNotPresentDoesNotStartBackwardSyncWhenInitialSyncNotDone() {
+    BlockHeader mockHeader =
+        headerGenerator.parentHash(Hash.fromHexStringLenient("0xbeef")).buildHeader();
+
+    var res = coordinator.getOrSyncHeadByHash(mockHeader.getHash(), Hash.ZERO, false);
+
+    assertThat(res).isNotPresent();
+    verify(backwardSyncContext, never()).maybeUpdateTargetHeight(any());
+    verify(backwardSyncContext, never()).syncBackwardsUntil(any(Hash.class));
+  }
+
   @ParameterizedTest(name = "{index}: {0}")
   @MethodSource("getGasLimits")
   public void shouldSetCorrectTargetGasLimit(final ArgumentsAccessor argumentsAccessor) {
