@@ -52,10 +52,6 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
     INVALID_BLOCK_HASH;
   }
 
-  // Only protocolSchedule/protocolContext/vertx/engineCallListener are used by every engine
-  // method (via this base class); the rest are consumed by specific subclass families, so they
-  // are nullable here to keep single-family construction (production and tests) from having to
-  // populate fields it will never read.
   @Value.Builder
   public record ConstructorArguments(
       ProtocolSchedule protocolSchedule,

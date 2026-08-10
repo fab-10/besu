@@ -33,7 +33,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSucces
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.ExecutionPayloadBodiesV2;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockBody;
-import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
@@ -102,8 +101,8 @@ public class EngineGetPayloadBodiesByRangeV2Test extends EngineGetPayloadBodiesB
                 Collections.emptyList()));
 
     when(blockchain.getChainHeadBlockNumber()).thenReturn(2L);
-    when(blockchain.getBlockByNumber(1L)).thenReturn(Optional.of(block1));
-    when(blockchain.getBlockByNumber(2L)).thenReturn(Optional.of(block2));
+    stubBlock(1L, block1);
+    stubBlock(2L, block2);
     when(blockchain.getBlockAccessList(block1.getHash())).thenReturn(Optional.of(blockAccessList));
     when(blockchain.getBlockAccessList(block2.getHash())).thenReturn(Optional.empty());
 
@@ -124,7 +123,7 @@ public class EngineGetPayloadBodiesByRangeV2Test extends EngineGetPayloadBodiesB
                 Collections.emptyList()));
 
     when(blockchain.getChainHeadBlockNumber()).thenReturn(1L);
-    when(blockchain.getBlockByNumber(1L)).thenReturn(Optional.of(block));
+    stubBlock(1L, block);
     // blockchain.getBlockAccessList returns Optional.empty() by default
 
     final List<ExecutionPayloadBodiesV2> result = fromSuccessRespV2(resp("0x1", "0x1"));
@@ -145,10 +144,6 @@ public class EngineGetPayloadBodiesByRangeV2Test extends EngineGetPayloadBodiesB
   private List<ExecutionPayloadBodiesV2> fromSuccessRespV2(final JsonRpcResponse resp) {
     assertThat(resp.getType()).isEqualTo(RpcResponseType.SUCCESS);
     return (List<ExecutionPayloadBodiesV2>) ((JsonRpcSuccessResponse) resp).getResult();
-  }
-
-  private static Block blockWithBody(final long blockNumber, final BlockBody body) {
-    return new Block(new BlockHeaderTestFixture().number(blockNumber).buildHeader(), body);
   }
 
   private static BlockAccessList createSampleBlockAccessList() {

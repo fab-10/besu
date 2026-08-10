@@ -39,6 +39,11 @@ VersionScheduler.startsFromBeginningUntil(EngineGetPayloadV1.class, SHANGHAI)
     .build(...);
 ```
 
+Not every series is a version-supersedes-version chain: in `engine_getPayloadBodiesBy*` V2 only adds
+an optional field, so V1 and V2 coexist permanently, with no fork window on either — use
+`VersionScheduler.alwaysActive(EngineGetPayloadBodiesByHashV1::new, EngineGetPayloadBodiesByHashV2::new)`
+for series like this instead of `startsFromBeginningUntil`/`thenFrom`.
+
 The scheduler instantiates each version with the right `(minSupportedFork, firstUnsupportedFork)`
 pair derived from the chain. Method names live in the `RpcMethod` enum;
 `engine_exchangeCapabilities` derives the advertised capability list automatically from every

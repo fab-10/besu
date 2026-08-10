@@ -64,7 +64,7 @@ public sealed class EngineGetPayloadBodiesByHashV1<EPB extends ExecutionPayloadB
     try {
       return new JsonRpcSuccessResponse(reqId, collectExecutionPayloadBodiesByHash(request));
     } catch (final InvalidJsonRpcParameters e) {
-      return new JsonRpcErrorResponse(reqId, e.getRpcErrorType());
+      return new JsonRpcErrorResponse(reqId, e.getRpcErrorType(), e.getMessage());
     }
   }
 

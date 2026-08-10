@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import org.hyperledger.besu.datatypes.HardforkId;
+import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.parameters.UnsignedLongParameter;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
@@ -27,7 +28,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSucces
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.ExecutionPayloadBodiesV1;
 import org.hyperledger.besu.ethereum.chain.Blockchain;
-import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockBody;
 
 import java.util.List;
@@ -63,7 +63,7 @@ public sealed class EngineGetPayloadBodiesByRangeV1<EPB extends ExecutionPayload
     try {
       return new JsonRpcSuccessResponse(reqId, collectExecutionPayloadBodiesByRange(request));
     } catch (final InvalidJsonRpcParameters e) {
-      return new JsonRpcErrorResponse(reqId, e.getRpcErrorType());
+      return new JsonRpcErrorResponse(reqId, e.getRpcErrorType(), e.getMessage());
     }
   }
 
@@ -86,7 +86,7 @@ public sealed class EngineGetPayloadBodiesByRangeV1<EPB extends ExecutionPayload
 
     if (count < 1) {
       throw new InvalidJsonRpcParameters(
-          "count %d < 1".formatted(startBlockNumber), RpcErrorType.INVALID_BLOCK_COUNT_PARAMS);
+          "count %d < 1".formatted(count), RpcErrorType.INVALID_BLOCK_COUNT_PARAMS);
     }
 
     if (count > maxRequestBlocks) {
@@ -110,15 +110,18 @@ public sealed class EngineGetPayloadBodiesByRangeV1<EPB extends ExecutionPayload
         .mapToObj(
             blockNumber ->
                 blockchain
-                    .getBlockByNumber(blockNumber)
-                    .map(this::fetchExecutionPayloadBody)
+                    .getBlockHashByNumber(blockNumber)
+                    .flatMap(
+                        hash ->
+                            blockchain
+                                .getBlockBody(hash)
+                                .map(body -> fetchExecutionPayloadBody(hash, body)))
                     .orElse(null))
         .toList();
   }
 
   @SuppressWarnings("unchecked")
-  protected EPB fetchExecutionPayloadBody(final Block block) {
-    final BlockBody body = block.getBody();
+  protected EPB fetchExecutionPayloadBody(final Hash hash, final BlockBody body) {
     return (EPB)
         new ExecutionPayloadBodiesV1(body.getTransactions(), body.getWithdrawals().orElse(null));
   }

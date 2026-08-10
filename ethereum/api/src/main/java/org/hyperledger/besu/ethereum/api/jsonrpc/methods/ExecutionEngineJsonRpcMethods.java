@@ -254,14 +254,14 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
     static VersionScheduler startsFromBeginningUntil(
         final EngineMethodFactory firstVersion, final HardforkId to) {
       final VersionScheduler vs = new VersionScheduler();
-      vs.readyMethods.add(new MethodVersionBuildData(firstVersion, false, null, to));
+      vs.readyMethods.add(new MethodVersionBuildData(firstVersion, null, to));
       return vs;
     }
 
     static VersionScheduler startsFrom(
         final HardforkId from, final EngineMethodFactory firstVersion) {
       final VersionScheduler vs = new VersionScheduler();
-      vs.pendingMethods.add(new MethodVersionBuildData(firstVersion, false, from, null));
+      vs.pendingMethods.add(new MethodVersionBuildData(firstVersion, from, null));
       return vs;
     }
 
@@ -276,7 +276,7 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
       checkState(
           pendingMethods.isEmpty() || pendingMethods.stream().allMatch(mvbd -> mvbd.to == null),
           "This method can only be called for methods that are active since Paris hardfork");
-      pendingMethods.add(new MethodVersionBuildData(method, false, null, null));
+      pendingMethods.add(new MethodVersionBuildData(method, null, null));
       return this;
     }
 
@@ -286,8 +286,7 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
       pendingMethods = new ArrayList<>();
       Arrays.stream(methods)
           .forEach(
-              method ->
-                  pendingMethods.add(new MethodVersionBuildData(method, false, hardforkId, null)));
+              method -> pendingMethods.add(new MethodVersionBuildData(method, hardforkId, null)));
       return this;
     }
 
@@ -304,15 +303,14 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
           .toList();
     }
 
-    record MethodVersionBuildData(
-        EngineMethodFactory factory, boolean alwaysActive, HardforkId from, HardforkId to) {
+    record MethodVersionBuildData(EngineMethodFactory factory, HardforkId from, HardforkId to) {
 
       MethodVersionBuildData withTo(final HardforkId hardforkId) {
-        return new MethodVersionBuildData(factory, false, from, hardforkId);
+        return new MethodVersionBuildData(factory, from, hardforkId);
       }
 
       static MethodVersionBuildData alwaysActive(final EngineMethodFactory factory) {
-        return new MethodVersionBuildData(factory, true, null, null);
+        return new MethodVersionBuildData(factory, null, null);
       }
     }
   }

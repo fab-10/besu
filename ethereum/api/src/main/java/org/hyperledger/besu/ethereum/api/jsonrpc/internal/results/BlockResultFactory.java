@@ -117,4 +117,6 @@ public class BlockResultFactory {
         includeCoinbase,
         blockWithMetadata.getWithdrawals());
   }
+
+  // endregion BlockResult
 }
