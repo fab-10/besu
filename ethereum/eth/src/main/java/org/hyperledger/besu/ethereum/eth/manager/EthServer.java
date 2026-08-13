@@ -549,7 +549,7 @@ class EthServer {
               .getBlobCellsBytes()
               .orElseGet(() -> CKZG4844Helper.computeCells(bundle.getBlob()));
       if (blobCells.size() != CellMask.CELL_COUNT * CellMask.CELL_SIZE) {
-        return Collections.emptyList();
+        return new ArrayList<>();
       }
       requestedIndexes.forEach(
           index -> cells.add(blobCells.slice(index * CellMask.CELL_SIZE, CellMask.CELL_SIZE)));

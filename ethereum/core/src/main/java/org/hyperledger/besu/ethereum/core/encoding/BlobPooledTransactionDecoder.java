@@ -54,7 +54,11 @@ public class BlobPooledTransactionDecoder {
     final Transaction.Builder builder = Transaction.builder();
     BlobTransactionDecoder.readTransactionPayloadInner(builder, txRlp);
 
-    boolean hasVersionId = !txRlp.nextIsList();
+    // A KZG_PROOF (versionId 0) transaction never writes the version scalar, so the item
+    // immediately after the tx payload is either the blobs list or (eth/72) its elided null
+    // marker - neither of which is a version scalar, and the null marker isn't a list either,
+    // so nextIsList() alone can't tell them apart.
+    boolean hasVersionId = !txRlp.nextIsList() && !txRlp.nextIsNull();
     if (hasVersionId) {
       versionId = txRlp.readIntScalar();
     }
