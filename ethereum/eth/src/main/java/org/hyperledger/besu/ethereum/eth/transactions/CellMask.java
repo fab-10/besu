@@ -34,13 +34,14 @@ public record CellMask(Bytes bytes) {
   public static final CellMask EMPTY = new CellMask(Bytes.wrap(new byte[BYTE_LENGTH]));
   public static final CellMask FULL = new CellMask(fullMaskBytes());
 
-  public CellMask {
+  public CellMask(final Bytes bytes) {
     checkNotNull(bytes, "cell mask bytes must not be null");
     checkArgument(
         bytes.size() == BYTE_LENGTH,
         "cell mask must be %s bytes, got %s",
         BYTE_LENGTH,
         bytes.size());
+    this.bytes = bytes;
   }
 
   public static CellMask fromBytes(final Bytes bytes) {
