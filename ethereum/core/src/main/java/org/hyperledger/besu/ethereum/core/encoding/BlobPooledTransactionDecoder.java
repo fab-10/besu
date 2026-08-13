@@ -58,16 +58,27 @@ public class BlobPooledTransactionDecoder {
     if (hasVersionId) {
       versionId = txRlp.readIntScalar();
     }
-    List<Blob> blobs = txRlp.readList(Blob::readFrom);
+    final boolean blobPayloadElided = txRlp.nextIsNull();
+    List<Blob> blobs;
+    if (blobPayloadElided) {
+      txRlp.skipNext();
+      blobs = List.of();
+    } else {
+      blobs = txRlp.readList(Blob::readFrom);
+    }
     List<KZGCommitment> commitments = txRlp.readList(KZGCommitment::readFrom);
     List<KZGProof> proofs = txRlp.readList(KZGProof::readFrom);
     txRlp.leaveList();
 
+    // BlobsWithCommitments requires a non-empty blobs list, so an elided payload (blobs == [])
+    // must skip kzgBlobs() entirely - commitments/proofs are still validated below regardless.
     final Transaction transaction =
-        builder
-            .kzgBlobs(BlobType.of(versionId), commitments, blobs, proofs)
-            .sizeForAnnouncement(input.size())
-            .build();
+        blobPayloadElided
+            ? builder.sizeForAnnouncement(input.size()).build()
+            : builder
+                .kzgBlobs(BlobType.of(versionId), commitments, blobs, proofs)
+                .sizeForAnnouncement(input.size())
+                .build();
 
     // Validate that each commitment hashes to the versioned hash declared in the tx body.
     // A mismatch means the peer sent a sidecar that does not correspond to the transaction.

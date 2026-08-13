@@ -22,26 +22,30 @@ import org.hyperledger.besu.ethereum.core.BlockBody;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
-import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
 import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncodingConfiguration;
+import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
+import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
 import org.hyperledger.besu.ethereum.eth.manager.exceptions.ProtocolViolationException;
 import org.hyperledger.besu.ethereum.eth.messages.BlockAccessListsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.BlockBodiesMessage;
 import org.hyperledger.besu.ethereum.eth.messages.BlockHeadersMessage;
+import org.hyperledger.besu.ethereum.eth.messages.CellsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.EthProtocolMessages;
 import org.hyperledger.besu.ethereum.eth.messages.GetBlockAccessListsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetBlockBodiesMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetBlockHeadersMessage;
+import org.hyperledger.besu.ethereum.eth.messages.GetCellsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetPaginatedReceiptsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetPooledTransactionsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetReceiptsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.PaginatedReceiptsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.PooledTransactionsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.ReceiptsMessage;
+import org.hyperledger.besu.ethereum.eth.transactions.CellMask;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.block.access.list.BlockAccessList;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
@@ -122,7 +126,8 @@ class EthServer {
                 peer,
                 messageData,
                 ethereumWireProtocolConfiguration.getMaxGetPooledTransactions(),
-                maxMessageSize));
+                maxMessageSize,
+                capability));
     ethMessages.registerResponseConstructor(
         EthProtocolMessages.GET_BLOCK_ACCESS_LISTS,
         (peer, messageData, capability) ->
@@ -130,6 +135,14 @@ class EthServer {
                 blockchain,
                 messageData,
                 ethereumWireProtocolConfiguration.getMaxGetBlockAccessLists(),
+                maxMessageSize));
+    ethMessages.registerResponseConstructor(
+        EthProtocolMessages.GET_CELLS,
+        (peer, messageData, capability) ->
+            constructGetCellsResponse(
+                transactionPool,
+                messageData,
+                ethereumWireProtocolConfiguration.getMaxGetPooledTransactions(),
                 maxMessageSize));
   }
 
@@ -414,7 +427,8 @@ class EthServer {
       final EthPeer peer,
       final MessageData message,
       final int requestLimit,
-      final int maxMessageSize) {
+      final int maxMessageSize,
+      final Capability capability) {
     final GetPooledTransactionsMessage getPooledTransactions =
         GetPooledTransactionsMessage.readFrom(message);
     final Iterable<Hash> hashes = getPooledTransactions.pooledTransactions();
@@ -451,7 +465,8 @@ class EthServer {
       }
 
       final BytesValueRLPOutput txRlp = new BytesValueRLPOutput();
-      TransactionEncoder.encodeRLP(maybeTx.get(), txRlp, EncodingContext.POOLED_TRANSACTION);
+      TransactionEncoder.encodePooledTransaction(
+          maybeTx.get(), txRlp, !EthProtocol.isEth72Compatible(capability));
       final int encodedSize = txRlp.encodedSize();
       if (responseSizeEstimate + encodedSize > maxMessageSize) {
         break;
@@ -476,5 +491,69 @@ class EthServer {
     }
 
     return PooledTransactionsMessage.createUnsafe(rlp.encoded());
+  }
+
+  static MessageData constructGetCellsResponse(
+      final TransactionPool transactionPool,
+      final MessageData message,
+      final int requestLimit,
+      final int maxMessageSize) {
+    final GetCellsMessage getCells = GetCellsMessage.readFrom(message);
+    final List<Hash> requestedHashes = getCells.hashes();
+    final CellMask cellMask = getCells.cellMask();
+    final List<Integer> requestedIndexes = cellMask.indexes();
+
+    int responseSizeEstimate = RLP.MAX_PREFIX_SIZE + cellMask.bytes().size();
+    final List<Hash> returnedHashes = new ArrayList<>();
+    final List<List<Bytes>> returnedCells = new ArrayList<>();
+
+    int requestedCount = 0;
+    for (final Hash hash : requestedHashes) {
+      if (requestedCount >= requestLimit) {
+        break;
+      }
+      requestedCount++;
+
+      final Optional<Transaction> maybeTx = transactionPool.getTransactionByHash(hash);
+      if (maybeTx.isEmpty() || maybeTx.get().getBlobsWithCommitments().isEmpty()) {
+        continue;
+      }
+
+      final List<Bytes> cells = cellsForTransaction(maybeTx.get(), requestedIndexes);
+      if (cells.isEmpty() && !requestedIndexes.isEmpty()) {
+        continue;
+      }
+
+      final BytesValueRLPOutput cellsRlp = new BytesValueRLPOutput();
+      cellsRlp.writeList(cells, (cell, rlpOutput) -> rlpOutput.writeBytes(cell));
+      final int encodedSize = 32 + cellsRlp.encodedSize();
+      if (responseSizeEstimate + encodedSize > maxMessageSize) {
+        break;
+      }
+
+      responseSizeEstimate += encodedSize;
+      returnedHashes.add(hash);
+      returnedCells.add(cells);
+    }
+
+    return CellsMessage.create(returnedHashes, returnedCells, cellMask);
+  }
+
+  private static List<Bytes> cellsForTransaction(
+      final Transaction transaction, final List<Integer> requestedIndexes) {
+    final List<Bytes> cells = new ArrayList<>();
+    for (final BlobProofBundle bundle :
+        transaction.getBlobsWithCommitments().orElseThrow().getBlobProofBundles()) {
+      final Bytes blobCells =
+          bundle
+              .getBlobCellsBytes()
+              .orElseGet(() -> CKZG4844Helper.computeCells(bundle.getBlob()));
+      if (blobCells.size() != CellMask.CELL_COUNT * CellMask.CELL_SIZE) {
+        return Collections.emptyList();
+      }
+      requestedIndexes.forEach(
+          index -> cells.add(blobCells.slice(index * CellMask.CELL_SIZE, CellMask.CELL_SIZE)));
+    }
+    return cells;
   }
 }

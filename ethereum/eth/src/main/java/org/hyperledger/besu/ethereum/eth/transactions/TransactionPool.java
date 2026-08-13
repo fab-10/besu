@@ -124,7 +124,7 @@ public class TransactionPool implements BlockAddedObserver {
   private final ListMultimap<VersionedHash, BlobProofBundle> mapOfBlobsInTransactionPool =
       Multimaps.synchronizedListMultimap(
           Multimaps.newListMultimap(new HashMap<>(), () -> new ArrayList<>(1)));
-  private final AtomicReference<Bytes> blobCustodyColumns = new AtomicReference<>();
+  private final AtomicReference<CellMask> blobCustodyColumns = new AtomicReference<>();
 
   public TransactionPool(
       final Supplier<PendingTransactions> pendingTransactionsSupplier,
@@ -739,13 +739,13 @@ public class TransactionPool implements BlockAddedObserver {
    * The CL's current blob custody column set, as last reported via {@code
    * engine_forkchoiceUpdatedV4}'s {@code custodyColumns} parameter.
    *
-   * @return the 16-byte custody bitarray, or empty if the CL has never reported one.
+   * @return the custody column set, or empty if the CL has never reported one.
    */
-  public Optional<Bytes> getBlobCustodyColumns() {
+  public Optional<CellMask> getBlobCustodyColumns() {
     return Optional.ofNullable(blobCustodyColumns.get());
   }
 
-  public void updateBlobCustodyColumns(final Bytes custodyColumns) {
+  public void updateBlobCustodyColumns(final CellMask custodyColumns) {
     blobCustodyColumns.set(custodyColumns);
   }
 
