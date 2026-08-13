@@ -17,6 +17,7 @@ package org.hyperledger.besu.ethereum.core.encoding;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 import org.hyperledger.besu.ethereum.util.TrustedSetupClassLoaderExtension;
 
@@ -68,6 +69,26 @@ public class BlobTransactionEncodingTest extends TrustedSetupClassLoaderExtensio
     TransactionEncoder.encodeRLP(
         transaction, bytesValueRLPOutput, EncodingContext.POOLED_TRANSACTION);
     assertThat(transaction.getSizeForAnnouncement()).isEqualTo(bytes.size());
+  }
+
+  @ParameterizedTest(name = "{index} {0}")
+  @MethodSource("provideOpaqueBytesForNetwork")
+  public void blobPooledTransactionCanElideBlobPayloadForEth72(
+      final TypedTransactionBytesArgument argument) {
+    final Transaction transaction =
+        TransactionDecoder.decodeOpaqueBytes(argument.bytes, EncodingContext.POOLED_TRANSACTION);
+
+    final BytesValueRLPOutput output = new BytesValueRLPOutput();
+    TransactionEncoder.encodePooledTransaction(transaction, output, false);
+
+    final Transaction decoded =
+        TransactionDecoder.decodeRLP(
+            new BytesValueRLPInput(output.encoded(), false),
+            EncodingContext.POOLED_TRANSACTION);
+
+    assertThat(decoded.getHash()).isEqualTo(transaction.getHash());
+    assertThat(decoded.getBlobsWithCommitments()).isEmpty();
+    assertThat(decoded.getVersionedHashes()).isEqualTo(transaction.getVersionedHashes());
   }
 
   @ParameterizedTest(name = "{index} {0}")
