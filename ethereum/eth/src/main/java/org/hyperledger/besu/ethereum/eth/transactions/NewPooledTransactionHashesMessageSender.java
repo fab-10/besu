@@ -75,7 +75,22 @@ class NewPooledTransactionHashesMessageSender {
           .addArgument(() -> toHashList(txBatch))
           .log();
 
-      final var message = NewPooledTransactionHashesMessage.create(txBatch, capability);
+      final NewPooledTransactionHashesMessage message;
+      try {
+        message = NewPooledTransactionHashesMessage.create(txBatch, capability);
+      } catch (final IllegalArgumentException e) {
+        // eth/72 carries a single cell_mask for every blob tx in the message; a batch mixing
+        // blob txs with different cell masks can't be encoded as one message. This should not
+        // currently happen (every locally-held blob tx has full commitments today), but must
+        // not crash the whole announcement batch to this peer if it ever does.
+        LOG.atWarn()
+            .setMessage(
+                "Failed to encode transaction announcements for peer={}, dropping batch: {}")
+            .addArgument(peer)
+            .addArgument(e::getMessage)
+            .log();
+        return true;
+      }
 
       peer.send(message);
     } catch (final PeerNotConnected unused) {

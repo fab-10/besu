@@ -126,8 +126,7 @@ class EthServer {
                 peer,
                 messageData,
                 ethereumWireProtocolConfiguration.getMaxGetPooledTransactions(),
-                maxMessageSize,
-                capability));
+                maxMessageSize));
     ethMessages.registerResponseConstructor(
         EthProtocolMessages.GET_BLOCK_ACCESS_LISTS,
         (peer, messageData, capability) ->
@@ -427,8 +426,7 @@ class EthServer {
       final EthPeer peer,
       final MessageData message,
       final int requestLimit,
-      final int maxMessageSize,
-      final Capability capability) {
+      final int maxMessageSize) {
     final GetPooledTransactionsMessage getPooledTransactions =
         GetPooledTransactionsMessage.readFrom(message);
     final Iterable<Hash> hashes = getPooledTransactions.pooledTransactions();
@@ -464,9 +462,14 @@ class EthServer {
         continue;
       }
 
+      // Eliding the blob payload for eth/72 peers is spec-correct, but nothing can yet
+      // reconstruct a pool-valid transaction from an elided response on the receiving end
+      // (BlobPooledTransactionDecoder can't attach commitments without blob data, and
+      // TransactionPool.validate() then rejects the result outright) - so always send the
+      // full payload until the sampler/provider cell-fetch intake pipeline exists to consume
+      // elided responses correctly.
       final BytesValueRLPOutput txRlp = new BytesValueRLPOutput();
-      TransactionEncoder.encodePooledTransaction(
-          maybeTx.get(), txRlp, !EthProtocol.isEth72Compatible(capability));
+      TransactionEncoder.encodePooledTransaction(maybeTx.get(), txRlp, true);
       final int encodedSize = txRlp.encodedSize();
       if (responseSizeEstimate + encodedSize > maxMessageSize) {
         break;
