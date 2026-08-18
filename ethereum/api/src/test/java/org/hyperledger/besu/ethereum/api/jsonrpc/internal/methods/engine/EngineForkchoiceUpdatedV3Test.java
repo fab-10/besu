@@ -53,13 +53,13 @@ public class EngineForkchoiceUpdatedV3Test extends EngineForkchoiceUpdatedV2Test
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
             .protocolContext(protocolContext)
-            .vertx(vertx)
             .engineCallListener(engineCallListener)
             .mergeCoordinator(mergeCoordinator)
             .ethPeers(mock(EthPeers.class))
             .metricsSystem(new NoOpMetricsSystem())
             .maxRequestBlocks(0)
             .build(),
+        vertx,
         CANCUN,
         AMSTERDAM);
   }

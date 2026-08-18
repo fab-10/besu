@@ -138,13 +138,13 @@ public class EngineForkchoiceUpdatedBadAncestorIntegrationTest {
             new ConstructorArgumentsBuilder()
                 .protocolSchedule(protocolSchedule)
                 .protocolContext(protocolContext)
-                .vertx(vertx)
                 .engineCallListener(mock(EngineCallListener.class))
                 .mergeCoordinator(mergeCoordinator)
                 .ethPeers(mock(EthPeers.class))
                 .metricsSystem(new NoOpMetricsSystem())
                 .maxRequestBlocks(0)
                 .build(),
+            vertx,
             CANCUN,
             AMSTERDAM);
   }

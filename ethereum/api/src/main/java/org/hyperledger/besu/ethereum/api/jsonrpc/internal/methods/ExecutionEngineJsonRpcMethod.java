@@ -55,7 +55,6 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
   public record ConstructorArguments(
       ProtocolSchedule protocolSchedule,
       ProtocolContext protocolContext,
-      Vertx vertx,
       EngineCallListener engineCallListener,
       MergeMiningCoordinator mergeCoordinator,
       EthPeers ethPeers,
@@ -64,11 +63,6 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
 
   private static final Logger LOG = LoggerFactory.getLogger(ExecutionEngineJsonRpcMethod.class);
   public static final long ENGINE_API_LOGGING_THRESHOLD = 60000L;
-  // Shared engine consensus API Vertx instance. Only read by OrderedExecutionJsonRpcMethod
-  // (engine_forkchoiceUpdated / engine_newPayload), which uses it to run calls on a dedicated
-  // single-threaded executor rather than spinning up a Vertx instance just for ordering; every
-  // other engine method computes its response directly on the calling thread.
-  protected final Vertx syncVertx;
   protected final Optional<MergeContext> mergeContextOptional;
   protected final Supplier<MergeContext> mergeContext;
   protected final ProtocolSchedule protocolSchedule;
@@ -87,13 +81,16 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
   private final HardforkId firstUnsupportedFork;
 
   // TRANSITIONAL SHIM (remove in cleanup PR): old constructor signature used by not-yet-migrated
-  // engine methods (vertx-first, optional protocol schedule).
+  // engine methods (vertx-first, optional protocol schedule). The Vertx parameter is unused here —
+  // kept only so these methods' constructors (and their call sites/tests) don't need touching;
+  // only OrderedExecutionJsonRpcMethod (engine_forkchoiceUpdated / engine_newPayload) actually
+  // needs a Vertx instance.
   protected ExecutionEngineJsonRpcMethod(
       final Vertx vertx,
       final ProtocolSchedule protocolSchedule,
       final ProtocolContext protocolContext,
       final EngineCallListener engineCallListener) {
-    this(protocolSchedule, protocolContext, vertx, engineCallListener, null, null);
+    this(protocolSchedule, protocolContext, engineCallListener, null, null);
   }
 
   // TRANSITIONAL SHIM (remove in cleanup PR): old constructor signature for methods that have no
@@ -102,7 +99,7 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
       final Vertx vertx,
       final ProtocolContext protocolContext,
       final EngineCallListener engineCallListener) {
-    this(null, protocolContext, vertx, engineCallListener, null, null);
+    this(null, protocolContext, engineCallListener, null, null);
   }
 
   protected ExecutionEngineJsonRpcMethod(
@@ -112,7 +109,6 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
     this(
         constructorArguments.protocolSchedule(),
         constructorArguments.protocolContext(),
-        constructorArguments.vertx(),
         constructorArguments.engineCallListener(),
         minSupportedFork,
         firstUnsupportedFork);
@@ -121,11 +117,9 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
   protected ExecutionEngineJsonRpcMethod(
       final ProtocolSchedule protocolSchedule,
       final ProtocolContext protocolContext,
-      final Vertx vertx,
       final EngineCallListener engineCallListener,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    this.syncVertx = vertx;
     this.protocolSchedule = protocolSchedule;
     this.maybeProtocolSchedule = Optional.ofNullable(protocolSchedule);
     this.protocolContext = protocolContext;

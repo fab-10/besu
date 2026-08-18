@@ -57,7 +57,6 @@ public class EngineGetPayloadBodiesByRangeV2Test extends EngineGetPayloadBodiesB
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
             .protocolContext(protocolContext)
-            .vertx(vertx)
             .engineCallListener(engineCallListener)
             .mergeCoordinator(mock(MergeMiningCoordinator.class))
             .ethPeers(mock(EthPeers.class))

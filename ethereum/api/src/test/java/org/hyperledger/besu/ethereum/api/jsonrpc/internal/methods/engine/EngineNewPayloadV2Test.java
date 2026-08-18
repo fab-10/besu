@@ -61,13 +61,13 @@ public class EngineNewPayloadV2Test extends EngineNewPayloadV1Test {
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
             .protocolContext(protocolContext)
-            .vertx(vertx)
             .engineCallListener(engineCallListener)
             .mergeCoordinator(mergeCoordinator)
             .ethPeers(ethPeers)
             .metricsSystem(new NoOpMetricsSystem())
             .maxRequestBlocks(0)
             .build(),
+        vertx,
         null,
         CANCUN);
   }

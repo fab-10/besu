@@ -44,6 +44,7 @@ import java.util.List;
 import java.util.Optional;
 
 import com.google.common.annotations.VisibleForTesting;
+import io.vertx.core.Vertx;
 import org.apache.tuweni.bytes.Bytes32;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,9 +57,10 @@ public sealed class EngineNewPayloadV3<
 
   public EngineNewPayloadV3(
       final ConstructorArguments constructorArguments,
+      final Vertx vertx,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    super(constructorArguments, vertx, minSupportedFork, firstUnsupportedFork);
   }
 
   @Override

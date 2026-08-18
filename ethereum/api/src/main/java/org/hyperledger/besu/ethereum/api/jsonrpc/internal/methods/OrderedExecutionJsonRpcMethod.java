@@ -25,6 +25,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import io.vertx.core.Vertx;
 import io.vertx.core.WorkerExecutor;
 
 /**
@@ -35,7 +36,9 @@ import io.vertx.core.WorkerExecutor;
  * <p>All instances share one single-threaded {@link WorkerExecutor} created from the engine
  * consensus API's existing Vertx instance (the same one backing {@code EngineQosTimer}), so calls
  * are serialized globally in arrival order regardless of which HTTP connection they arrive on,
- * without spinning up a dedicated Vertx instance just for ordering.
+ * without spinning up a dedicated Vertx instance just for ordering. That Vertx instance is passed
+ * directly to this constructor rather than threaded through {@link ConstructorArguments}, since
+ * these are the only engine methods that need it.
  */
 public abstract class OrderedExecutionJsonRpcMethod extends ExecutionEngineJsonRpcMethod {
 
@@ -49,10 +52,11 @@ public abstract class OrderedExecutionJsonRpcMethod extends ExecutionEngineJsonR
 
   protected OrderedExecutionJsonRpcMethod(
       final ConstructorArguments constructorArguments,
+      final Vertx vertx,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
     super(constructorArguments, minSupportedFork, firstUnsupportedFork);
-    this.orderedExecutor = syncVertx.createSharedWorkerExecutor(ORDERED_EXECUTOR_NAME, 1);
+    this.orderedExecutor = vertx.createSharedWorkerExecutor(ORDERED_EXECUTOR_NAME, 1);
   }
 
   @Override

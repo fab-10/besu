@@ -24,6 +24,7 @@ import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
 import java.util.Optional;
 
+import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -45,9 +46,10 @@ public sealed class EngineForkchoiceUpdatedV2<PA extends PayloadAttributesV2>
 
   public EngineForkchoiceUpdatedV2(
       final ConstructorArguments constructorArguments,
+      final Vertx vertx,
       final HardforkId minFork,
       final HardforkId maxFork) {
-    super(constructorArguments, minFork, maxFork);
+    super(constructorArguments, vertx, minFork, maxFork);
     shanghaiTimestamp = protocolSchedule.milestoneFor(HardforkId.MainnetHardforkId.SHANGHAI);
   }
 

@@ -43,6 +43,7 @@ import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import java.util.Optional;
 import java.util.OptionalLong;
 
+import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -75,9 +76,10 @@ public sealed class EngineForkchoiceUpdatedV1<PA extends PayloadAttributesV1>
 
   public EngineForkchoiceUpdatedV1(
       final ConstructorArguments constructorArguments,
+      final Vertx vertx,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    super(constructorArguments, vertx, minSupportedFork, firstUnsupportedFork);
     this.mergeCoordinator = constructorArguments.mergeCoordinator();
   }
 

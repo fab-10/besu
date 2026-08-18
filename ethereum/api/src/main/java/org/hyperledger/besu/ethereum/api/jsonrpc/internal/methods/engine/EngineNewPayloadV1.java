@@ -62,6 +62,7 @@ import java.util.Optional;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
 import com.google.common.base.Preconditions;
+import io.vertx.core.Vertx;
 import org.jspecify.annotations.NonNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -93,9 +94,10 @@ public sealed class EngineNewPayloadV1<
 
   public EngineNewPayloadV1(
       final ConstructorArguments constructorArguments,
+      final Vertx vertx,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    super(constructorArguments, vertx, minSupportedFork, firstUnsupportedFork);
     this.mergeCoordinator = constructorArguments.mergeCoordinator();
     this.ethPeers = constructorArguments.ethPeers();
 

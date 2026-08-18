@@ -88,13 +88,13 @@ public class EngineNewPayloadV4Test extends EngineNewPayloadV3Test {
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
             .protocolContext(protocolContext)
-            .vertx(vertx)
             .engineCallListener(engineCallListener)
             .mergeCoordinator(mergeCoordinator)
             .ethPeers(ethPeers)
             .metricsSystem(new NoOpMetricsSystem())
             .maxRequestBlocks(0)
             .build(),
+        vertx,
         PRAGUE,
         AMSTERDAM);
   }

@@ -22,6 +22,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
+import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -55,9 +56,10 @@ public final class EngineForkchoiceUpdatedV4<PA extends PayloadAttributesV4>
 
   public EngineForkchoiceUpdatedV4(
       final ConstructorArguments constructorArguments,
+      final Vertx vertx,
       final HardforkId minFork,
       final HardforkId maxFork) {
-    super(constructorArguments, minFork, maxFork);
+    super(constructorArguments, vertx, minFork, maxFork);
   }
 
   @Override

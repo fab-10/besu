@@ -37,7 +37,6 @@ import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import java.util.List;
 import java.util.Optional;
 
-import io.vertx.core.Vertx;
 import org.junit.jupiter.api.Test;
 
 class VersionSchedulerTest {
@@ -47,7 +46,6 @@ class VersionSchedulerTest {
       new ConstructorArgumentsBuilder()
           .protocolSchedule(protocolSchedule)
           .protocolContext(mock(ProtocolContext.class))
-          .vertx(mock(Vertx.class))
           .engineCallListener(mock(EngineCallListener.class))
           .mergeCoordinator(mock(MergeMiningCoordinator.class))
           .ethPeers(mock(EthPeers.class))

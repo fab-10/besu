@@ -121,7 +121,6 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
           new ConstructorArguments(
               protocolSchedule,
               protocolContext,
-              consensusEngineServer,
               engineQosTimer,
               mergeCoordinator.get(),
               ethPeers,
@@ -183,24 +182,43 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
   private Collection<? extends JsonRpcMethod> createEngineForkchoiceUpdatedMethods(
       final ConstructorArguments constructorArguments) {
 
+    // FCU is the only engine method series (besides engine_newPayload) requiring ordered
+    // execution, so it's the only one whose factories need the shared consensus engine Vertx
+    // instance — captured here rather than threaded through ConstructorArguments.
     // special case at the first hardfork (Shanghai), before it was possible to call either V1 or V2
     // so both versions are scheduled at the beginning, and only V1 must be stopped at Shanghai
     // timestamp
-    return VersionScheduler.startsFromBeginningUntil(EngineForkchoiceUpdatedV1::new, SHANGHAI)
-        .thenAlsoFromBeginning(EngineForkchoiceUpdatedV2::new)
-        .thenFrom(CANCUN, EngineForkchoiceUpdatedV3::new)
-        .thenFrom(AMSTERDAM, EngineForkchoiceUpdatedV4::new)
+    return VersionScheduler.startsFromBeginningUntil(
+            (ca, from, to) -> new EngineForkchoiceUpdatedV1<>(ca, consensusEngineServer, from, to),
+            SHANGHAI)
+        .thenAlsoFromBeginning(
+            (ca, from, to) -> new EngineForkchoiceUpdatedV2<>(ca, consensusEngineServer, from, to))
+        .thenFrom(
+            CANCUN,
+            (ca, from, to) -> new EngineForkchoiceUpdatedV3<>(ca, consensusEngineServer, from, to))
+        .thenFrom(
+            AMSTERDAM,
+            (ca, from, to) -> new EngineForkchoiceUpdatedV4<>(ca, consensusEngineServer, from, to))
         .build(constructorArguments);
   }
 
   private Collection<? extends JsonRpcMethod> createEngineNewPayloadMethods(
       final ConstructorArguments constructorArguments) {
 
-    return VersionScheduler.startsFromBeginningUntil(EngineNewPayloadV1::new, SHANGHAI)
-        .thenAlsoFromBeginning(EngineNewPayloadV2::new)
-        .thenFrom(CANCUN, EngineNewPayloadV3::new)
-        .thenFrom(PRAGUE, EngineNewPayloadV4::new)
-        .thenFrom(AMSTERDAM, EngineNewPayloadV5::new)
+    // engine_newPayload also requires ordered execution — see the comment in
+    // createEngineForkchoiceUpdatedMethods above.
+    return VersionScheduler.startsFromBeginningUntil(
+            (ca, from, to) -> new EngineNewPayloadV1<>(ca, consensusEngineServer, from, to),
+            SHANGHAI)
+        .thenAlsoFromBeginning(
+            (ca, from, to) -> new EngineNewPayloadV2<>(ca, consensusEngineServer, from, to))
+        .thenFrom(
+            CANCUN, (ca, from, to) -> new EngineNewPayloadV3<>(ca, consensusEngineServer, from, to))
+        .thenFrom(
+            PRAGUE, (ca, from, to) -> new EngineNewPayloadV4<>(ca, consensusEngineServer, from, to))
+        .thenFrom(
+            AMSTERDAM,
+            (ca, from, to) -> new EngineNewPayloadV5<>(ca, consensusEngineServer, from, to))
         .build(constructorArguments);
   }
 

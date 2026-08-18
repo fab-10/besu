@@ -45,7 +45,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import io.vertx.core.Vertx;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.junit.jupiter.api.BeforeEach;
@@ -60,7 +59,6 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class EngineGetPayloadBodiesByHashV1Test extends AbstractScheduledApiTest {
   protected EngineGetPayloadBodiesByHashV1<?> method;
-  protected static final Vertx vertx = Vertx.vertx();
   @Mock protected ProtocolContext protocolContext;
   @Mock protected EngineCallListener engineCallListener;
   @Mock protected MutableBlockchain blockchain;
@@ -77,7 +75,6 @@ public class EngineGetPayloadBodiesByHashV1Test extends AbstractScheduledApiTest
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
             .protocolContext(protocolContext)
-            .vertx(vertx)
             .engineCallListener(engineCallListener)
             .mergeCoordinator(mock(MergeMiningCoordinator.class))
             .ethPeers(mock(EthPeers.class))

@@ -40,7 +40,6 @@ public class EngineGetPayloadV5Test extends EngineGetPayloadV4Test {
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
             .protocolContext(protocolContext)
-            .vertx(vertx)
             .engineCallListener(engineCallListener)
             .mergeCoordinator(mergeMiningCoordinator)
             .ethPeers(ethPeers)

@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 
+import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,9 +48,10 @@ public sealed class EngineNewPayloadV4<
 
   public EngineNewPayloadV4(
       final ConstructorArguments constructorArguments,
+      final Vertx vertx,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
-    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    super(constructorArguments, vertx, minSupportedFork, firstUnsupportedFork);
   }
 
   @Override

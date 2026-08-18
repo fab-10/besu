@@ -63,7 +63,6 @@ import java.util.OptionalLong;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.vertx.core.Vertx;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -81,7 +80,6 @@ public class EngineGetPayloadV1Test extends AbstractScheduledApiTest {
 
   protected EngineGetPayloadV1 method;
 
-  protected static final Vertx vertx = Vertx.vertx();
   protected static final PayloadIdentifier mockPid = new PayloadIdentifier(1337L);
   protected BlockHeader mockHeader =
       new BlockHeaderTestFixture().prevRandao(Bytes32.random()).buildHeader();
@@ -116,7 +114,6 @@ public class EngineGetPayloadV1Test extends AbstractScheduledApiTest {
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
             .protocolContext(protocolContext)
-            .vertx(vertx)
             .engineCallListener(engineCallListener)
             .mergeCoordinator(mergeMiningCoordinator)
             .ethPeers(ethPeers)
