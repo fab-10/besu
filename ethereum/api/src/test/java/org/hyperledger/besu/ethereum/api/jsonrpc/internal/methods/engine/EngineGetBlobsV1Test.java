@@ -15,8 +15,11 @@
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.CANCUN;
+import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.OSAKA;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineTestSupport.fromErrorResp;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
@@ -34,6 +37,7 @@ import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
@@ -44,7 +48,9 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.plugin.services.rpc.RpcResponseType;
 
 import java.math.BigInteger;
@@ -53,7 +59,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
-import io.vertx.core.Vertx;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.junit.jupiter.api.BeforeEach;
@@ -87,8 +92,6 @@ public class EngineGetBlobsV1Test extends AbstractScheduledApiTest {
 
   private EngineGetBlobsV1 method;
 
-  private static final Vertx vertx = Vertx.vertx();
-
   @BeforeEach
   public void beforeEach() {
     when(mergeContext.isSyncing()).thenReturn(false);
@@ -100,7 +103,17 @@ public class EngineGetBlobsV1Test extends AbstractScheduledApiTest {
     this.method =
         spy(
             new EngineGetBlobsV1(
-                vertx, protocolContext, protocolSchedule, engineCallListener, transactionPool));
+                new ConstructorArgumentsBuilder()
+                    .protocolSchedule(protocolSchedule)
+                    .protocolContext(protocolContext)
+                    .engineCallListener(engineCallListener)
+                    .ethPeers(mock(EthPeers.class))
+                    .metricsSystem(new NoOpMetricsSystem())
+                    .maxRequestBlocks(0)
+                    .transactionPool(transactionPool)
+                    .build(),
+                CANCUN,
+                OSAKA));
   }
 
   @Test

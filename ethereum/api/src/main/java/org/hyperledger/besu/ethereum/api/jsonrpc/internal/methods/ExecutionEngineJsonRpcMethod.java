@@ -25,6 +25,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcErrorR
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -33,8 +34,8 @@ import java.util.Optional;
 import java.util.function.Supplier;
 
 import com.fasterxml.jackson.databind.JsonMappingException;
-import io.vertx.core.Vertx;
 import org.immutables.value.Value;
+import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -47,30 +48,28 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
     INVALID_BLOCK_HASH;
   }
 
-  // Fields used by migrated series (currently engine_forkchoiceUpdatedV*, engine_newPayloadV*,
-  // engine_getPayloadV* and engine_getPayloadBodiesBy*
-  // — see the package README's migration status table). Not-yet-migrated series keep using the
-  // TRANSITIONAL SHIM constructors below instead of this record.
+  // Fields shared by every engine method series — see the package README's migration status
+  // table. Fields only some series read (e.g. mergeCoordinator is absent pre-merge,
+  // clientVersion/commit/transactionPool are read by a handful of series) are @Nullable rather
+  // than forcing every series/test to supply a value it doesn't use.
   @Value.Builder
   public record ConstructorArguments(
       ProtocolSchedule protocolSchedule,
       ProtocolContext protocolContext,
       EngineCallListener engineCallListener,
-      MergeMiningCoordinator mergeCoordinator,
+      @Nullable MergeMiningCoordinator mergeCoordinator,
       EthPeers ethPeers,
       MetricsSystem metricsSystem,
-      int maxRequestBlocks) {}
+      int maxRequestBlocks,
+      @Nullable String clientVersion,
+      @Nullable String commit,
+      @Nullable TransactionPool transactionPool) {}
 
   private static final Logger LOG = LoggerFactory.getLogger(ExecutionEngineJsonRpcMethod.class);
   public static final long ENGINE_API_LOGGING_THRESHOLD = 60000L;
   protected final Optional<MergeContext> mergeContextOptional;
   protected final Supplier<MergeContext> mergeContext;
   protected final ProtocolSchedule protocolSchedule;
-
-  // TRANSITIONAL SHIM (remove in cleanup PR): not-yet-migrated engine methods reference the
-  // protocol schedule as an Optional under this name; new methods use the non-optional field above.
-  protected final Optional<ProtocolSchedule> maybeProtocolSchedule;
-
   protected final ProtocolContext protocolContext;
   protected final EngineCallListener engineCallListener;
 
@@ -79,28 +78,6 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
 
   private final HardforkId minSupportedFork;
   private final HardforkId firstUnsupportedFork;
-
-  // TRANSITIONAL SHIM (remove in cleanup PR): old constructor signature used by not-yet-migrated
-  // engine methods (vertx-first, optional protocol schedule). The Vertx parameter is unused here —
-  // kept only so these methods' constructors (and their call sites/tests) don't need touching;
-  // only OrderedExecutionJsonRpcMethod (engine_forkchoiceUpdated / engine_newPayload) actually
-  // needs a Vertx instance.
-  protected ExecutionEngineJsonRpcMethod(
-      final Vertx vertx,
-      final ProtocolSchedule protocolSchedule,
-      final ProtocolContext protocolContext,
-      final EngineCallListener engineCallListener) {
-    this(protocolSchedule, protocolContext, engineCallListener, null, null);
-  }
-
-  // TRANSITIONAL SHIM (remove in cleanup PR): old constructor signature for methods that have no
-  // protocol schedule.
-  protected ExecutionEngineJsonRpcMethod(
-      final Vertx vertx,
-      final ProtocolContext protocolContext,
-      final EngineCallListener engineCallListener) {
-    this(null, protocolContext, engineCallListener, null, null);
-  }
 
   protected ExecutionEngineJsonRpcMethod(
       final ConstructorArguments constructorArguments,
@@ -121,7 +98,6 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
     this.protocolSchedule = protocolSchedule;
-    this.maybeProtocolSchedule = Optional.ofNullable(protocolSchedule);
     this.protocolContext = protocolContext;
     this.mergeContextOptional = protocolContext.safeConsensusContext(MergeContext.class);
     this.mergeContext = mergeContextOptional::orElseThrow;
@@ -206,9 +182,7 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
     return engineCallListener;
   }
 
-  // TRANSITIONAL: not 'final' yet (restored in cleanup PR) so not-yet-migrated engine methods can
-  // still override it; new methods inherit this implementation.
-  protected ValidationResult<RpcErrorType> validateForkSupported(final long blockTimestamp) {
+  protected final ValidationResult<RpcErrorType> validateForkSupported(final long blockTimestamp) {
     return ForkSupportHelper.validateForkSupported(
         minSupportedFork, minForkTimestamp, firstUnsupportedFork, maxForkTimestamp, blockTimestamp);
   }

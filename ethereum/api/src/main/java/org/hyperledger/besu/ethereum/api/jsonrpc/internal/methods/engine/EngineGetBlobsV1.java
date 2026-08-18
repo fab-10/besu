@@ -14,12 +14,9 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
-import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.CANCUN;
-import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.OSAKA;
-
 import org.hyperledger.besu.datatypes.BlobType;
+import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.datatypes.VersionedHash;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.exception.InvalidJsonRpcParameters;
@@ -32,15 +29,12 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlobAndProofV1;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 
-import io.vertx.core.Vertx;
 import jakarta.validation.constraints.NotNull;
 import org.jspecify.annotations.Nullable;
 
@@ -69,19 +63,13 @@ import org.jspecify.annotations.Nullable;
 public class EngineGetBlobsV1 extends ExecutionEngineJsonRpcMethod {
 
   private final TransactionPool transactionPool;
-  private final Optional<Long> cancunMilestone;
-  private final Optional<Long> osakaMilestone;
 
   public EngineGetBlobsV1(
-      final Vertx vertx,
-      final ProtocolContext protocolContext,
-      final ProtocolSchedule protocolSchedule,
-      final EngineCallListener engineCallListener,
-      final TransactionPool transactionPool) {
-    super(vertx, protocolContext, engineCallListener);
-    this.transactionPool = transactionPool;
-    this.cancunMilestone = protocolSchedule.milestoneFor(CANCUN);
-    this.osakaMilestone = protocolSchedule.milestoneFor(OSAKA);
+      final ConstructorArguments constructorArguments,
+      final HardforkId minSupportedFork,
+      final HardforkId firstUnsupportedFork) {
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    this.transactionPool = constructorArguments.transactionPool();
   }
 
   @Override
@@ -137,11 +125,5 @@ public class EngineGetBlobsV1 extends ExecutionEngineJsonRpcMethod {
     }
     return new BlobAndProofV1(
         bq.getBlob().getData().toHexString(), bq.getKzgProof().getFirst().getData().toHexString());
-  }
-
-  @Override
-  protected ValidationResult<RpcErrorType> validateForkSupported(final long currentTimestamp) {
-    return ForkSupportHelper.validateForkSupported(
-        CANCUN, cancunMilestone, OSAKA, osakaMilestone, currentTimestamp);
   }
 }

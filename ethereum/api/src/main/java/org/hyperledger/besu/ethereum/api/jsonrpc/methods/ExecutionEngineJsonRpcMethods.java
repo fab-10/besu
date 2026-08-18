@@ -116,17 +116,22 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
   @Override
   protected Map<String, JsonRpcMethod> create() {
     final EngineQosTimer engineQosTimer = new EngineQosTimer(consensusEngineServer);
-    if (mergeCoordinator.isPresent()) {
-      final ConstructorArguments constructorArguments =
-          new ConstructorArguments(
-              protocolSchedule,
-              protocolContext,
-              engineQosTimer,
-              mergeCoordinator.get(),
-              ethPeers,
-              metricsSystem,
-              GET_PAYLOAD_BODIES_MAX_REQUEST_SIZE);
+    // mergeCoordinator is absent pre-merge, when only EngineExchangeTransitionConfiguration is
+    // registered (see the else branch below) — every other field is always available.
+    final ConstructorArguments constructorArguments =
+        new ConstructorArguments(
+            protocolSchedule,
+            protocolContext,
+            engineQosTimer,
+            mergeCoordinator.orElse(null),
+            ethPeers,
+            metricsSystem,
+            GET_PAYLOAD_BODIES_MAX_REQUEST_SIZE,
+            clientVersion,
+            commit,
+            transactionPool);
 
+    if (mergeCoordinator.isPresent()) {
       List<JsonRpcMethod> executionEngineApisSupported = new ArrayList<>();
       executionEngineApisSupported.addAll(
           createEngineForkchoiceUpdatedMethods(constructorArguments));
@@ -139,43 +144,19 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
 
       executionEngineApisSupported.addAll(
           Arrays.asList(
-              new EngineExchangeTransitionConfiguration(
-                  consensusEngineServer, protocolContext, engineQosTimer),
-              new EngineExchangeCapabilities(
-                  consensusEngineServer, protocolContext, engineQosTimer),
-              new EngineGetClientVersionV1(
-                  consensusEngineServer, protocolContext, engineQosTimer, clientVersion, commit),
-              new EngineGetBlobsV1(
-                  consensusEngineServer,
-                  protocolContext,
-                  protocolSchedule,
-                  engineQosTimer,
-                  transactionPool)));
+              new EngineExchangeTransitionConfiguration(constructorArguments, null, null),
+              new EngineExchangeCapabilities(constructorArguments, null, null),
+              new EngineGetClientVersionV1(constructorArguments, null, null),
+              new EngineGetBlobsV1(constructorArguments, CANCUN, OSAKA)));
 
       if (protocolSchedule.milestoneFor(OSAKA).isPresent()) {
-        executionEngineApisSupported.add(
-            new EngineGetBlobsV2(
-                consensusEngineServer,
-                protocolContext,
-                protocolSchedule,
-                engineQosTimer,
-                transactionPool,
-                metricsSystem));
-        executionEngineApisSupported.add(
-            new EngineGetBlobsV3(
-                consensusEngineServer,
-                protocolContext,
-                protocolSchedule,
-                engineQosTimer,
-                transactionPool,
-                metricsSystem));
+        executionEngineApisSupported.add(new EngineGetBlobsV2(constructorArguments, OSAKA, null));
+        executionEngineApisSupported.add(new EngineGetBlobsV3(constructorArguments, OSAKA, null));
       }
 
       return mapOf(executionEngineApisSupported);
     } else {
-      return mapOf(
-          new EngineExchangeTransitionConfiguration(
-              consensusEngineServer, protocolContext, engineQosTimer));
+      return mapOf(new EngineExchangeTransitionConfiguration(constructorArguments, null, null));
     }
   }
 

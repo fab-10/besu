@@ -22,15 +22,18 @@ import static org.mockito.Mockito.verify;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
+import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.plugin.services.rpc.RpcResponseType;
 
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
-import io.vertx.core.Vertx;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -40,15 +43,29 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 public class EngineExchangeCapabilitiesTest {
   private EngineExchangeCapabilities method;
-  private static final Vertx vertx = Vertx.vertx();
 
   @Mock private ProtocolContext protocolContext;
 
   @Mock private EngineCallListener engineCallListener;
 
+  @Mock private ProtocolSchedule protocolSchedule;
+
+  @Mock private EthPeers ethPeers;
+
   @BeforeEach
   public void setUp() {
-    this.method = new EngineExchangeCapabilities(vertx, protocolContext, engineCallListener);
+    this.method =
+        new EngineExchangeCapabilities(
+            new ConstructorArgumentsBuilder()
+                .protocolSchedule(protocolSchedule)
+                .protocolContext(protocolContext)
+                .engineCallListener(engineCallListener)
+                .ethPeers(ethPeers)
+                .metricsSystem(new NoOpMetricsSystem())
+                .maxRequestBlocks(0)
+                .build(),
+            null,
+            null);
   }
 
   @Test

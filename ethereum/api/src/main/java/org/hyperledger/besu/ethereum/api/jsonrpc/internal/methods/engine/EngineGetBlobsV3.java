@@ -14,11 +14,9 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
-import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.OSAKA;
-
 import org.hyperledger.besu.datatypes.BlobType;
+import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.datatypes.VersionedHash;
-import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.exception.InvalidJsonRpcParameters;
@@ -31,7 +29,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlobAndProofV2;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
-import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -40,9 +37,7 @@ import org.hyperledger.besu.util.HexUtils;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Optional;
 
-import io.vertx.core.Vertx;
 import jakarta.validation.constraints.NotNull;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -73,17 +68,14 @@ public class EngineGetBlobsV3 extends ExecutionEngineJsonRpcMethod {
   private final Counter availableCounter;
   private final Counter partialResponseCounter;
   private final Counter fullResponseCounter;
-  private final Optional<Long> osakaMilestone;
 
   public EngineGetBlobsV3(
-      final Vertx vertx,
-      final ProtocolContext protocolContext,
-      final ProtocolSchedule protocolSchedule,
-      final EngineCallListener engineCallListener,
-      final TransactionPool transactionPool,
-      final MetricsSystem metricsSystem) {
-    super(vertx, protocolSchedule, protocolContext, engineCallListener);
-    this.transactionPool = transactionPool;
+      final ConstructorArguments constructorArguments,
+      final HardforkId minSupportedFork,
+      final HardforkId firstUnsupportedFork) {
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    this.transactionPool = constructorArguments.transactionPool();
+    final MetricsSystem metricsSystem = constructorArguments.metricsSystem();
     // create counters
     this.requestedCounter =
         metricsSystem.createCounter(
@@ -105,7 +97,6 @@ public class EngineGetBlobsV3 extends ExecutionEngineJsonRpcMethod {
             BesuMetricCategory.RPC,
             "execution_engine_getblobs_v3_full_total",
             "Number of calls to engine_getBlobsV3 that returned complete responses");
-    this.osakaMilestone = protocolSchedule.milestoneFor(OSAKA);
   }
 
   @Override
@@ -191,10 +182,5 @@ public class EngineGetBlobsV3 extends ExecutionEngineJsonRpcMethod {
         blobProofBundle.getKzgProof().parallelStream()
             .map(proof -> HexUtils.toFastHex(proof.getData(), true))
             .toList());
-  }
-
-  @Override
-  protected ValidationResult<RpcErrorType> validateForkSupported(final long currentTimestamp) {
-    return ForkSupportHelper.validateForkSupported(OSAKA, osakaMilestone, currentTimestamp);
   }
 }

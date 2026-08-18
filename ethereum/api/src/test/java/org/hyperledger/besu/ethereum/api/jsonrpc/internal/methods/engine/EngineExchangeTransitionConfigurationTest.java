@@ -29,6 +29,7 @@ import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.EngineExchangeTransitionConfigurationParameter;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
@@ -38,6 +39,9 @@ import org.hyperledger.besu.ethereum.core.BlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.ParsedExtraData;
+import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 import org.hyperledger.besu.plugin.services.rpc.RpcResponseType;
 
 import java.math.BigInteger;
@@ -46,7 +50,6 @@ import java.util.Optional;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.vertx.core.Vertx;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.units.bigints.UInt256;
@@ -60,7 +63,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 public class EngineExchangeTransitionConfigurationTest {
   private EngineExchangeTransitionConfiguration method;
-  private static final Vertx vertx = Vertx.vertx();
 
   @Mock private ProtocolContext protocolContext;
 
@@ -68,12 +70,26 @@ public class EngineExchangeTransitionConfigurationTest {
 
   @Mock private EngineCallListener engineCallListener;
 
+  @Mock private ProtocolSchedule protocolSchedule;
+
+  @Mock private EthPeers ethPeers;
+
   @BeforeEach
   public void setUp() {
     when(protocolContext.safeConsensusContext(Mockito.any())).thenReturn(Optional.of(mergeContext));
 
     this.method =
-        new EngineExchangeTransitionConfiguration(vertx, protocolContext, engineCallListener);
+        new EngineExchangeTransitionConfiguration(
+            new ConstructorArgumentsBuilder()
+                .protocolSchedule(protocolSchedule)
+                .protocolContext(protocolContext)
+                .engineCallListener(engineCallListener)
+                .ethPeers(ethPeers)
+                .metricsSystem(new NoOpMetricsSystem())
+                .maxRequestBlocks(0)
+                .build(),
+            null,
+            null);
   }
 
   @Test

@@ -19,13 +19,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineGetClientVersionResultV1;
+import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
+import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 
 import java.util.List;
 
-import io.vertx.core.Vertx;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
@@ -44,11 +47,18 @@ class EngineGetClientVersionV1Test {
   void before() {
     getClientVersion =
         new EngineGetClientVersionV1(
-            Mockito.mock(Vertx.class),
-            Mockito.mock(ProtocolContext.class),
-            Mockito.mock(EngineCallListener.class),
-            CLIENT_VERSION,
-            COMMIT);
+            new ConstructorArgumentsBuilder()
+                .protocolSchedule(Mockito.mock(ProtocolSchedule.class))
+                .protocolContext(Mockito.mock(ProtocolContext.class))
+                .engineCallListener(Mockito.mock(EngineCallListener.class))
+                .ethPeers(Mockito.mock(EthPeers.class))
+                .metricsSystem(new NoOpMetricsSystem())
+                .maxRequestBlocks(0)
+                .clientVersion(CLIENT_VERSION)
+                .commit(COMMIT)
+                .build(),
+            null,
+            null);
   }
 
   @Test
