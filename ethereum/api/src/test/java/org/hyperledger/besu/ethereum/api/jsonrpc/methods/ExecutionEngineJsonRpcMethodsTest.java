@@ -30,6 +30,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSucces
 import org.hyperledger.besu.ethereum.blockcreation.MiningCoordinator;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListConfiguration;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.trie.forest.ForestWorldStateArchive;
 import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.provider.PathBasedWorldStateProvider;
@@ -129,7 +130,8 @@ class ExecutionEngineJsonRpcMethodsTest {
             "testClient",
             "testCommit",
             mock(TransactionPool.class),
-            mock(MetricsSystem.class));
+            mock(MetricsSystem.class),
+            InclusionListConfiguration.DEFAULT);
 
     return methods.create();
   }
