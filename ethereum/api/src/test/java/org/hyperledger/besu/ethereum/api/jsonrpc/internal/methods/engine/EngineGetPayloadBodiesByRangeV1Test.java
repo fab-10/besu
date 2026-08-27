@@ -68,6 +68,7 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
   @Mock protected ProtocolContext protocolContext;
   @Mock protected EngineCallListener engineCallListener;
   @Mock protected MutableBlockchain blockchain;
+  @Mock protected TransactionPool transactionPool;
 
   @Override
   @BeforeEach
@@ -87,6 +88,7 @@ public class EngineGetPayloadBodiesByRangeV1Test extends AbstractScheduledApiTes
             .transactionPool(mock(TransactionPool.class))
             .ethPeers(mock(EthPeers.class))
             .metricsSystem(new NoOpMetricsSystem())
+            .transactionPool(transactionPool)
             .maxRequestBlocks(maxRequestBlocks)
             .build(),
         null,

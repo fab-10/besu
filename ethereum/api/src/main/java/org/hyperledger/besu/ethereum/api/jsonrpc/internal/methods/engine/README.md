@@ -11,6 +11,9 @@ Each method series (`engine_newPayloadV*`, `engine_getPayloadV*`, `engine_forkch
 is a **sealed class hierarchy mirroring the specification**: version N extends version N−1 and
 overrides only what its spec version adds or changes.
 
+- Engine methods execute concurrently by default. Engine methods that require ordering (FIFO)
+  must extend `OrderedExecutionJsonRpcMethod`. Examples being `EngineNewPayloadV1` and `EngineForkchoiceUpdatedV1` 
+  and associated sealed version hierarchies.
 - `EngineGetPayloadV1 permits EngineGetPayloadV2`, `... V5 permits EngineGetPayloadV6`, and the
   latest version is `final`. The same applies to the other series.
 - All versions extend `ExecutionEngineJsonRpcMethod`, which owns the fork-window validation
@@ -24,6 +27,13 @@ overrides only what its spec version adds or changes.
 - A version class overrides narrow, protected hooks of its parent (e.g. `createResponse`,
   `createExecutionPayload`, `validateParameters`, `validatePayloadAttributes`) — it never
   re-implements the request flow.
+- Method take a single `ExecutionEngineJsonRpcMethod.ConstructorArguments` record (built
+  via the generated `ConstructorArgumentsBuilder`) plus `(minSupportedFork, firstUnsupportedFork)`,
+  instead of a bespoke positional argument list per series — this is what lets `VersionScheduler`
+  build every version through one shared factory shape (see below). `ConstructorArguments` only
+  carries the fields the currently-migrated series need — mark a field `@Nullable` if only some
+  migrated series read it (e.g. `ethPeers`/`metricsSystem` are `engine_newPayloadV*`-only) — and
+  extend it (and its builder) when migrating a series that needs a field it doesn't have yet. 
 
 ### Registration and scheduling
 

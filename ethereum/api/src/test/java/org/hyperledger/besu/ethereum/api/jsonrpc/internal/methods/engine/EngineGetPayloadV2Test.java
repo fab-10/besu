@@ -57,6 +57,7 @@ public class EngineGetPayloadV2Test extends EngineGetPayloadV1Test {
             .transactionPool(transactionPool)
             .ethPeers(ethPeers)
             .metricsSystem(metricsSystem)
+            .transactionPool(transactionPool)
             .maxRequestBlocks(0)
             .build(),
         null,

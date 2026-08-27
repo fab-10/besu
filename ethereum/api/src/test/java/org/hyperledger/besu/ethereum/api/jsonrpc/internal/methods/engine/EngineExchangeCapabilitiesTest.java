@@ -53,8 +53,8 @@ public class EngineExchangeCapabilitiesTest {
 
   @Mock private EngineCallListener engineCallListener;
   @Mock private MergeMiningCoordinator mergeCoordinator;
-  @Mock private TransactionPool transactionPool;
   @Mock private EthPeers ethPeers;
+  @Mock private TransactionPool transactionPool;
 
   @BeforeEach
   public void setUp() {
@@ -66,9 +66,9 @@ public class EngineExchangeCapabilitiesTest {
                 .vertx(vertx)
                 .engineCallListener(engineCallListener)
                 .mergeCoordinator(mergeCoordinator)
-                .transactionPool(transactionPool)
                 .ethPeers(ethPeers)
                 .metricsSystem(new NoOpMetricsSystem())
+                .transactionPool(transactionPool)
                 .maxRequestBlocks(0)
                 .build());
   }

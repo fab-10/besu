@@ -90,7 +90,7 @@ public class EngineForkchoiceUpdatedBadAncestorIntegrationTest {
   private BadBlockManager badBlockManager;
   private MutableBlockchain blockchain;
   private MergeCoordinator mergeCoordinator;
-  private EngineForkchoiceUpdatedV3<PayloadAttributesV3> method;
+  private EngineForkchoiceUpdatedV3<PayloadAttributesV3, ?> method;
 
   @BeforeEach
   public void setUp() {
@@ -144,6 +144,7 @@ public class EngineForkchoiceUpdatedBadAncestorIntegrationTest {
                 .transactionPool(transactionPool)
                 .ethPeers(mock(EthPeers.class))
                 .metricsSystem(new NoOpMetricsSystem())
+                .transactionPool(transactionPool)
                 .maxRequestBlocks(0)
                 .build(),
             CANCUN,

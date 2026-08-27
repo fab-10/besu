@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.SHANGHAI;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineTestSupport.fromErrorResp;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType.UNSUPPORTED_FORK;
@@ -93,6 +94,7 @@ public class EngineGetPayloadV1Test extends AbstractScheduledApiTest {
   @Mock protected EngineCallListener engineCallListener;
   @Mock protected TransactionPool transactionPool;
   @Mock protected EthPeers ethPeers;
+  @Mock protected TransactionPool transactionPool;
   protected static final NoOpMetricsSystem metricsSystem = new NoOpMetricsSystem();
 
   @BeforeEach
@@ -124,6 +126,7 @@ public class EngineGetPayloadV1Test extends AbstractScheduledApiTest {
             .transactionPool(transactionPool)
             .ethPeers(ethPeers)
             .metricsSystem(metricsSystem)
+            .transactionPool(transactionPool)
             .maxRequestBlocks(0)
             .build(),
         null,
@@ -132,6 +135,25 @@ public class EngineGetPayloadV1Test extends AbstractScheduledApiTest {
 
   protected final void createMethod() {
     this.method = createMethodInstance();
+  }
+
+  @Test
+  public void shouldFailFastWhenMergeCoordinatorIsNull() {
+    var constructorArguments =
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .ethPeers(ethPeers)
+            .metricsSystem(metricsSystem)
+            .transactionPool(transactionPool)
+            .maxRequestBlocks(0)
+            .build();
+
+    assertThatThrownBy(() -> new EngineGetPayloadV1(constructorArguments, null, SHANGHAI))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessageContaining("mergeCoordinator must not be null");
   }
 
   @Test

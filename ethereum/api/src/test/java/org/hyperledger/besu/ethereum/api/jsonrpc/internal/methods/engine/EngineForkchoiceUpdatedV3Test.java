@@ -32,7 +32,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 
 import java.util.Collections;
@@ -49,7 +48,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 public class EngineForkchoiceUpdatedV3Test extends EngineForkchoiceUpdatedV2Test {
 
   @Override
-  protected EngineForkchoiceUpdatedV1<?> createMethodInstance() {
+  protected EngineForkchoiceUpdatedV1<?, ?> createMethodInstance() {
     return new EngineForkchoiceUpdatedV3<>(
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
@@ -59,7 +58,7 @@ public class EngineForkchoiceUpdatedV3Test extends EngineForkchoiceUpdatedV2Test
             .mergeCoordinator(mergeCoordinator)
             .ethPeers(mock(EthPeers.class))
             .metricsSystem(new NoOpMetricsSystem())
-            .transactionPool(mock(TransactionPool.class))
+            .transactionPool(transactionPool)
             .maxRequestBlocks(0)
             .build(),
         CANCUN,

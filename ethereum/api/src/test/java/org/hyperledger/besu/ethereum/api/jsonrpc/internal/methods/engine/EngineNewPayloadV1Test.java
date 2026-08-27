@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import static java.util.Collections.emptyList;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.SHANGHAI;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.EngineStatus.ACCEPTED;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.EngineStatus.INVALID;
@@ -27,6 +28,7 @@ import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErr
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType.UNSUPPORTED_FORK;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -107,6 +109,8 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
 
   @Mock protected EngineCallListener engineCallListener;
 
+  @Mock protected TransactionPool transactionPool;
+
   @BeforeEach
   @Override
   public void before() {
@@ -134,7 +138,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
             .mergeCoordinator(mergeCoordinator)
             .ethPeers(ethPeers)
             .metricsSystem(new NoOpMetricsSystem())
-            .transactionPool(mock(TransactionPool.class))
+            .transactionPool(transactionPool)
             .maxRequestBlocks(0)
             .build(),
         null,
@@ -143,6 +147,25 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
 
   private void createMethod() {
     this.method = createMethodInstance();
+  }
+
+  @Test
+  public void shouldFailFastWhenMergeCoordinatorIsNull() {
+    var constructorArguments =
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .ethPeers(ethPeers)
+            .metricsSystem(new NoOpMetricsSystem())
+            .transactionPool(transactionPool)
+            .maxRequestBlocks(0)
+            .build();
+
+    assertThatThrownBy(() -> new EngineNewPayloadV1<>(constructorArguments, null, SHANGHAI))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessageContaining("mergeCoordinator must not be null");
   }
 
   protected long getMinSupportedTimestamp() {
@@ -320,6 +343,7 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
   @Test
   public void shouldRespondWithSyncingDuringBackwardsSync() {
     BlockHeader mockHeader = createBlockHeader(getMinSupportedTimestamp());
+    when(mergeContext.isInitialSyncDone()).thenReturn(true);
     when(mergeCoordinator.appendNewPayloadToSync(any()))
         .thenReturn(CompletableFuture.completedFuture(null));
     var resp = resp(requestParams(mockEnginePayloadParam(mockHeader, emptyList())));
@@ -328,6 +352,21 @@ public class EngineNewPayloadV1Test extends AbstractScheduledApiTest {
     assertThat(res.getLatestValidHash()).isEmpty();
     assertThat(res.getStatusAsString()).isEqualTo(SYNCING.name());
     assertThat(res.getError()).isNull();
+    verify(mergeCoordinator).appendNewPayloadToSync(any());
+    verify(engineCallListener, times(1)).executionEngineCalled();
+  }
+
+  @Test
+  public void shouldNotAppendToBackwardSyncWhenInitialSyncNotDone() {
+    BlockHeader mockHeader = createBlockHeader(getMinSupportedTimestamp());
+    when(mergeContext.isInitialSyncDone()).thenReturn(false);
+    var resp = resp(requestParams(mockEnginePayloadParam(mockHeader, emptyList())));
+
+    PayloadStatusV1 res = fromSuccessResp(resp);
+    assertThat(res.getLatestValidHash()).isEmpty();
+    assertThat(res.getStatusAsString()).isEqualTo(SYNCING.name());
+    assertThat(res.getError()).isNull();
+    verify(mergeCoordinator, never()).appendNewPayloadToSync(any());
     verify(engineCallListener, times(1)).executionEngineCalled();
   }
 

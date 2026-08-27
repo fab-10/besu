@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.SHANGHAI;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.EngineStatus.INVALID;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.EngineStatus.SYNCING;
@@ -75,8 +76,8 @@ import org.mockito.quality.Strictness;
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
-  protected static final Consumer<BlockHeaderTestFixture> NO_OP = bhb -> {};
-  protected EngineForkchoiceUpdatedV1<?> method;
+  protected static final Consumer<BlockHeaderTestFixture> NO_OP = _ -> {};
+  protected EngineForkchoiceUpdatedV1<?, ?> method;
 
   protected static final Vertx vertx = Vertx.vertx();
   protected static final Hash mockHash = Hash.hash(Bytes32.fromHexStringLenient("0x1337deadbeef"));
@@ -93,6 +94,7 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
   @Mock protected MergeMiningCoordinator mergeCoordinator;
   @Mock protected MutableBlockchain blockchain;
   @Mock protected EngineCallListener engineCallListener;
+  @Mock protected TransactionPool transactionPool;
   @Mock protected WorldStateArchive worldStateArchive;
 
   @Override
@@ -109,7 +111,7 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
   }
 
   /** Returns the method factory for the version under test. Overridden by each subclass. */
-  protected EngineForkchoiceUpdatedV1<?> createMethodInstance() {
+  protected EngineForkchoiceUpdatedV1<?, ?> createMethodInstance() {
     return new EngineForkchoiceUpdatedV1<>(
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
@@ -119,7 +121,7 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
             .mergeCoordinator(mergeCoordinator)
             .ethPeers(mock(EthPeers.class))
             .metricsSystem(new NoOpMetricsSystem())
-            .transactionPool(mock(TransactionPool.class))
+            .transactionPool(transactionPool)
             .maxRequestBlocks(0)
             .build(),
         null,
@@ -128,6 +130,25 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
 
   private void createMethod() {
     this.method = createMethodInstance();
+  }
+
+  @Test
+  public void shouldFailFastWhenMergeCoordinatorIsNull() {
+    var constructorArguments =
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(vertx)
+            .engineCallListener(engineCallListener)
+            .ethPeers(mock(EthPeers.class))
+            .metricsSystem(new NoOpMetricsSystem())
+            .transactionPool(transactionPool)
+            .maxRequestBlocks(0)
+            .build();
+
+    assertThatThrownBy(() -> new EngineForkchoiceUpdatedV1<>(constructorArguments, null, SHANGHAI))
+        .isInstanceOf(NullPointerException.class)
+        .hasMessageContaining("mergeCoordinator must not be null");
   }
 
   protected long getMinSupportedTimestamp() {

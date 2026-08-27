@@ -64,6 +64,7 @@ public class EngineGetPayloadBodiesByRangeV2Test extends EngineGetPayloadBodiesB
             .transactionPool(mock(TransactionPool.class))
             .ethPeers(mock(EthPeers.class))
             .metricsSystem(new NoOpMetricsSystem())
+            .transactionPool(transactionPool)
             .maxRequestBlocks(maxRequestBlocks)
             .build(),
         null,

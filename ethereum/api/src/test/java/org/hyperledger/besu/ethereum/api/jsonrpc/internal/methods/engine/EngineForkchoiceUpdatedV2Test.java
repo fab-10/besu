@@ -37,7 +37,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.ForkchoiceUpda
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.WithdrawalsValidator;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 
@@ -56,7 +55,7 @@ public class EngineForkchoiceUpdatedV2Test extends EngineForkchoiceUpdatedV1Test
   private final long withdrawalsEnabledTimestamp = shanghaiHardfork.milestone();
 
   @Override
-  protected EngineForkchoiceUpdatedV1<?> createMethodInstance() {
+  protected EngineForkchoiceUpdatedV1<?, ?> createMethodInstance() {
     return new EngineForkchoiceUpdatedV2<>(
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
@@ -66,7 +65,7 @@ public class EngineForkchoiceUpdatedV2Test extends EngineForkchoiceUpdatedV1Test
             .mergeCoordinator(mergeCoordinator)
             .ethPeers(mock(EthPeers.class))
             .metricsSystem(new NoOpMetricsSystem())
-            .transactionPool(mock(TransactionPool.class))
+            .transactionPool(transactionPool)
             .maxRequestBlocks(0)
             .build(),
         PARIS,

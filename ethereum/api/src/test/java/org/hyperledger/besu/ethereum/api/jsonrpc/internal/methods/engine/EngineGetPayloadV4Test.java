@@ -61,6 +61,7 @@ public class EngineGetPayloadV4Test extends EngineGetPayloadV3Test {
             .transactionPool(transactionPool)
             .ethPeers(ethPeers)
             .metricsSystem(metricsSystem)
+            .transactionPool(transactionPool)
             .maxRequestBlocks(0)
             .build(),
         PRAGUE,

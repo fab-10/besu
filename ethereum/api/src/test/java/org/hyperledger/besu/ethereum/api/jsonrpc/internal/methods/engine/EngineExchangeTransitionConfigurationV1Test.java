@@ -28,13 +28,16 @@ import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.LogsBloomFilter;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.ProtocolContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcObjectMapperFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.TransitionConfigurationV1;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcErrorResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.EngineExchangeTransitionConfigurationResult;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
@@ -77,8 +80,8 @@ public class EngineExchangeTransitionConfigurationV1Test extends AbstractSchedul
   @Mock private EngineCallListener engineCallListener;
   @Mock private BlockHeader blockHeader;
   @Mock private MergeMiningCoordinator mergeCoordinator;
-  @Mock private TransactionPool transactionPool;
   @Mock private EthPeers ethPeers;
+  @Mock private TransactionPool transactionPool;
 
   @BeforeEach
   public void setUp() {
@@ -95,9 +98,9 @@ public class EngineExchangeTransitionConfigurationV1Test extends AbstractSchedul
                 .vertx(vertx)
                 .engineCallListener(engineCallListener)
                 .mergeCoordinator(mergeCoordinator)
-                .transactionPool(transactionPool)
                 .ethPeers(ethPeers)
                 .metricsSystem(new NoOpMetricsSystem())
+                .transactionPool(transactionPool)
                 .maxRequestBlocks(0)
                 .build(),
             null,
@@ -227,6 +230,30 @@ public class EngineExchangeTransitionConfigurationV1Test extends AbstractSchedul
     assertThat(res.get("terminalBlockHash"))
         .isEqualTo("0x0000000000000000000000000000000000000000000000000000000000000000");
     assertThat(res.get("terminalTotalDifficulty")).isEqualTo("0x0");
+  }
+
+  @Test
+  public void shouldRejectCallPostCancun() {
+    when(blockHeader.getTimestamp()).thenReturn(cancunHardfork.milestone());
+
+    var response = resp(new TransitionConfigurationV1(Difficulty.ZERO, Hash.ZERO, 0L));
+
+    assertThat(response.getType()).isEqualTo(RpcResponseType.ERROR);
+    assertThat(((JsonRpcErrorResponse) response).getErrorType())
+        .isEqualTo(RpcErrorType.UNSUPPORTED_FORK);
+  }
+
+  @Test
+  public void shouldSerializeRemoteConfigurationWithoutCyclicReference()
+      throws JsonProcessingException {
+    // regression guard for https://github.com/hyperledger/besu/pull/4357: the trace log line in
+    // EngineExchangeTransitionConfigurationV1 serializes the received parameter, and Difficulty /
+    // Hash self-reference when serialized by a mapper that does not know the Besu types.
+    final String json =
+        JsonRpcObjectMapperFactory.getResponseMapper()
+            .writeValueAsString(new TransitionConfigurationV1(Difficulty.of(24), Hash.ZERO, 100L));
+
+    assertThat(json).contains("\"terminalBlockNumber\":\"0x64\"");
   }
 
   private JsonRpcResponse resp(final TransitionConfigurationV1 param) {

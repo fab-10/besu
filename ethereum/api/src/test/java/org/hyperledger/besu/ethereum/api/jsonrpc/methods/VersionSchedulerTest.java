@@ -54,6 +54,7 @@ class VersionSchedulerTest {
           .transactionPool(mock(TransactionPool.class))
           .ethPeers(mock(EthPeers.class))
           .metricsSystem(new NoOpMetricsSystem())
+          .transactionPool(mock(TransactionPool.class))
           .maxRequestBlocks(0)
           .build();
 

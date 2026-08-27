@@ -46,6 +46,7 @@ public class EngineGetPayloadV5Test extends EngineGetPayloadV4Test {
             .transactionPool(transactionPool)
             .ethPeers(ethPeers)
             .metricsSystem(metricsSystem)
+            .transactionPool(transactionPool)
             .maxRequestBlocks(0)
             .build(),
         OSAKA,
