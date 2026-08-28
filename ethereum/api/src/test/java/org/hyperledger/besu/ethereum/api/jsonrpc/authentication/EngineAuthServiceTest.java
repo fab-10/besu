@@ -135,7 +135,7 @@ public class EngineAuthServiceTest {
   /**
    * The fast path compares the presented token against the cached one with MessageDigest.isEqual
    * rather than String.equals, so that a live bearer credential is not matched with a byte-by-byte
-   * early-exit comparison. These cases pin the comparison's correctness — a constant-time compare
+   * early-exit comparison. These cases pin the comparison's correctness — a timing-safe compare
    * that mishandles length or the final byte would still pass the plain cache-hit test above.
    */
   @Test
