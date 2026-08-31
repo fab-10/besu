@@ -38,6 +38,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineF
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetBlobsV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetBlobsV2;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetBlobsV3;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetBlobsV4;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetClientVersionV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetPayloadBodiesByHashV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineGetPayloadBodiesByHashV2;
@@ -72,6 +73,7 @@ import com.google.common.annotations.VisibleForTesting;
 import io.vertx.core.Vertx;
 
 public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
+
   private static final int GET_PAYLOAD_BODIES_MAX_REQUEST_SIZE = 1024;
 
   private final Optional<MergeMiningCoordinator> mergeCoordinator;
@@ -117,16 +119,15 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
   protected Map<String, JsonRpcMethod> create() {
     final EngineQosTimer engineQosTimer = new EngineQosTimer(consensusEngineServer);
     final ConstructorArgumentsBuilder constructorArgumentsBuilder =
-        new ConstructorArgumentsBuilder();
-    constructorArgumentsBuilder
-        .protocolSchedule(protocolSchedule)
-        .protocolContext(protocolContext)
-        .vertx(consensusEngineServer)
-        .transactionPool(transactionPool)
-        .metricsSystem(metricsSystem)
-        .ethPeers(ethPeers)
-        .engineCallListener(engineQosTimer)
-        .maxRequestBlocks(GET_PAYLOAD_BODIES_MAX_REQUEST_SIZE);
+        new ConstructorArgumentsBuilder()
+            .protocolSchedule(protocolSchedule)
+            .protocolContext(protocolContext)
+            .vertx(consensusEngineServer)
+            .engineCallListener(engineQosTimer)
+            .ethPeers(ethPeers)
+            .metricsSystem(metricsSystem)
+            .transactionPool(transactionPool)
+            .maxRequestBlocks(GET_PAYLOAD_BODIES_MAX_REQUEST_SIZE);
 
     if (mergeCoordinator.isPresent()) {
       final ConstructorArguments constructorArguments =
@@ -142,8 +143,8 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
           createGetPayloadBodiesByRangeMethods(constructorArguments));
       executionEngineApisSupported.addAll(
           createEngineExchangeTransitionConfigurationMethods(constructorArguments));
-
       executionEngineApisSupported.addAll(createGetBlobsMethods(constructorArguments));
+      executionEngineApisSupported.addAll(createGetBlobsV4Methods(constructorArguments));
 
       executionEngineApisSupported.addAll(
           Arrays.asList(
@@ -224,9 +225,19 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
 
   private Collection<? extends JsonRpcMethod> createGetBlobsMethods(
       final ConstructorArguments constructorArguments) {
-
+    // V2 and V3 both activate at Osaka and coexist from then on: V2 answers all-or-nothing, V3
+    // answers partially, so neither supersedes the other.
     return VersionScheduler.startsFrom(CANCUN, EngineGetBlobsV1::new)
         .thenFrom(OSAKA, EngineGetBlobsV2::new, EngineGetBlobsV3::new)
+        .build(constructorArguments);
+  }
+
+  private Collection<? extends JsonRpcMethod> createGetBlobsV4Methods(
+      final ConstructorArguments constructorArguments) {
+    // engine_getBlobsV4 is not the next version of the V1-V3 chain: it takes different request
+    // parameters and returns BlobCellsAndProofsV1 instead of BlobAndProofV1/V2, so it is its own
+    // standalone series that is simply added from Amsterdam on, leaving V2/V3 valid indefinitely.
+    return VersionScheduler.startsFrom(AMSTERDAM, EngineGetBlobsV4::new)
         .build(constructorArguments);
   }
 
@@ -253,10 +264,9 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
       return vs;
     }
 
-    static VersionScheduler startsFrom(
-        final HardforkId from, final EngineMethodFactory firstVersion) {
+    static VersionScheduler startsFrom(final HardforkId from, final EngineMethodFactory factory) {
       final VersionScheduler vs = new VersionScheduler();
-      vs.pendingMethods.add(new MethodVersionBuildData(firstVersion, from, null));
+      vs.pendingMethods.add(new MethodVersionBuildData(factory, from, null));
       return vs;
     }
 

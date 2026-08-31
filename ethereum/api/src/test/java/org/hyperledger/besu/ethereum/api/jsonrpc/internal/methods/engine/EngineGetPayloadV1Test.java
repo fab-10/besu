@@ -92,7 +92,6 @@ public class EngineGetPayloadV1Test extends AbstractScheduledApiTest {
   @Mock protected MergeContext mergeContext;
   @Mock protected MergeMiningCoordinator mergeMiningCoordinator;
   @Mock protected EngineCallListener engineCallListener;
-  @Mock protected TransactionPool transactionPool;
   @Mock protected EthPeers ethPeers;
   @Mock protected TransactionPool transactionPool;
   protected static final NoOpMetricsSystem metricsSystem = new NoOpMetricsSystem();

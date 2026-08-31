@@ -172,6 +172,15 @@ public abstract class ExecutionEngineJsonRpcMethod implements JsonRpcMethod {
     return engineCallListener;
   }
 
+  protected int getNumericVersion() {
+    final String name = getName();
+    final int vIndex = name.lastIndexOf('V');
+    if (vIndex < 0 || vIndex == name.length() - 1) {
+      throw new IllegalStateException("Cannot derive numeric version from method name: " + name);
+    }
+    return Integer.parseInt(name.substring(vIndex + 1));
+  }
+
   protected final ValidationResult<RpcErrorType> validateForkSupported(final long blockTimestamp) {
     return ForkSupportHelper.validateForkSupported(
         minSupportedFork, minForkTimestamp, firstUnsupportedFork, maxForkTimestamp, blockTimestamp);

@@ -30,10 +30,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlobAndProofV1
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
-import org.hyperledger.besu.metrics.BesuMetricCategory;
-import org.hyperledger.besu.plugin.services.MetricsSystem;
-import org.hyperledger.besu.plugin.services.metrics.Counter;
-import org.hyperledger.besu.plugin.services.metrics.LabelledMetric;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -71,12 +67,7 @@ public sealed class EngineGetBlobsV1<BAP extends BlobAndProofV1>
   private static final Logger LOG = LoggerFactory.getLogger(EngineGetBlobsV1.class);
   public static final int REQUEST_MAX_VERSIONED_HASHES = 128;
   protected final TransactionPool transactionPool;
-  private final LabelledMetric<Counter> requestedCounter;
-  private final LabelledMetric<Counter> availableCounter;
-  private final LabelledMetric<Counter> missingCounter;
-  private final LabelledMetric<Counter> unsupportedCounter;
-  private final LabelledMetric<Counter> fullCounter;
-  private final LabelledMetric<Counter> emptyCounter;
+  protected final GetBlobsMetrics getBlobsMetrics;
 
   public EngineGetBlobsV1(
       final ConstructorArguments constructorArguments,
@@ -84,46 +75,8 @@ public sealed class EngineGetBlobsV1<BAP extends BlobAndProofV1>
       final HardforkId firstUnsupportedFork) {
     super(constructorArguments, minSupportedFork, firstUnsupportedFork);
     this.transactionPool = constructorArguments.transactionPool();
-
-    final MetricsSystem metricsSystem = constructorArguments.metricsSystem();
-    // create counters
-    this.requestedCounter =
-        metricsSystem.createLabelledCounter(
-            BesuMetricCategory.RPC,
-            "execution_engine_getblobs_requested_total",
-            "Number of blobs requested via engine_getBlobsV*",
-            "version");
-    this.availableCounter =
-        metricsSystem.createLabelledCounter(
-            BesuMetricCategory.RPC,
-            "execution_engine_getblobs_available_total",
-            "Number of blobs requested via engine_getBlobsV* that are present in the blob pool",
-            "version");
-    this.missingCounter =
-        metricsSystem.createLabelledCounter(
-            BesuMetricCategory.RPC,
-            "execution_engine_getblobs_missing_total",
-            "Number of blobs requested via engine_getBlobsV* that are not present in the blob pool",
-            "version");
-    this.unsupportedCounter =
-        metricsSystem.createLabelledCounter(
-            BesuMetricCategory.RPC,
-            "execution_engine_getblobs_unsupported_total",
-            "Number of blobs requested via engine_getBlobsV* that have unsupported type",
-            "version");
-
-    this.fullCounter =
-        metricsSystem.createLabelledCounter(
-            BesuMetricCategory.RPC,
-            "execution_engine_getblobs_full_total",
-            "Number of calls to engine_getBlobsV* that returned all blobs",
-            "version");
-    this.emptyCounter =
-        metricsSystem.createLabelledCounter(
-            BesuMetricCategory.RPC,
-            "execution_engine_getblobs_empty_total",
-            "Number of calls to engine_getBlobsV* that returned zero blobs",
-            "version");
+    this.getBlobsMetrics =
+        new GetBlobsMetrics(constructorArguments.metricsSystem(), getNumericVersion());
   }
 
   @Override
@@ -173,7 +126,7 @@ public sealed class EngineGetBlobsV1<BAP extends BlobAndProofV1>
   }
 
   protected @NotNull List<BAP> getResultPartialMode(final VersionedHash[] versionedHashes) {
-    return fetchedBlobsData(versionedHashes).blobProofBundles().parallelStream()
+    return fetchedBlobsData(versionedHashes).blobProofBundles().stream()
         .map(this::getBlobAndProofResult)
         .toList();
   }
@@ -193,9 +146,9 @@ public sealed class EngineGetBlobsV1<BAP extends BlobAndProofV1>
   protected FetchedBlobsData fetchedBlobsData(final VersionedHash[] versionedHashes) {
     final ArrayList<BlobProofBundle> validBundles =
         new ArrayList<>(Collections.nCopies(versionedHashes.length, null));
-    requestedCounter.labels(getName()).inc(versionedHashes.length);
-    int missingBlobs = 0;
+    getBlobsMetrics.increaseRequested(versionedHashes.length);
     int unsupportedBlobs = 0;
+    int missingBlobs = 0;
     int foundBlobs = 0;
     for (int i = 0; i < versionedHashes.length; i++) {
       final VersionedHash hash = versionedHashes[i];
@@ -205,7 +158,7 @@ public sealed class EngineGetBlobsV1<BAP extends BlobAndProofV1>
         missingBlobs++;
         continue;
       }
-      if (isSupportedBlob(bundle)) {
+      if (isUnsupportedBlob(bundle)) {
         LOG.trace("Unsupported blob type {} for versioned hash: {}", bundle.getBlobType(), hash);
         unsupportedBlobs++;
         continue;
@@ -214,13 +167,13 @@ public sealed class EngineGetBlobsV1<BAP extends BlobAndProofV1>
       foundBlobs++;
     }
 
-    availableCounter.labels(getName()).inc(foundBlobs);
-    missingCounter.labels(getName()).inc(missingBlobs);
-    unsupportedCounter.labels(getName()).inc(unsupportedBlobs);
+    getBlobsMetrics.increaseAvailable(foundBlobs);
+    getBlobsMetrics.increaseMissing(missingBlobs);
+    getBlobsMetrics.increaseUnsupported(unsupportedBlobs);
     if (foundBlobs == versionedHashes.length) {
-      fullCounter.labels(getName()).inc();
-    } else if (foundBlobs == 0) {
-      emptyCounter.labels(getName()).inc();
+      getBlobsMetrics.increaseFull();
+    } else {
+      getBlobsMetrics.increasePartial();
     }
 
     LOG.debug(
@@ -233,7 +186,7 @@ public sealed class EngineGetBlobsV1<BAP extends BlobAndProofV1>
     return new FetchedBlobsData(validBundles, missingBlobs + unsupportedBlobs > 0);
   }
 
-  protected boolean isSupportedBlob(final BlobProofBundle blobProofBundle) {
+  protected boolean isUnsupportedBlob(final BlobProofBundle blobProofBundle) {
     return blobProofBundle.getBlobType() == BlobType.KZG_CELL_PROOFS;
   }
 

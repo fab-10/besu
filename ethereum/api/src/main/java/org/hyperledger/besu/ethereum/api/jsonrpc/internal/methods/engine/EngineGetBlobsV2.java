@@ -62,7 +62,7 @@ public sealed class EngineGetBlobsV2<BAP extends BlobAndProofV2> extends EngineG
   }
 
   @Override
-  protected boolean isSupportedBlob(final BlobProofBundle blobProofBundle) {
+  protected boolean isUnsupportedBlob(final BlobProofBundle blobProofBundle) {
     return blobProofBundle.getBlobType() == BlobType.KZG_PROOF;
   }
 

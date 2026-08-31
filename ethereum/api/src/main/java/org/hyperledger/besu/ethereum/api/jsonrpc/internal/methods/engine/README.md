@@ -31,9 +31,19 @@ overrides only what its spec version adds or changes.
   via the generated `ConstructorArgumentsBuilder`) plus `(minSupportedFork, firstUnsupportedFork)`,
   instead of a bespoke positional argument list per series — this is what lets `VersionScheduler`
   build every version through one shared factory shape (see below). `ConstructorArguments` only
-  carries the fields the currently-migrated series need — mark a field `@Nullable` if only some
-  migrated series read it (e.g. `ethPeers`/`metricsSystem` are `engine_newPayloadV*`-only) — and
-  extend it (and its builder) when migrating a series that needs a field it doesn't have yet. 
+  carries the fields the series actually need — mark a field `@Nullable` if only some series read
+  it (e.g. `mergeCoordinator` is absent for `engine_exchangeTransitionConfigurationV1`) — and
+  extend it (and its builder) when adding a series that needs a field it doesn't have yet.
+- The JSON data structures relevant to migrated series are sealed hierarchies too, mirroring the
+  spec versions: request parameters in `..internal.parameters` (`ExecutionPayloadV1..V4`,
+  `NewPayloadRequestParametersV1..V3`, `ForkchoiceStateV1`, `PayloadAttributesV1..V4`), results in
+  `..internal.results` (`PayloadStatusV1`, `ForkchoiceUpdatedResultV1`,
+  `EngineGetPayloadResultV1..V6`, `ExecutionPayloadBodiesV1..V2`, `BlobAndProofV1..V2`). Result
+  classes reuse the request-side payload hierarchy rather than re-declaring header fields:
+  `EngineGetPayloadResultV1` wraps an `ExecutionPayloadV1` via `@JsonValue`.
+- A version class overrides narrow, protected hooks of its parent (e.g. `createResponse`,
+  `createExecutionPayload`, `validateParameters`, `validatePayloadAttributes`) — it never
+  re-implements the request flow.
 
 ### Registration and scheduling
 
@@ -52,7 +62,31 @@ VersionScheduler.startsFromBeginningUntil(EngineGetPayloadV1.class, SHANGHAI)
 Not every series is a version-supersedes-version chain: in `engine_getPayloadBodiesBy*` V2 only adds
 an optional field, so V1 and V2 coexist permanently, with no fork window on either — use
 `VersionScheduler.alwaysActive(EngineGetPayloadBodiesByHashV1::new, EngineGetPayloadBodiesByHashV2::new)`
-for series like this instead of `startsFromBeginningUntil`/`thenFrom`.
+for series like this instead of `startsFromBeginningUntil`/`thenFrom`. Two versions can also share
+one fork window inside a chain — `thenFrom` takes varargs, which is how `engine_getBlobsV2` and
+`engine_getBlobsV3` (both introduced at Osaka, neither superseding the other) are scheduled:
+
+```java
+VersionScheduler.startsFromBeginningUntil(EngineGetBlobsV1::new, OSAKA)
+    .thenFrom(OSAKA, EngineGetBlobsV2::new, EngineGetBlobsV3::new)
+    .build(constructorArguments);
+```
+
+`VersionScheduler.startsFrom(<FORK>, EngineBarV1::new)` is the entry point for a **brand-new series
+with no earlier version**: one factory, active from `<FORK>` onward, with no upper bound, registered
+as its own independent chain. Use it instead of appending `.thenFrom(<FORK>, ...)` to an existing
+chain whenever the new method does not supersede that chain's current version — `thenFrom` closes
+the previous window at `<FORK>`, which would wrongly retire methods that stay valid.
+
+`engine_getBlobsV4` is exactly that case: despite looking like "the version after V3", it takes
+different request parameters (`versioned_blob_hashes` plus a new `indices_bitarray`), returns
+`BlobCellsAndProofsV1` rather than `BlobAndProofV1`/`V2`, and does not extend `EngineGetBlobsV3`.
+It is an *addition* at Amsterdam alongside V2/V3, which remain valid indefinitely, so it gets its
+own scheduler:
+
+```java
+VersionScheduler.startsFrom(AMSTERDAM, EngineGetBlobsV4::new).build(constructorArguments);
+```
 
 The scheduler instantiates each version with the right `(minSupportedFork, firstUnsupportedFork)`
 pair derived from the chain. Method names live in the `RpcMethod` enum;
@@ -96,7 +130,9 @@ Use the commits that introduced the current latest version as the exemplar
 3. Add `ENGINE_FOO_VN+1("engine_fooVN+1")` to `RpcMethod` (this also advertises it via
    `engine_exchangeCapabilities`).
 4. Extend the series' `VersionScheduler` chain in `ExecutionEngineJsonRpcMethods` with
-   `.thenFrom(<ACTIVATION_FORK>, EngineFooVN+1.class)`.
+   `.thenFrom(<ACTIVATION_FORK>, EngineFooVN+1::new)`. Only do this if VN+1 really supersedes VN;
+   if the "next version" is unrelated in request/response shape it belongs in its own chain via
+   `startsFrom(...)` — see `engine_getBlobsV4` under "Registration and scheduling".
 5. Add `EngineFooVN+1Test extends EngineFooVNTest`: override `createMethodInstance()`, the
    method-name test, the fork-window hooks, and any builder/assertion hooks; add tests only for
    the new behavior. All inherited tests must pass unmodified.
