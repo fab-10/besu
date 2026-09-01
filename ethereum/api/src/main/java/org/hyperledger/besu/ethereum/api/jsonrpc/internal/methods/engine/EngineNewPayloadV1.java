@@ -257,9 +257,10 @@ public sealed class EngineNewPayloadV1<
     //    the payload doesn't extend the canonical chain
     //    the payload hasn't been fully validated
     //    ancestors of a payload are known and comprise a well-formed chain.
+    /*
     if (maybeLatestValidAncestor.isEmpty()) {
       return respondWith(reqId, blockParam, null, ACCEPTED);
-    }
+    }*/
 
     final Hash latestValidAncestor = maybeLatestValidAncestor.get();
 
