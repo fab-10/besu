@@ -40,6 +40,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
@@ -61,6 +63,29 @@ class DebugTraceTransactionStepFactoryTest {
 
   private static final String EXPECTED_HASH =
       "0x1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef";
+
+  // createAsync only exists to exercise the async usage pattern in tests; it is not used in
+  // production, so it lives here rather than in DebugTraceTransactionStepFactory. It uses its own
+  // executor rather than CompletableFuture.supplyAsync's default ForkJoinPool.commonPool(), whose
+  // worker count is derived from Runtime.availableProcessors() and can be too small (or zero) on
+  // CPU-constrained CI runners, silently stalling the submitted task and hanging the test.
+  private static final ExecutorService ASYNC_TEST_EXECUTOR =
+      Executors.newCachedThreadPool(
+          runnable -> {
+            final Thread thread = new Thread(runnable, "debug-trace-transaction-step-test");
+            thread.setDaemon(true);
+            return thread;
+          });
+
+  private static Function<TransactionTrace, CompletableFuture<DebugTraceTransactionResult>>
+      createAsync(final TraceOptions traceOptions, final ProtocolSpec protocolSpec) {
+    return transactionTrace ->
+        CompletableFuture.supplyAsync(
+            () ->
+                DebugTraceTransactionStepFactory.create(traceOptions, protocolSpec)
+                    .apply(transactionTrace),
+            ASYNC_TEST_EXECUTOR);
+  }
 
   @BeforeEach
   void setUp() {
@@ -187,8 +212,7 @@ class DebugTraceTransactionStepFactoryTest {
   void shouldCreateAsyncFunctionForOpcodeTracer() throws Exception {
     // Given
     Function<TransactionTrace, CompletableFuture<DebugTraceTransactionResult>> asyncFunction =
-        DebugTraceTransactionStepFactory.createAsync(
-            new TraceOptions(TracerType.OPCODE_TRACER, null, null), mockProtocolSpec);
+        createAsync(new TraceOptions(TracerType.OPCODE_TRACER, null, null), mockProtocolSpec);
 
     // When
     CompletableFuture<DebugTraceTransactionResult> future =
@@ -210,7 +234,7 @@ class DebugTraceTransactionStepFactoryTest {
     // When
     TraceOptions traceOptions = new TraceOptions(tracerType, null, null);
     Function<TransactionTrace, CompletableFuture<DebugTraceTransactionResult>> asyncFunction =
-        DebugTraceTransactionStepFactory.createAsync(traceOptions, mockProtocolSpec);
+        createAsync(traceOptions, mockProtocolSpec);
 
     // Then
     assertThat(asyncFunction).isNotNull();
@@ -224,7 +248,7 @@ class DebugTraceTransactionStepFactoryTest {
     // Given
     TraceOptions traceOptions = new TraceOptions(tracerType, null, null);
     Function<TransactionTrace, CompletableFuture<DebugTraceTransactionResult>> asyncFunction =
-        DebugTraceTransactionStepFactory.createAsync(traceOptions, mockProtocolSpec);
+        createAsync(traceOptions, mockProtocolSpec);
 
     // When
     CompletableFuture<DebugTraceTransactionResult> future =
@@ -277,7 +301,7 @@ class DebugTraceTransactionStepFactoryTest {
     Function<TransactionTrace, DebugTraceTransactionResult> syncFunction =
         DebugTraceTransactionStepFactory.create(traceOptions, mockProtocolSpec);
     Function<TransactionTrace, CompletableFuture<DebugTraceTransactionResult>> asyncFunction =
-        DebugTraceTransactionStepFactory.createAsync(traceOptions, mockProtocolSpec);
+        createAsync(traceOptions, mockProtocolSpec);
 
     // When
     DebugTraceTransactionResult syncResult = syncFunction.apply(mockTransactionTrace);

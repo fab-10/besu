@@ -26,9 +26,6 @@ import org.hyperledger.besu.ethereum.debug.TraceOptions;
 import org.hyperledger.besu.ethereum.debug.TracerType;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.function.Function;
 
 import com.fasterxml.jackson.annotation.JsonGetter;
@@ -36,23 +33,11 @@ import com.fasterxml.jackson.annotation.JsonGetter;
 /**
  * Factory for creating transaction steps for various tracers.
  *
- * <p>This factory provides methods to create functions that process a {@link TransactionTrace} and
- * return a {@link DebugTraceTransactionResult} with the appropriate tracer result based on the
- * specified tracer type. Both synchronous and asynchronous processing options are available through
- * the {@code create} and {@code createAsync} methods respectively.
+ * <p>This factory provides a method to create a function that processes a {@link TransactionTrace}
+ * and returns a {@link DebugTraceTransactionResult} with the appropriate tracer result based on the
+ * specified tracer type.
  */
 public class DebugTraceTransactionStepFactory {
-
-  // Dedicated pool for createAsync, so this doesn't depend on ForkJoinPool.commonPool(), whose
-  // worker count is derived from Runtime.availableProcessors() and can be too small (or zero) on
-  // CPU-constrained hosts, silently stalling submitted tasks.
-  private static final ExecutorService ASYNC_EXECUTOR =
-      Executors.newCachedThreadPool(
-          runnable -> {
-            final Thread thread = new Thread(runnable, "debug-trace-transaction-step");
-            thread.setDaemon(true);
-            return thread;
-          });
 
   /**
    * Creates a function that processes a {@link TransactionTrace} and returns a {@link
@@ -107,23 +92,6 @@ public class DebugTraceTransactionStepFactory {
             return new DebugTraceTransactionResult(transactionTrace, result);
           };
     };
-  }
-
-  /**
-   * Creates an asynchronous function that processes a {@link TransactionTrace} and returns a {@link
-   * DebugTraceTransactionResult} with the appropriate tracer result based on the specified tracer
-   * type.
-   *
-   * @param traceOptions the options of tracer to use for processing the transaction trace
-   * @param protocolSpec the protocol spec for the block being traced
-   * @return an asynchronous function that processes a {@link TransactionTrace} and returns a {@link
-   *     DebugTraceTransactionResult} with the appropriate tracer result
-   */
-  public static Function<TransactionTrace, CompletableFuture<DebugTraceTransactionResult>>
-      createAsync(final TraceOptions traceOptions, final ProtocolSpec protocolSpec) {
-    return transactionTrace ->
-        CompletableFuture.supplyAsync(
-            () -> create(traceOptions, protocolSpec).apply(transactionTrace), ASYNC_EXECUTOR);
   }
 
   public static class UnimplementedTracerResult {
