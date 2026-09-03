@@ -27,6 +27,8 @@ import org.hyperledger.besu.ethereum.debug.TracerType;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpec;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.function.Function;
 
 import com.fasterxml.jackson.annotation.JsonGetter;
@@ -40,6 +42,17 @@ import com.fasterxml.jackson.annotation.JsonGetter;
  * the {@code create} and {@code createAsync} methods respectively.
  */
 public class DebugTraceTransactionStepFactory {
+
+  // Dedicated pool for createAsync, so this doesn't depend on ForkJoinPool.commonPool(), whose
+  // worker count is derived from Runtime.availableProcessors() and can be too small (or zero) on
+  // CPU-constrained hosts, silently stalling submitted tasks.
+  private static final ExecutorService ASYNC_EXECUTOR =
+      Executors.newCachedThreadPool(
+          runnable -> {
+            final Thread thread = new Thread(runnable, "debug-trace-transaction-step");
+            thread.setDaemon(true);
+            return thread;
+          });
 
   /**
    * Creates a function that processes a {@link TransactionTrace} and returns a {@link
@@ -110,7 +123,7 @@ public class DebugTraceTransactionStepFactory {
       createAsync(final TraceOptions traceOptions, final ProtocolSpec protocolSpec) {
     return transactionTrace ->
         CompletableFuture.supplyAsync(
-            () -> create(traceOptions, protocolSpec).apply(transactionTrace));
+            () -> create(traceOptions, protocolSpec).apply(transactionTrace), ASYNC_EXECUTOR);
   }
 
   public static class UnimplementedTracerResult {

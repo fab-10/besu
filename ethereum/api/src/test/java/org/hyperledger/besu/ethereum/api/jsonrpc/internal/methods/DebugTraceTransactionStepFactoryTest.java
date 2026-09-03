@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -192,7 +193,7 @@ class DebugTraceTransactionStepFactoryTest {
     // When
     CompletableFuture<DebugTraceTransactionResult> future =
         asyncFunction.apply(mockTransactionTrace);
-    DebugTraceTransactionResult result = future.get();
+    DebugTraceTransactionResult result = future.get(5, TimeUnit.SECONDS);
 
     // Then
     assertThat(future).isNotNull();
@@ -228,7 +229,7 @@ class DebugTraceTransactionStepFactoryTest {
     // When
     CompletableFuture<DebugTraceTransactionResult> future =
         asyncFunction.apply(mockTransactionTrace);
-    DebugTraceTransactionResult result = future.get();
+    DebugTraceTransactionResult result = future.get(5, TimeUnit.SECONDS);
 
     // Then
     assertThat(future).isNotNull();
@@ -280,7 +281,8 @@ class DebugTraceTransactionStepFactoryTest {
 
     // When
     DebugTraceTransactionResult syncResult = syncFunction.apply(mockTransactionTrace);
-    DebugTraceTransactionResult asyncResult = asyncFunction.apply(mockTransactionTrace).get();
+    DebugTraceTransactionResult asyncResult =
+        asyncFunction.apply(mockTransactionTrace).get(5, TimeUnit.SECONDS);
 
     // Then
     assertThat(asyncResult.getTxHash()).isEqualTo(syncResult.getTxHash());
