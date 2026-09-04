@@ -24,6 +24,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.JsonRpcPara
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.PayloadAttributesV4;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.eth.transactions.CellMask;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
@@ -62,7 +63,6 @@ public final class EngineForkchoiceUpdatedV4<
     extends EngineForkchoiceUpdatedV3<PA, FRP> {
 
   private static final Logger LOG = LoggerFactory.getLogger(EngineForkchoiceUpdatedV4.class);
-  private static final int CUSTODY_COLUMNS_BYTE_LENGTH = 16;
 
   private final TransactionPool transactionPool;
 
@@ -107,13 +107,14 @@ public final class EngineForkchoiceUpdatedV4<
           RpcErrorType.INVALID_CUSTODY_COLUMNS_PARAMS,
           e);
     }
-    // If custodyColumns is provided (non-null), the following rules apply:
-    // custodyColumns MUST be a 16-byte DATA value. If it is not, the client software MUST return
-    // -32602: Invalid params.
-    if (custodyColumns.isPresent() && custodyColumns.get().size() != CUSTODY_COLUMNS_BYTE_LENGTH) {
+
+      // If custodyColumns is provided (non-null), the following rules apply:
+      // custodyColumns MUST be a 16-byte DATA value. If it is not, the client software MUST return
+      // -32602: Invalid params.
+    if (custodyColumns.isPresent() && custodyColumns.get().size() != CellMask.BYTE_LENGTH) {
       throw new InvalidRequestParametersException(
           "custodyColumns must be %d bytes, got %d"
-              .formatted(CUSTODY_COLUMNS_BYTE_LENGTH, custodyColumns.get().size()),
+              .formatted(CellMask.BYTE_LENGTH, custodyColumns.get().size()),
           RpcErrorType.INVALID_CUSTODY_COLUMNS_PARAMS);
     }
     return custodyColumns;
@@ -132,6 +133,7 @@ public final class EngineForkchoiceUpdatedV4<
     // processing flow of this method.
     requestParameters
         .custodyColumns()
+        .map(CellMask::fromBytes)
         .ifPresent(
             custodyColumns -> {
               try {

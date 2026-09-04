@@ -117,16 +117,18 @@ public sealed class EngineForkchoiceUpdatedV1<
       return new JsonRpcErrorResponse(requestId, e.getRpcErrorType());
     }
 
-    applyUnverifiedRequestParameters(requestParameters);
-
     final ForkchoiceStateV1 forkChoice = requestParameters.forkchoiceState();
     final Optional<? extends PA> maybePayloadAttributes = requestParameters.payloadAttributes();
 
-    // Structural parameter check (-32602) — must happen before any FCU processing.
+    // Structural parameter check (-32602) — must happen before any FCU processing, including
+    // applyRequestParameters() below (e.g. custody-column adoption must not run for a request
+    // that's about to be rejected as malformed).
     final ValidationResult<RpcErrorType> structResult = validateForkchoiceStateParams(forkChoice);
     if (!structResult.isValid()) {
       return new JsonRpcErrorResponse(requestId, structResult);
     }
+
+     applyUnverifiedRequestParameters(requestParameters);
 
     if (mergeCoordinator.isBadBlock(forkChoice.getHeadBlockHash())) {
       logFCU(INVALID, forkChoice);

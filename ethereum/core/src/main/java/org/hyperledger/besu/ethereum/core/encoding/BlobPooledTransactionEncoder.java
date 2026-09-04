@@ -33,6 +33,11 @@ public class BlobPooledTransactionEncoder {
       "Transaction with no blobsWithCommitments cannot be encoded for Pooled Transaction";
 
   public static void encode(final Transaction transaction, final RLPOutput out) {
+    encode(transaction, out, true);
+  }
+
+  public static void encode(
+      final Transaction transaction, final RLPOutput out, final boolean includeBlobPayload) {
     LOG.trace("Encoding transaction with blobs {}", transaction);
     var blobsWithCommitments = transaction.getBlobsWithCommitments();
     if (blobsWithCommitments.isEmpty() || blobsWithCommitments.get().getBlobs().isEmpty()) {
@@ -43,7 +48,11 @@ public class BlobPooledTransactionEncoder {
     if (blobsWithCommitments.get().getBlobType() == KZG_CELL_PROOFS) {
       out.writeIntScalar(blobsWithCommitments.get().getBlobType().getVersionId());
     }
-    out.writeList(blobsWithCommitments.get().getBlobs(), Blob::writeTo);
+    if (includeBlobPayload) {
+      out.writeList(blobsWithCommitments.get().getBlobs(), Blob::writeTo);
+    } else {
+      out.writeNull();
+    }
     out.writeList(blobsWithCommitments.get().getKzgCommitments(), KZGCommitment::writeTo);
     out.writeList(blobsWithCommitments.get().getKzgProofs(), KZGProof::writeTo);
     out.endList();
