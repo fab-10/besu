@@ -24,6 +24,7 @@ import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.rlp.RLPOutput;
 
 import java.security.InvalidParameterException;
+import java.util.List;
 
 import org.slf4j.Logger;
 
@@ -32,8 +33,9 @@ public class BlobPooledTransactionEncoder {
   static final String NO_BLOBS_ERROR =
       "Transaction with no blobsWithCommitments cannot be encoded for Pooled Transaction";
 
-  public static void encode(final Transaction transaction, final RLPOutput out) {
-    LOG.trace("Encoding transaction with blobs {}", transaction);
+  public static void encode(
+      final Transaction transaction, final boolean elideBlobs, final RLPOutput out) {
+    LOG.trace("Encoding transaction with blobs {}, blobs elision {}", transaction, elideBlobs);
     var blobsWithCommitments = transaction.getBlobsWithCommitments();
     if (blobsWithCommitments.isEmpty() || blobsWithCommitments.get().getBlobs().isEmpty()) {
       throw new InvalidParameterException(NO_BLOBS_ERROR);
@@ -43,7 +45,15 @@ public class BlobPooledTransactionEncoder {
     if (blobsWithCommitments.get().getBlobType() == KZG_CELL_PROOFS) {
       out.writeIntScalar(blobsWithCommitments.get().getBlobType().getVersionId());
     }
-    out.writeList(blobsWithCommitments.get().getBlobs(), Blob::writeTo);
+    if (elideBlobs) {
+      out.writeList(
+          List.of(),
+          (_, _) -> {
+            throw new IllegalStateException("Internal error: must not be called for an empty list");
+          });
+    } else {
+      out.writeList(blobsWithCommitments.get().getBlobs(), Blob::writeTo);
+    }
     out.writeList(blobsWithCommitments.get().getKzgCommitments(), KZGCommitment::writeTo);
     out.writeList(blobsWithCommitments.get().getKzgProofs(), KZGProof::writeTo);
     out.endList();
