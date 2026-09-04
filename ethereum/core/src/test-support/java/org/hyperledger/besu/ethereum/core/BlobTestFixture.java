@@ -22,6 +22,7 @@ import org.hyperledger.besu.datatypes.VersionedHash;
 import org.hyperledger.besu.ethereum.core.kzg.Blob;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGCommitment;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 
@@ -64,7 +65,12 @@ public class BlobTestFixture {
           case KZG_CELL_PROOFS -> computeBlobKzgProofs(blob);
         };
     return new BlobProofBundle(
-        blobType, blob, kzgCommitment, proofs, hashCommitment(new KZGCommitment(commitment)));
+        blobType,
+        blob,
+        kzgCommitment,
+        proofs,
+        hashCommitment(new KZGCommitment(commitment)),
+        CellMask.FULL);
   }
 
   public BlobsWithCommitments createBlobsWithCommitments(final int blobCount) {
@@ -80,7 +86,7 @@ public class BlobTestFixture {
       versionedHashes.add(blobProofBundle.getVersionedHash());
     }
     return new BlobsWithCommitments(
-        BlobType.KZG_PROOF, commitments, blobs, proofs, versionedHashes);
+        BlobType.KZG_PROOF, commitments, blobs, proofs, versionedHashes, CellMask.FULL);
   }
 
   private VersionedHash hashCommitment(final KZGCommitment commitment) {

@@ -159,7 +159,7 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
   }
 
   private List<Integer> cellIndexesFor(final Bytes indicesBitarray) {
-    final List<Integer> indexes = new ArrayList<>();
+    final List<Integer> indexes = new ArrayList<>(CKZG4844Helper.CELL_PROOFS_PER_BLOB);
     for (int i = 0; i < CKZG4844Helper.CELL_PROOFS_PER_BLOB; i++) {
       final int byteIndex = i / Byte.SIZE;
       final int bitIndex = i % Byte.SIZE;

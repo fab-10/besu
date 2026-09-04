@@ -36,28 +36,42 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
   private final List<BlobProofBundle> blobProofBundles;
 
   /**
-   * Constructs a {@link BlobsWithCommitments} instance from a list of {@link BlobProofBundle}.
+   * Constructs an instance from a list of {@link BlobProofBundle}.
    *
    * @param blobProofBundles the list of blob proof bundles to be attached to the transaction.
    */
   public BlobsWithCommitments(final List<BlobProofBundle> blobProofBundles) {
     checkArgument(!blobProofBundles.isEmpty(), "BlobProofBundles list cannot be empty");
+
     BlobType blobType = blobProofBundles.getFirst().getBlobType();
     checkArgument(
-        blobProofBundles.stream().allMatch(bundle -> bundle.getBlobType() == blobType),
+        blobProofBundles.stream()
+            .skip(1)
+            .map(BlobProofBundle::getBlobType)
+            .allMatch(blobType::equals),
         "BlobProofBundles must have the same BlobType");
+
+    final CellMask firstCellMask = blobProofBundles.getFirst().getCellMask();
+    checkArgument(
+        blobProofBundles.stream()
+            .skip(1)
+            .map(BlobProofBundle::getCellMask)
+            .allMatch(firstCellMask::equals),
+        "BlobProofBundles must have the same cell mask");
+
     this.blobProofBundles = blobProofBundles;
     this.blobType = blobType;
   }
 
   /**
-   * Constructs a {@link BlobsWithCommitments} instance.
+   * Constructs an instance.
    *
    * @param blobType blobType for the sidecar.
    * @param kzgCommitments commitments for the blobs.
    * @param blobs list of blobs to be committed to.
    * @param kzgProofs proofs for the commitments.
    * @param versionedHashes hashes of the commitments.
+   * @param cellMask cell mask for the blobs.
    * @throws InvalidParameterException if the input parameters are invalid.
    */
   public BlobsWithCommitments(
@@ -65,10 +79,12 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
       final List<KZGCommitment> kzgCommitments,
       final List<Blob> blobs,
       final List<KZGProof> kzgProofs,
-      final List<VersionedHash> versionedHashes) {
+      final List<VersionedHash> versionedHashes,
+      final CellMask cellMask) {
     validateInputParameters(blobType, kzgCommitments, blobs, kzgProofs, versionedHashes);
     this.blobProofBundles =
-        buildBlobProofBundles(blobType, kzgCommitments, blobs, kzgProofs, versionedHashes);
+        buildBlobProofBundles(
+            blobType, kzgCommitments, blobs, kzgProofs, versionedHashes, cellMask);
     this.blobType = blobType;
   }
 
@@ -77,7 +93,8 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
       final List<KZGCommitment> kzgCommitments,
       final List<Blob> blobs,
       final List<KZGProof> kzgProofs,
-      final List<VersionedHash> versionedHashes) {
+      final List<VersionedHash> versionedHashes,
+      final CellMask cellMask) {
     return IntStream.range(0, blobs.size())
         .mapToObj(
             index -> {
@@ -87,7 +104,8 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
                   blobs.get(index),
                   kzgCommitments.get(index),
                   kzgProofsForBlob,
-                  versionedHashes.get(index));
+                  versionedHashes.get(index),
+                  cellMask);
             })
         .toList();
   }
@@ -267,6 +285,10 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
       }
     }
     return cellIndices;
+  }
+
+  public CellMask getCellMask() {
+    return blobProofBundles.getFirst().getCellMask();
   }
 
   @Override

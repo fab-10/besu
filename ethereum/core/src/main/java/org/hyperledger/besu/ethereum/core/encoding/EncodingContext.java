@@ -31,11 +31,32 @@ package org.hyperledger.besu.ethereum.core.encoding;
  */
 public enum EncodingContext {
   /** Represents the context where the transaction is part of a block body. */
-  BLOCK_BODY,
+  BLOCK_BODY(true),
 
   /**
    * Represents the context where the transaction is part of a transaction pool. This context is
    * also used when encoding transactions for RPC calls related to the transaction pool.
    */
-  POOLED_TRANSACTION,
+  POOLED_TRANSACTION(false),
+  POOLED_TRANSACTION_ETH_72(false, true);
+
+  private final boolean encodeForBlock;
+  private final boolean elideBlobs;
+
+  EncodingContext(final boolean encodeForBlock) {
+    this(encodeForBlock, false);
+  }
+
+  EncodingContext(final boolean encodeForBlock, final boolean elideBlobs) {
+    this.encodeForBlock = encodeForBlock;
+    this.elideBlobs = elideBlobs;
+  }
+
+  public boolean encodeForBlock() {
+    return encodeForBlock;
+  }
+
+  public boolean elideBlobs() {
+    return elideBlobs;
+  }
 }

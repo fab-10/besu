@@ -96,7 +96,8 @@ public class CKZG4844Helper {
         bundle.getBlob(),
         bundle.getKzgCommitment(),
         kzgCellProofs,
-        bundle.getVersionedHash());
+        bundle.getVersionedHash(),
+        CellMask.FULL);
   }
 
   /**
