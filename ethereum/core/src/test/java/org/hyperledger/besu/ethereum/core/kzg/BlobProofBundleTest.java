@@ -44,7 +44,8 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
   @Test
   void shouldSucceedWithValidInputsV0() {
     BlobProofBundle bundle =
-        new BlobProofBundle(BlobType.KZG_PROOF, blob, kzgCommitment, kzgProofs, versionedHash);
+        new BlobProofBundle(
+            BlobType.KZG_PROOF, blob, kzgCommitment, kzgProofs, versionedHash, CellMask.FULL);
 
     assertEquals(BlobType.KZG_PROOF, bundle.getBlobType());
     assertEquals(blob, bundle.getBlob());
@@ -58,7 +59,9 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
     IllegalArgumentException exception =
         assertThrows(
             IllegalArgumentException.class,
-            () -> new BlobProofBundle(BlobType.KZG_PROOF, blob, null, kzgProofs, versionedHash));
+            () ->
+                new BlobProofBundle(
+                    BlobType.KZG_PROOF, blob, null, kzgProofs, versionedHash, CellMask.FULL));
     assertEquals("kzgCommitment must not be empty", exception.getMessage());
   }
 
@@ -67,7 +70,9 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
     IllegalArgumentException exception =
         assertThrows(
             IllegalArgumentException.class,
-            () -> new BlobProofBundle(BlobType.KZG_PROOF, blob, kzgCommitment, kzgProofs, null));
+            () ->
+                new BlobProofBundle(
+                    BlobType.KZG_PROOF, blob, kzgCommitment, kzgProofs, null, CellMask.FULL));
     assertEquals("versionedHash must not be empty", exception.getMessage());
   }
 
@@ -78,7 +83,12 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
             IllegalArgumentException.class,
             () ->
                 new BlobProofBundle(
-                    BlobType.KZG_PROOF, null, kzgCommitment, kzgProofs, versionedHash));
+                    BlobType.KZG_PROOF,
+                    null,
+                    kzgCommitment,
+                    kzgProofs,
+                    versionedHash,
+                    CellMask.FULL));
     assertEquals("blob must not be empty", exception.getMessage());
   }
 
@@ -88,7 +98,8 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                new BlobProofBundle(BlobType.KZG_PROOF, blob, kzgCommitment, null, versionedHash));
+                new BlobProofBundle(
+                    BlobType.KZG_PROOF, blob, kzgCommitment, null, versionedHash, CellMask.FULL));
     assertEquals("kzgProof must not be empty", exception.getMessage());
   }
 
@@ -99,7 +110,12 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
             IllegalArgumentException.class,
             () ->
                 new BlobProofBundle(
-                    BlobType.KZG_PROOF, blob, kzgCommitment, kzgCellProofs, versionedHash));
+                    BlobType.KZG_PROOF,
+                    blob,
+                    kzgCommitment,
+                    kzgCellProofs,
+                    versionedHash,
+                    CellMask.FULL));
     assertEquals(
         "Invalid kzgProof size for versionId 0, expected 1 but got 128", exception.getMessage());
   }
@@ -111,7 +127,12 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
             IllegalArgumentException.class,
             () ->
                 new BlobProofBundle(
-                    BlobType.KZG_CELL_PROOFS, blob, kzgCommitment, kzgProofs, versionedHash));
+                    BlobType.KZG_CELL_PROOFS,
+                    blob,
+                    kzgCommitment,
+                    kzgProofs,
+                    versionedHash,
+                    CellMask.FULL));
     assertEquals(
         "Invalid kzgProof size for versionId 1, expected 128 but got 1", exception.getMessage());
   }

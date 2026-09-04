@@ -14,7 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.core.kzg;
 
-import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.VersionedHash;
@@ -34,6 +34,7 @@ public final class BlobProofBundle {
   private final List<KZGProof> kzgProof;
   private final VersionedHash versionedHash;
   private final Bytes blobCells;
+  private final CellMask cellMask;
 
   /**
    * @param blobType the type of the blob
@@ -41,17 +42,21 @@ public final class BlobProofBundle {
    * @param kzgCommitment the KZG commitment for the blob.
    * @param kzgProof the KZG proof for the blob.
    * @param versionedHash the versioned hash of the blob.
+   * @param cellMask the cell mask for the blob.
    */
   public BlobProofBundle(
       final BlobType blobType,
       final Blob blob,
       final KZGCommitment kzgCommitment,
       final List<KZGProof> kzgProof,
-      final VersionedHash versionedHash) {
-    checkArgument(kzgCommitment != null, "kzgCommitment must not be empty");
-    checkArgument(versionedHash != null, "versionedHash must not be empty");
-    checkArgument(blob != null, "blob must not be empty");
-    checkArgument(kzgProof != null, "kzgProof must not be empty");
+      final VersionedHash versionedHash,
+      final CellMask cellMask) {
+    checkNotNull(kzgCommitment, "kzgCommitment must not be null");
+    checkNotNull(versionedHash, "versionedHash must not be null");
+    // eth/72 blob can be null
+    // checkNotNull(blob, "blob must not be null");
+    checkNotNull(kzgProof, "kzgProof must not be null");
+    checkNotNull(cellMask, "cellMask must not be null");
     if (blobType == BlobType.KZG_PROOF && kzgProof.size() != 1) {
       String errorMessage =
           "Invalid kzgProof size for versionId 0, expected 1 but got " + kzgProof.size();
@@ -71,7 +76,8 @@ public final class BlobProofBundle {
     this.kzgCommitment = kzgCommitment;
     this.kzgProof = kzgProof;
     this.versionedHash = versionedHash;
-    this.blobCells = computeCells(blob, blobType);
+    this.blobCells = blob != null ? computeCells(blob, blobType) : null;
+    this.cellMask = cellMask;
   }
 
   private Bytes computeCells(final Blob blob, final BlobType blobType) {
@@ -103,6 +109,10 @@ public final class BlobProofBundle {
 
   public Optional<Bytes> getBlobCellsBytes() {
     return Optional.ofNullable(blobCells);
+  }
+
+  public CellMask getCellMask() {
+    return cellMask;
   }
 
   @Override

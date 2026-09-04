@@ -39,6 +39,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.core.kzg.Blob;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGCommitment;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
@@ -226,7 +227,7 @@ class BlobSizeTransactionSelectorTest {
         tx.versionedHashes(Optional.of(versionHashes));
         final var blobsWithCommitments =
             new BlobsWithCommitments(
-                BlobType.KZG_PROOF, kgzCommitments, blobs, kzgProofs, versionHashes);
+                BlobType.KZG_PROOF, kgzCommitments, blobs, kzgProofs, versionHashes, CellMask.FULL);
         tx.blobsWithCommitments(Optional.of(blobsWithCommitments));
       } else {
         fail("At least 1 blob is required for blob tx type");

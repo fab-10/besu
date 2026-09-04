@@ -14,6 +14,8 @@
  */
 package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 
+import static org.hyperledger.besu.ethereum.eth.core.transactions.DevP2PUtils.createPooledTransactionsMessage;
+
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
 import org.hyperledger.besu.ethereum.core.Transaction;
@@ -56,7 +58,7 @@ public class GetPooledTransactionsFromPeerTaskTest {
 
     Transaction transaction = GENERATOR.transaction();
     PooledTransactionsMessage pooledTransactionsMessage =
-        PooledTransactionsMessage.create(List.of(transaction));
+        createPooledTransactionsMessage(List.of(transaction));
 
     List<Transaction> result = task.processResponse(pooledTransactionsMessage, AGREED_CAPABILITIES);
 
@@ -69,7 +71,7 @@ public class GetPooledTransactionsFromPeerTaskTest {
     GetPooledTransactionsFromPeerTask task = new GetPooledTransactionsFromPeerTask(hashes);
 
     PooledTransactionsMessage pooledTransactionsMessage =
-        PooledTransactionsMessage.create(List.of(GENERATOR.transaction(), GENERATOR.transaction()));
+        createPooledTransactionsMessage(List.of(GENERATOR.transaction(), GENERATOR.transaction()));
 
     InvalidPeerTaskResponseException exception =
         Assertions.assertThrows(
