@@ -21,7 +21,10 @@ import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
+import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.RawMessage;
+import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 
 import java.util.Arrays;
 import java.util.List;
@@ -43,7 +46,7 @@ public class PooledTransactionsMessageTest {
                 .value(Wei.of(1337))
                 .payload(Bytes.EMPTY)
                 .signAndBuild(SignatureAlgorithmFactory.getInstance().generateKeyPair()));
-    final PooledTransactionsMessage msg = PooledTransactionsMessage.create(tx);
+    final PooledTransactionsMessage msg = createPooledTransactionsMessage(tx);
     assertThat(msg.getCode()).isEqualTo(EthProtocolMessages.POOLED_TRANSACTIONS);
     assertThat(msg.transactions()).isEqualTo(tx);
   }
@@ -54,5 +57,16 @@ public class PooledTransactionsMessageTest {
 
     assertThatExceptionOfType(IllegalArgumentException.class)
         .isThrownBy(() -> PooledTransactionsMessage.readFrom(rawMsg));
+  }
+
+  private static PooledTransactionsMessage createPooledTransactionsMessage(
+      final List<Transaction> transactions) {
+    final BytesValueRLPOutput out = new BytesValueRLPOutput();
+    out.writeList(
+        transactions,
+        (transaction, rlpOutput) ->
+            TransactionEncoder.encodeRLP(
+                transaction, rlpOutput, EncodingContext.POOLED_TRANSACTION));
+    return PooledTransactionsMessage.createUnsafe(out.encoded());
   }
 }

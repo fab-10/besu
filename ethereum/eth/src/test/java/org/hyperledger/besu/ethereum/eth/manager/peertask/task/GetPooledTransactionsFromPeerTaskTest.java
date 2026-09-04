@@ -17,6 +17,8 @@ package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
+import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.InvalidPeerTaskResponseException;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.MalformedRlpFromPeerException;
@@ -24,6 +26,7 @@ import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskValidationResp
 import org.hyperledger.besu.ethereum.eth.messages.PooledTransactionsMessage;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
+import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 
 import java.util.List;
 import java.util.Set;
@@ -56,7 +59,7 @@ public class GetPooledTransactionsFromPeerTaskTest {
 
     Transaction transaction = GENERATOR.transaction();
     PooledTransactionsMessage pooledTransactionsMessage =
-        PooledTransactionsMessage.create(List.of(transaction));
+        createPooledTransactionsMessage(List.of(transaction));
 
     List<Transaction> result = task.processResponse(pooledTransactionsMessage, AGREED_CAPABILITIES);
 
@@ -69,7 +72,7 @@ public class GetPooledTransactionsFromPeerTaskTest {
     GetPooledTransactionsFromPeerTask task = new GetPooledTransactionsFromPeerTask(hashes);
 
     PooledTransactionsMessage pooledTransactionsMessage =
-        PooledTransactionsMessage.create(List.of(GENERATOR.transaction(), GENERATOR.transaction()));
+        createPooledTransactionsMessage(List.of(GENERATOR.transaction(), GENERATOR.transaction()));
 
     InvalidPeerTaskResponseException exception =
         Assertions.assertThrows(
@@ -103,5 +106,16 @@ public class GetPooledTransactionsFromPeerTaskTest {
     PeerTaskValidationResponse validationResponse = task.validateResult(List.of(transaction));
     Assertions.assertEquals(
         PeerTaskValidationResponse.RESULTS_DO_NOT_MATCH_QUERY, validationResponse);
+  }
+
+  private static PooledTransactionsMessage createPooledTransactionsMessage(
+      final List<Transaction> transactions) {
+    final BytesValueRLPOutput out = new BytesValueRLPOutput();
+    out.writeList(
+        transactions,
+        (transaction, rlpOutput) ->
+            TransactionEncoder.encodeRLP(
+                transaction, rlpOutput, EncodingContext.POOLED_TRANSACTION));
+    return PooledTransactionsMessage.createUnsafe(out.encoded());
   }
 }

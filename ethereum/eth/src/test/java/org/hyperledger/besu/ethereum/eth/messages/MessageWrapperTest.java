@@ -38,9 +38,12 @@ import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.LogWithMetadata;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
+import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
+import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncodingConfiguration;
 import org.hyperledger.besu.ethereum.mainnet.MainnetBlockHeaderFunctions;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
+import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 
 import java.io.IOException;
@@ -213,7 +216,7 @@ public class MessageWrapperTest {
     final var testJson = parseTestFile("PooledTransactionsPacket66.json");
     final Bytes expected = Bytes.fromHexString(testJson.get("rlp").asText());
     final PooledTransactionsMessage pooledTransactionsMessage =
-        PooledTransactionsMessage.create(
+        createPooledTransactionsMessage(
             Arrays.asList(
                 objectMapper.treeToValue(
                     testJson.get("data").get("PooledTransactionsPacket"), Transaction[].class)));
@@ -384,5 +387,16 @@ public class MessageWrapperTest {
 
   private JsonNode parseTestFile(final String filename) throws IOException {
     return objectMapper.readTree(this.getClass().getResource("/" + filename));
+  }
+
+  private static PooledTransactionsMessage createPooledTransactionsMessage(
+      final List<Transaction> transactions) {
+    final BytesValueRLPOutput out = new BytesValueRLPOutput();
+    out.writeList(
+        transactions,
+        (transaction, rlpOutput) ->
+            TransactionEncoder.encodeRLP(
+                transaction, rlpOutput, EncodingContext.POOLED_TRANSACTION));
+    return PooledTransactionsMessage.createUnsafe(out.encoded());
   }
 }

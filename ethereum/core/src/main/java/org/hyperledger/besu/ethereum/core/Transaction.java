@@ -40,6 +40,7 @@ import org.hyperledger.besu.ethereum.core.encoding.TransactionDecoder;
 import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
 import org.hyperledger.besu.ethereum.core.kzg.Blob;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGCommitment;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
@@ -1312,7 +1313,8 @@ public class Transaction
         detachedCommitments,
         detachedBlobs,
         detachedProofs,
-        versionedHashes);
+        versionedHashes,
+        blobsWithCommitments.getCellMask());
   }
 
   public static class Builder {
@@ -1558,9 +1560,11 @@ public class Transaction
         final BlobType blobType,
         final List<KZGCommitment> kzgCommitments,
         final List<Blob> blobs,
-        final List<KZGProof> kzgProofs) {
+        final List<KZGProof> kzgProofs,
+        final CellMask cellMask) {
       this.blobsWithCommitments =
-          new BlobsWithCommitments(blobType, kzgCommitments, blobs, kzgProofs, versionedHashes);
+          new BlobsWithCommitments(
+              blobType, kzgCommitments, blobs, kzgProofs, versionedHashes, cellMask);
       return this;
     }
 

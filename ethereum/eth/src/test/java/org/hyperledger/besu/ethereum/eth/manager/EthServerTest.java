@@ -31,6 +31,8 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.core.encoding.BlockAccessListEncoder;
+import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
+import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncodingConfiguration;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
@@ -243,7 +245,7 @@ public class EthServerTest {
     final EthMessage ethMsg = new EthMessage(ethPeer, msgData);
 
     // Check response
-    final PooledTransactionsMessage expectedMsg = PooledTransactionsMessage.create(expectedResult);
+    final PooledTransactionsMessage expectedMsg = createPooledTransactionsMessage(expectedResult);
     final Optional<MessageData> result = ethMessages.dispatch(ethMsg, EthProtocol.LATEST);
     assertThat(result).contains(expectedMsg);
   }
@@ -264,7 +266,7 @@ public class EthServerTest {
     final EthMessage ethMsg = new EthMessage(ethPeer, msgData);
 
     // Check response
-    final PooledTransactionsMessage expectedMsg = PooledTransactionsMessage.create(expectedResult);
+    final PooledTransactionsMessage expectedMsg = createPooledTransactionsMessage(expectedResult);
     final Optional<MessageData> result = ethMessages.dispatch(ethMsg, EthProtocol.LATEST);
     assertThat(result).contains(expectedMsg);
   }
@@ -736,5 +738,16 @@ public class EthServerTest {
               BlockAccessListEncoder.encode(blockAccessList, rlp);
               return rlp.encodedSize();
             });
+  }
+
+  private static PooledTransactionsMessage createPooledTransactionsMessage(
+      final List<Transaction> transactions) {
+    final BytesValueRLPOutput out = new BytesValueRLPOutput();
+    out.writeList(
+        transactions,
+        (transaction, rlpOutput) ->
+            TransactionEncoder.encodeRLP(
+                transaction, rlpOutput, EncodingContext.POOLED_TRANSACTION));
+    return PooledTransactionsMessage.createUnsafe(out.encoded());
   }
 }

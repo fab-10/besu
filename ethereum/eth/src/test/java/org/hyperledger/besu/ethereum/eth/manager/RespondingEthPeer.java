@@ -28,6 +28,8 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
+import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
+import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncodingConfiguration;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
@@ -49,6 +51,7 @@ import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.DefaultMessage;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.messages.DisconnectMessage.DisconnectReason;
+import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateArchive;
 
 import java.math.BigInteger;
@@ -323,7 +326,7 @@ public class RespondingEthPeer {
         case EthProtocolMessages.GET_POOLED_TRANSACTIONS:
           response =
               EthServer.constructGetPooledTransactionsResponse(
-                  transactionPool, peer, msg, 200, maxMsgSize);
+                  transactionPool, peer, msg, 200, maxMsgSize, cap);
           break;
         case EthProtocolMessages.GET_BLOCK_ACCESS_LISTS:
           response =
@@ -400,11 +403,22 @@ public class RespondingEthPeer {
               Lists.newArrayList(pooledTransactionsMessage.transactions());
           final List<Transaction> partialPooledTx =
               originalPooledTx.subList(0, (int) (originalPooledTx.size() * portion));
-          partialResponse = PooledTransactionsMessage.create(partialPooledTx);
+          partialResponse = createPooledTransactionsMessage(partialPooledTx);
           break;
       }
       return Optional.of(partialResponse);
     };
+  }
+
+  private static PooledTransactionsMessage createPooledTransactionsMessage(
+      final List<Transaction> transactions) {
+    final BytesValueRLPOutput out = new BytesValueRLPOutput();
+    out.writeList(
+        transactions,
+        (transaction, rlpOutput) ->
+            TransactionEncoder.encodeRLP(
+                transaction, rlpOutput, EncodingContext.POOLED_TRANSACTION));
+    return PooledTransactionsMessage.createUnsafe(out.encoded());
   }
 
   public static Responder emptyResponder() {
@@ -425,7 +439,7 @@ public class RespondingEthPeer {
                       TransactionReceiptEncodingConfiguration.DEFAULT_NETWORK_CONFIGURATION));
           break;
         case EthProtocolMessages.GET_POOLED_TRANSACTIONS:
-          response = PooledTransactionsMessage.create(Collections.emptyList());
+          response = createPooledTransactionsMessage(Collections.emptyList());
           break;
         case EthProtocolMessages.GET_BLOCK_ACCESS_LISTS:
           response = BlockAccessListsMessage.create(Collections.emptyList());

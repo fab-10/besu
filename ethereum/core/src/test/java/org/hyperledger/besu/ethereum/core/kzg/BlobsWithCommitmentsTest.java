@@ -42,7 +42,8 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () ->
-                    new BlobsWithCommitments(KZG_PROOF, List.of(), List.of(), List.of(), List.of()))
+                    new BlobsWithCommitments(
+                        KZG_PROOF, List.of(), List.of(), List.of(), List.of(), CellMask.FULL))
             .getMessage();
     final String expectedMessage =
         "There needs to be a minimum of one blob in a blob transaction with commitments";
@@ -58,7 +59,7 @@ public class BlobsWithCommitmentsTest {
             IllegalArgumentException.class,
             () ->
                 new BlobsWithCommitments(
-                    KZG_PROOF, wrongCommitments, blobs, kzgProofs, versionedHashes));
+                    KZG_PROOF, wrongCommitments, blobs, kzgProofs, versionedHashes, CellMask.FULL));
 
     assertEquals("Invalid number of kzgCommitments, expected 2, got 1", exception.getMessage());
   }
@@ -72,7 +73,12 @@ public class BlobsWithCommitmentsTest {
             IllegalArgumentException.class,
             () ->
                 new BlobsWithCommitments(
-                    KZG_PROOF, kzgCommitments, blobs, kzgProofs, wrongVersionedHashes));
+                    KZG_PROOF,
+                    kzgCommitments,
+                    blobs,
+                    kzgProofs,
+                    wrongVersionedHashes,
+                    CellMask.FULL));
     assertEquals("Invalid number of versionedHashes, expected 2, got 1", exception.getMessage());
   }
 
@@ -84,7 +90,12 @@ public class BlobsWithCommitmentsTest {
             IllegalArgumentException.class,
             () ->
                 new BlobsWithCommitments(
-                    KZG_PROOF, kzgCommitments, blobs, wrongKzgProofs, versionedHashes));
+                    KZG_PROOF,
+                    kzgCommitments,
+                    blobs,
+                    wrongKzgProofs,
+                    versionedHashes,
+                    CellMask.FULL));
     String error = String.format("Invalid number of proofs (%s), expected 2, got 1", KZG_PROOF);
     assertEquals(error, exception.getMessage());
   }
@@ -97,7 +108,7 @@ public class BlobsWithCommitmentsTest {
             IllegalArgumentException.class,
             () ->
                 new BlobsWithCommitments(
-                    KZG_PROOF, wrongCommitments, blobs, kzgProofs, versionedHashes));
+                    KZG_PROOF, wrongCommitments, blobs, kzgProofs, versionedHashes, CellMask.FULL));
     assertEquals("Invalid number of kzgCommitments, expected 2, got 1", exception.getMessage());
   }
 
@@ -113,7 +124,8 @@ public class BlobsWithCommitmentsTest {
                     kzgCommitments,
                     blobs,
                     kzgProofs,
-                    wrongVersionedHashes));
+                    wrongVersionedHashes,
+                    CellMask.FULL));
     String error = String.format("Invalid number of versionedHashes, expected 2, got 1");
     assertEquals(error, exception.getMessage());
   }
@@ -128,7 +140,12 @@ public class BlobsWithCommitmentsTest {
             IllegalArgumentException.class,
             () ->
                 new BlobsWithCommitments(
-                    blobType, kzgCommitments, blobs, wrongKzgProofs, versionedHashes));
+                    blobType,
+                    kzgCommitments,
+                    blobs,
+                    wrongKzgProofs,
+                    versionedHashes,
+                    CellMask.FULL));
     String error = String.format("Invalid number of proofs (%s), expected 256, got 2", blobType);
     assertEquals(error, exception.getMessage());
   }

@@ -122,7 +122,8 @@ class EthServer {
                 peer,
                 messageData,
                 ethereumWireProtocolConfiguration.getMaxGetPooledTransactions(),
-                maxMessageSize));
+                maxMessageSize,
+                capability));
     ethMessages.registerResponseConstructor(
         EthProtocolMessages.GET_BLOCK_ACCESS_LISTS,
         (peer, messageData, capability) ->
@@ -414,7 +415,8 @@ class EthServer {
       final EthPeer peer,
       final MessageData message,
       final int requestLimit,
-      final int maxMessageSize) {
+      final int maxMessageSize,
+      final Capability capability) {
     final GetPooledTransactionsMessage getPooledTransactions =
         GetPooledTransactionsMessage.readFrom(message);
     final Iterable<Hash> hashes = getPooledTransactions.pooledTransactions();
