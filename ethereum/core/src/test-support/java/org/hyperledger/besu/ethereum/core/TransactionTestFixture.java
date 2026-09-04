@@ -27,6 +27,7 @@ import org.hyperledger.besu.datatypes.VersionedHash;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.core.encoding.CodeDelegationTransactionEncoder;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 
 import java.math.BigInteger;
@@ -115,7 +116,8 @@ public class TransactionTestFixture {
               blobs.get().getBlobType(),
               blobs.get().getKzgCommitments(),
               blobs.get().getBlobs(),
-              blobs.get().getKzgProofs());
+              blobs.get().getKzgProofs(),
+              CellMask.FULL);
         }
         break;
       case DELEGATE_CODE:

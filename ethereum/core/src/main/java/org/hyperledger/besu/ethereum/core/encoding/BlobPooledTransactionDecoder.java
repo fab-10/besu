@@ -19,12 +19,14 @@ import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.VersionedHash;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.kzg.Blob;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGCommitment;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.rlp.RLP;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 import org.hyperledger.besu.ethereum.rlp.RLPInput;
 
+import java.util.Arrays;
 import java.util.List;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -58,14 +60,25 @@ public class BlobPooledTransactionDecoder {
     if (hasVersionId) {
       versionId = txRlp.readIntScalar();
     }
-    List<Blob> blobs = txRlp.readList(Blob::readFrom);
-    List<KZGCommitment> commitments = txRlp.readList(KZGCommitment::readFrom);
-    List<KZGProof> proofs = txRlp.readList(KZGProof::readFrom);
+    final List<Blob> blobs = txRlp.readList(Blob::readFrom);
+    final List<KZGCommitment> commitments = txRlp.readList(KZGCommitment::readFrom);
+    final List<KZGProof> proofs = txRlp.readList(KZGProof::readFrom);
     txRlp.leaveList();
+
+    // eth/72: blobs can be empty
+    final List<Blob> normalizedBlobs;
+    final CellMask cellMask;
+    if (blobs.isEmpty()) {
+      cellMask = CellMask.EMPTY;
+      normalizedBlobs = Arrays.asList(new Blob[commitments.size()]);
+    } else {
+      cellMask = CellMask.FULL;
+      normalizedBlobs = blobs;
+    }
 
     final Transaction transaction =
         builder
-            .kzgBlobs(BlobType.of(versionId), commitments, blobs, proofs)
+            .kzgBlobs(BlobType.of(versionId), commitments, normalizedBlobs, proofs, cellMask)
             .sizeForAnnouncement(input.size())
             .build();
 

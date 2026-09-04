@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.eth.messages;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
+import static org.hyperledger.besu.ethereum.eth.core.transactions.DevP2PUtils.createPooledTransactionsMessage;
 
 import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.datatypes.TransactionType;
@@ -43,7 +44,7 @@ public class PooledTransactionsMessageTest {
                 .value(Wei.of(1337))
                 .payload(Bytes.EMPTY)
                 .signAndBuild(SignatureAlgorithmFactory.getInstance().generateKeyPair()));
-    final PooledTransactionsMessage msg = PooledTransactionsMessage.create(tx);
+    final PooledTransactionsMessage msg = createPooledTransactionsMessage(tx);
     assertThat(msg.getCode()).isEqualTo(EthProtocolMessages.POOLED_TRANSACTIONS);
     assertThat(msg.transactions()).isEqualTo(tx);
   }
