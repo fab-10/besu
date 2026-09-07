@@ -14,6 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.eth.manager;
 
+import static org.hyperledger.besu.ethereum.p2p.rlpx.wire.messages.DisconnectMessage.DisconnectReason.BREACH_OF_PROTOCOL_INVALID_NON_BLOB_TX_TYPE;
 import static org.hyperledger.besu.ethereum.p2p.rlpx.wire.messages.DisconnectMessage.DisconnectReason.INVALID_FIRST_BLOCK_RECEIPT_INDEX;
 
 import org.hyperledger.besu.datatypes.Hash;
@@ -26,6 +27,11 @@ import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
 import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncodingConfiguration;
+import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
+import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.core.kzg.Cell;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
+import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
 import org.hyperledger.besu.ethereum.eth.manager.exceptions.ProtocolViolationException;
@@ -36,6 +42,7 @@ import org.hyperledger.besu.ethereum.eth.messages.EthProtocolMessages;
 import org.hyperledger.besu.ethereum.eth.messages.GetBlockAccessListsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetBlockBodiesMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetBlockHeadersMessage;
+import org.hyperledger.besu.ethereum.eth.messages.GetCellsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetPaginatedReceiptsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetPooledTransactionsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetReceiptsMessage;
@@ -50,8 +57,11 @@ import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 import org.hyperledger.besu.ethereum.rlp.RLP;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -126,6 +136,14 @@ class EthServer {
                 capability));
     ethMessages.registerResponseConstructor(
         EthProtocolMessages.GET_BLOCK_ACCESS_LISTS,
+        (peer, messageData, capability) ->
+            constructGetBlockAccessListsResponse(
+                blockchain,
+                messageData,
+                ethereumWireProtocolConfiguration.getMaxGetBlockAccessLists(),
+                maxMessageSize));
+    ethMessages.registerResponseConstructor(
+        EthProtocolMessages.GET_CELLS,
         (peer, messageData, capability) ->
             constructGetBlockAccessListsResponse(
                 blockchain,
@@ -436,6 +454,9 @@ class EthServer {
       hashesToProcess = hashes;
     }
 
+    final EncodingContext encodingContext =
+        EncodingContext.pooledTransactionByCapability(capability);
+
     int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;
     final BytesValueRLPOutput rlp = new BytesValueRLPOutput();
     rlp.startList();
@@ -453,7 +474,7 @@ class EthServer {
       }
 
       final BytesValueRLPOutput txRlp = new BytesValueRLPOutput();
-      TransactionEncoder.encodeRLP(maybeTx.get(), txRlp, EncodingContext.POOLED_TRANSACTION);
+      TransactionEncoder.encodeRLP(maybeTx.get(), txRlp, encodingContext);
       final int encodedSize = txRlp.encodedSize();
       if (responseSizeEstimate + encodedSize > maxMessageSize) {
         break;
@@ -470,12 +491,117 @@ class EthServer {
 
     if (traceEnabled) {
       LOG.atTrace()
-          .setMessage("Sending pooled transactions: peer={}, returned hashes={}, notFoundCount={}")
+          .setMessage(
+              "Sending pooled transactions: peer={}, returned hashes={}, notFoundCount={}, encodingContext={}")
           .addArgument(peer)
           .addArgument(returnedHashes)
           .addArgument(requestedCount - returnedCount)
+          .addArgument(encodingContext)
           .log();
     }
+
+    return PooledTransactionsMessage.createUnsafe(rlp.encoded());
+  }
+
+  static MessageData constructGetCellsResponse(
+      final TransactionPool transactionPool,
+      final EthPeer peer,
+      final MessageData message,
+      final int requestLimit,
+      final int maxMessageSize,
+      final Capability capability) {
+    final GetCellsMessage getCells = GetCellsMessage.readFrom(message);
+    final Iterable<Hash> hashes = getCells.pooledTransactions();
+    final CellMask reqCellMask = getCells.cellMask();
+
+    final boolean traceEnabled = LOG.isTraceEnabled();
+    final Iterable<Hash> hashesToProcess;
+    if (traceEnabled) {
+      final List<Hash> requested = new ArrayList<>();
+      hashes.forEach(requested::add);
+      LOG.atTrace()
+          .setMessage(
+              "Requested cells for pooled transactions: peer={}, requested hashes={}, cell mask={}")
+          .addArgument(peer)
+          .addArgument(requested)
+          .addArgument(reqCellMask)
+          .log();
+      hashesToProcess = requested;
+    } else {
+      hashesToProcess = hashes;
+    }
+
+    //  final List<Hash> returnedHashes = traceEnabled ? new ArrayList<>() : null;
+    int requestedCount = 0;
+    //    int returnedCount = 0;
+
+    final Map<Hash, List<Cell[]>> matchingCells = new HashMap<>();
+
+    for (final Hash hash : hashesToProcess) {
+      if (requestedCount >= requestLimit) {
+        break;
+      }
+      requestedCount++;
+      final Optional<Transaction> maybeTx = transactionPool.getTransactionByHash(hash);
+      if (maybeTx.isEmpty()) {
+        continue;
+      }
+
+      final Transaction tx = maybeTx.get();
+
+      final Optional<BlobsWithCommitments> maybeBwc = tx.getBlobsWithCommitments();
+      if (maybeBwc.isEmpty()) {
+        throw new ProtocolViolationException(
+            ("Invalid request from peer %s, requested cells for non blob tx %s"
+                .formatted(peer, tx.toTraceLog())),
+            BREACH_OF_PROTOCOL_INVALID_NON_BLOB_TX_TYPE);
+      }
+
+      final BlobsWithCommitments bwc = maybeBwc.get();
+
+      final Optional<CellMask> maybeCellMask = bwc.getCellMask();
+
+      if (maybeCellMask.isEmpty()) {
+        continue;
+      }
+
+      final CellMask cellMask = maybeCellMask.get();
+
+      if (!cellMask.containsAll(reqCellMask)) {
+        LOG.atTrace()
+            .setMessage(
+                "Ignoring blob tx {} with cell mask {} since it does not contain all requested cells {}")
+            .addArgument(tx::toTraceLog)
+            .addArgument(cellMask)
+            .addArgument(reqCellMask)
+            .log();
+        continue;
+      }
+
+      matchingCells.put(
+          hash,
+          bwc.getBlobProofBundles().stream()
+              .map(BlobProofBundle::getCellsWithMask)
+              .map(
+                  maybe ->
+                      maybe.orElseThrow(
+                          () ->
+                              new IllegalStateException(
+                                  "Internal error: at this point CellsWithMask should not be empty")))
+              .map(CellsWithMask::getCells)
+              .toList());
+    }
+
+    // ToDo int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;
+    final BytesValueRLPOutput rlp = new BytesValueRLPOutput();
+
+    rlp.writeList(
+        matchingCells.keySet(), (hash, rlpOutput) -> rlpOutput.writeBytes(hash.getBytes()));
+    rlp.writeList(
+        matchingCells.values(),
+        (cellsList, rlpOutput) ->
+            cellsList.forEach(cells -> rlpOutput.writeList(Arrays.asList(cells), Cell::writeTo)));
+    rlp.writeBytes(reqCellMask.bytes());
 
     return PooledTransactionsMessage.createUnsafe(rlp.encoded());
   }

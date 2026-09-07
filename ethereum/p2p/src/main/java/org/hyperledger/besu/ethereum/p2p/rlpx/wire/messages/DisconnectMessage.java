@@ -124,6 +124,8 @@ public final class DisconnectMessage extends AbstractMessageData {
         (byte) 0x02, "A message was received before hello's exchanged"),
     BREACH_OF_PROTOCOL_INVALID_MESSAGE_RECEIVED_CAUGHT_EXCEPTION(
         (byte) 0x02, "An exception was caught decoding message"),
+    BREACH_OF_PROTOCOL_INVALID_NON_BLOB_TX_TYPE(
+        (byte) 0x14, "Invalid transaction type, only blob transactions are supported"),
     USELESS_PEER((byte) 0x03, "Useless peer"),
     USELESS_PEER_USELESS_RESPONSES((byte) 0x03, "Useless responses: exceeded threshold"),
     USELESS_PEER_TRAILING_PEER((byte) 0x03, "Trailing peer requirement"),

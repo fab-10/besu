@@ -19,6 +19,7 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.VersionedHash;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -29,12 +30,11 @@ import org.apache.tuweni.bytes.Bytes;
 public final class BlobProofBundle {
 
   private final BlobType blobType;
-  private final Blob blob;
+  private final Optional<Blob> blob;
   private final KZGCommitment kzgCommitment;
   private final List<KZGProof> kzgProof;
   private final VersionedHash versionedHash;
-  private final Bytes blobCells;
-  private final CellMask cellMask;
+  private final Optional<CellsWithMask> cellsWithMask;
 
   /**
    * @param blobType the type of the blob
@@ -42,21 +42,17 @@ public final class BlobProofBundle {
    * @param kzgCommitment the KZG commitment for the blob.
    * @param kzgProof the KZG proof for the blob.
    * @param versionedHash the versioned hash of the blob.
-   * @param cellMask the cell mask for the blob.
    */
   public BlobProofBundle(
       final BlobType blobType,
       final Blob blob,
       final KZGCommitment kzgCommitment,
       final List<KZGProof> kzgProof,
-      final VersionedHash versionedHash,
-      final CellMask cellMask) {
+      final VersionedHash versionedHash) {
     checkNotNull(kzgCommitment, "kzgCommitment must not be null");
     checkNotNull(versionedHash, "versionedHash must not be null");
-    // eth/72 blob can be null
-    // checkNotNull(blob, "blob must not be null");
+    checkNotNull(blob, "blob must not be null");
     checkNotNull(kzgProof, "kzgProof must not be null");
-    checkNotNull(cellMask, "cellMask must not be null");
     if (blobType == BlobType.KZG_PROOF && kzgProof.size() != 1) {
       String errorMessage =
           "Invalid kzgProof size for versionId 0, expected 1 but got " + kzgProof.size();
@@ -72,17 +68,53 @@ public final class BlobProofBundle {
       throw new IllegalArgumentException(errorMessage);
     }
     this.blobType = blobType;
-    this.blob = blob;
+    this.blob = Optional.of(blob);
     this.kzgCommitment = kzgCommitment;
     this.kzgProof = kzgProof;
     this.versionedHash = versionedHash;
-    this.blobCells = blob != null ? computeCells(blob, blobType) : null;
-    this.cellMask = cellMask;
+    this.cellsWithMask = Optional.ofNullable(computeCells(blob, blobType));
   }
 
-  private Bytes computeCells(final Blob blob, final BlobType blobType) {
+  public BlobProofBundle(
+      final BlobType blobType,
+      final CellsWithMask cellsWithMask,
+      final KZGCommitment kzgCommitment,
+      final List<KZGProof> kzgProof,
+      final VersionedHash versionedHash) {
+    checkNotNull(cellsWithMask, "cellsWithMask must not be null");
+    checkNotNull(kzgCommitment, "kzgCommitment must not be null");
+    checkNotNull(versionedHash, "versionedHash must not be null");
+    checkNotNull(kzgProof, "kzgProof must not be null");
+    if (blobType == BlobType.KZG_PROOF && kzgProof.size() != 1) {
+      String errorMessage =
+          "Invalid kzgProof size for versionId 0, expected 1 but got " + kzgProof.size();
+      throw new IllegalArgumentException(errorMessage);
+    }
+    if (blobType == BlobType.KZG_CELL_PROOFS
+        && kzgProof.size() != CKZG4844Helper.CELL_PROOFS_PER_BLOB) {
+      String errorMessage =
+          "Invalid kzgProof size for versionId 1, expected "
+              + CKZG4844Helper.CELL_PROOFS_PER_BLOB
+              + " but got "
+              + kzgProof.size();
+      throw new IllegalArgumentException(errorMessage);
+    }
+    this.blobType = blobType;
+    this.blob = Optional.empty();
+    this.cellsWithMask = Optional.of(cellsWithMask);
+    this.kzgCommitment = kzgCommitment;
+    this.kzgProof = kzgProof;
+    this.versionedHash = versionedHash;
+  }
+
+  private CellsWithMask computeCells(final Blob blob, final BlobType blobType) {
     if (blobType == BlobType.KZG_CELL_PROOFS) {
-      return CKZG4844Helper.computeCells(blob);
+      final Bytes cellsBytes = CKZG4844Helper.computeCells(blob);
+      final List<Cell> cells = new ArrayList<>(CKZG4844Helper.CELL_PROOFS_PER_BLOB);
+      for (int i = 0; i < CKZG4844Helper.CELL_PROOFS_PER_BLOB; i++) {
+        cells.add(new Cell(cellsBytes.slice(i * Cell.SIZE, Cell.SIZE)));
+      }
+      return new CellsWithMask(cells, CellMask.FULL);
     }
     return null;
   }
@@ -91,7 +123,7 @@ public final class BlobProofBundle {
     return blobType;
   }
 
-  public Blob getBlob() {
+  public Optional<Blob> getBlob() {
     return blob;
   }
 
@@ -108,11 +140,11 @@ public final class BlobProofBundle {
   }
 
   public Optional<Bytes> getBlobCellsBytes() {
-    return Optional.ofNullable(blobCells);
+    return Optional.ofNullable(cellsWithMask);
   }
 
-  public CellMask getCellMask() {
-    return cellMask;
+  public Optional<CellsWithMask> getCellsWithMask() {
+    return cellsWithMask;
   }
 
   @Override

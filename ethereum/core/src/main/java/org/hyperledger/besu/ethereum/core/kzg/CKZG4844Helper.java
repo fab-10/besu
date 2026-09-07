@@ -90,14 +90,17 @@ public class CKZG4844Helper {
     if (bundle.getBlobType() == BlobType.KZG_CELL_PROOFS) {
       return bundle;
     }
-    List<KZGProof> kzgCellProofs = computeBlobKzgProofs(bundle.getBlob());
+    final Blob blob =
+        bundle
+            .getBlob()
+            .orElseThrow(() -> new IllegalArgumentException("Blob of type 0 must have full data"));
+    List<KZGProof> kzgCellProofs = computeBlobKzgProofs(blob);
     return new BlobProofBundle(
         BlobType.KZG_CELL_PROOFS,
-        bundle.getBlob(),
+        blob,
         bundle.getKzgCommitment(),
         kzgCellProofs,
-        bundle.getVersionedHash(),
-        CellMask.FULL);
+        bundle.getVersionedHash());
   }
 
   /**
