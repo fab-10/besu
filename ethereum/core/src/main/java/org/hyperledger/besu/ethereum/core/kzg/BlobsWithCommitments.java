@@ -26,6 +26,7 @@ import java.security.InvalidParameterException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.IntStream;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -34,6 +35,12 @@ import org.apache.tuweni.bytes.Bytes;
 public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.BlobsWithCommitments {
   private final BlobType blobType;
   private final List<BlobProofBundle> blobProofBundles;
+
+  public BlobsWithCommitments(
+      final BlobType blobType, final List<BlobProofBundle> blobProofBundles) {
+    this.blobType = blobType;
+    this.blobProofBundles = blobProofBundles;
+  }
 
   /**
    * Constructs an instance from a list of {@link BlobProofBundle}.
@@ -51,13 +58,22 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
             .allMatch(blobType::equals),
         "BlobProofBundles must have the same BlobType");
 
-    final CellMask firstCellMask = blobProofBundles.getFirst().getCellMask();
-    checkArgument(
-        blobProofBundles.stream()
-            .skip(1)
-            .map(BlobProofBundle::getCellMask)
-            .allMatch(firstCellMask::equals),
-        "BlobProofBundles must have the same cell mask");
+    final Optional<CellsWithMask> firstCellsWithMask =
+        blobProofBundles.getFirst().getCellsWithMask();
+    firstCellsWithMask.ifPresent(
+        cellsWithMask -> {
+          final CellMask firstCellMask = cellsWithMask.getCellMask();
+          checkArgument(
+              blobProofBundles.stream()
+                  .skip(1)
+                  .allMatch(
+                      bundle ->
+                          bundle
+                              .getCellsWithMask()
+                              .map(cwm -> cwm.getCellMask().equals(firstCellMask))
+                              .orElse(Boolean.FALSE)),
+              "BlobProofBundles must have the same cell mask");
+        });
 
     this.blobProofBundles = blobProofBundles;
     this.blobType = blobType;
@@ -71,43 +87,58 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
    * @param blobs list of blobs to be committed to.
    * @param kzgProofs proofs for the commitments.
    * @param versionedHashes hashes of the commitments.
-   * @param cellMask cell mask for the blobs.
    * @throws InvalidParameterException if the input parameters are invalid.
    */
-  public BlobsWithCommitments(
+  public static BlobsWithCommitments createFromBlobs(
       final BlobType blobType,
       final List<KZGCommitment> kzgCommitments,
       final List<Blob> blobs,
       final List<KZGProof> kzgProofs,
-      final List<VersionedHash> versionedHashes,
-      final CellMask cellMask) {
-    validateInputParameters(blobType, kzgCommitments, blobs, kzgProofs, versionedHashes);
-    this.blobProofBundles =
-        buildBlobProofBundles(
-            blobType, kzgCommitments, blobs, kzgProofs, versionedHashes, cellMask);
-    this.blobType = blobType;
+      final List<VersionedHash> versionedHashes) {
+    checkArgument(blobs.stream().anyMatch(Objects::isNull), "all blobs must be non null");
+    commonValidateInputParameters(
+        blobType, kzgCommitments, kzgProofs, versionedHashes, blobs.size());
+
+    return new BlobsWithCommitments(
+        blobType,
+        IntStream.range(0, blobs.size())
+            .mapToObj(
+                index -> {
+                  List<KZGProof> kzgProofsForBlob =
+                      extractProofsForBlob(blobType, kzgProofs, index);
+                  return new BlobProofBundle(
+                      blobType,
+                      blobs.get(index),
+                      kzgCommitments.get(index),
+                      kzgProofsForBlob,
+                      versionedHashes.get(index));
+                })
+            .toList());
   }
 
-  private static List<BlobProofBundle> buildBlobProofBundles(
+  public static BlobsWithCommitments createFromBlobCells(
       final BlobType blobType,
       final List<KZGCommitment> kzgCommitments,
-      final List<Blob> blobs,
+      final List<CellsWithMask> cellsWithMaskList,
       final List<KZGProof> kzgProofs,
-      final List<VersionedHash> versionedHashes,
-      final CellMask cellMask) {
-    return IntStream.range(0, blobs.size())
-        .mapToObj(
-            index -> {
-              List<KZGProof> kzgProofsForBlob = extractProofsForBlob(blobType, kzgProofs, index);
-              return new BlobProofBundle(
-                  blobType,
-                  blobs.get(index),
-                  kzgCommitments.get(index),
-                  kzgProofsForBlob,
-                  versionedHashes.get(index),
-                  cellMask);
-            })
-        .toList();
+      final List<VersionedHash> versionedHashes) {
+    commonValidateInputParameters(
+        blobType, kzgCommitments, kzgProofs, versionedHashes, cellsWithMaskList.size());
+    return new BlobsWithCommitments(
+        blobType,
+        IntStream.range(0, cellsWithMaskList.size())
+            .mapToObj(
+                index -> {
+                  List<KZGProof> kzgProofsForBlob =
+                      extractProofsForBlob(blobType, kzgProofs, index);
+                  return new BlobProofBundle(
+                      blobType,
+                      cellsWithMaskList.get(index),
+                      kzgCommitments.get(index),
+                      kzgProofsForBlob,
+                      versionedHashes.get(index));
+                })
+            .toList());
   }
 
   private static List<KZGProof> extractProofsForBlob(
@@ -121,28 +152,27 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
     };
   }
 
-  private static void validateInputParameters(
+  private static void commonValidateInputParameters(
       final BlobType blobType,
       final List<KZGCommitment> kzgCommitments,
-      final List<Blob> blobs,
       final List<KZGProof> kzgProofs,
-      final List<VersionedHash> versionedHashes) {
+      final List<VersionedHash> versionedHashes,
+      final int count) {
     checkNotNull(versionedHashes, "versionedHashes must be set before calling kzgBlobs()");
-    int blobCount = blobs.size();
-    int expectedProofs = blobType == KZG_PROOF ? blobCount : CELL_PROOFS_PER_BLOB * blobCount;
     checkArgument(
-        blobCount > 0,
+        count > 0,
         "There needs to be a minimum of one blob in a blob transaction with commitments");
+    int expectedProofs = blobType == KZG_PROOF ? count : CELL_PROOFS_PER_BLOB * count;
     checkArgument(
-        blobCount == kzgCommitments.size(),
-        "Invalid number of kzgCommitments, expected %s, got %s",
-        blobCount,
-        kzgCommitments.size());
-    checkArgument(
-        blobCount == versionedHashes.size(),
+        count == versionedHashes.size(),
         "Invalid number of versionedHashes, expected %s, got %s",
-        blobCount,
+        count,
         versionedHashes.size());
+    checkArgument(
+        count == kzgCommitments.size(),
+        "Invalid number of kzgCommitments, expected %s, got %s",
+        count,
+        kzgCommitments.size());
     checkArgument(
         kzgProofs.size() == expectedProofs,
         "Invalid number of proofs (%s), expected %s, got %s",
@@ -158,7 +188,10 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
    */
   @Override
   public List<Blob> getBlobs() {
-    return blobProofBundles.stream().map(BlobProofBundle::getBlob).toList();
+    return blobProofBundles.stream()
+        .map(BlobProofBundle::getBlob)
+        .map(b -> b.orElse(null))
+        .toList();
   }
 
   /**
@@ -287,8 +320,13 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
     return cellIndices;
   }
 
-  public CellMask getCellMask() {
-    return blobProofBundles.getFirst().getCellMask();
+  public Optional<CellMask> getCellMask() {
+    return blobProofBundles.getFirst().getCellsWithMask().map(CellsWithMask::getCellMask);
+  }
+
+  public boolean hasFullData() {
+    return blobProofBundles.stream()
+        .allMatch(blobProofBundle -> blobProofBundle.getBlob().isPresent());
   }
 
   @Override

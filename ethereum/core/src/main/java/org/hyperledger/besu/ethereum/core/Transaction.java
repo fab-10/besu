@@ -40,7 +40,7 @@ import org.hyperledger.besu.ethereum.core.encoding.TransactionDecoder;
 import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
 import org.hyperledger.besu.ethereum.core.kzg.Blob;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
-import org.hyperledger.besu.ethereum.core.kzg.CellMask;
+import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGCommitment;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
@@ -1297,21 +1297,41 @@ public class Transaction
         blobsWithCommitments.getKzgCommitments().stream()
             .map(kc -> new KZGCommitment(kc.getData().copy()))
             .toList();
-    final var detachedBlobs =
-        blobsWithCommitments.getBlobs().stream()
-            .map(blob -> new Blob(blob.getData().copy()))
-            .toList();
     final var detachedProofs =
         blobsWithCommitments.getKzgProofs().stream()
             .map(proof -> new KZGProof(proof.getData().copy()))
             .toList();
-    return new BlobsWithCommitments(
-        blobsWithCommitments.getBlobType(),
-        detachedCommitments,
-        detachedBlobs,
-        detachedProofs,
-        versionedHashes,
-        blobsWithCommitments.getCellMask());
+    if (blobsWithCommitments.hasFullData()) {
+      final var detachedBlobs =
+          blobsWithCommitments.getBlobs().stream()
+              .map(
+                  b ->
+                      Objects.requireNonNull(
+                          b, "Internal error: hasFullData it true but blob is null"))
+              .toList();
+
+      return BlobsWithCommitments.createFromBlobs(
+          blobsWithCommitments.getBlobType(),
+          detachedCommitments,
+          detachedBlobs,
+          detachedProofs,
+          versionedHashes);
+    } else {
+      final var detachedBlobCells =
+          blobsWithCommitments.getCellMask().stream()
+              .map(
+                  b ->
+                      Objects.requireNonNull(
+                          b, "Internal error: hasFullData it true but blob is null"))
+              .toList();
+
+      return BlobsWithCommitments.createFromBlobs(
+          blobsWithCommitments.getBlobType(),
+          detachedCommitments,
+          detachedBlobs,
+          detachedProofs,
+          versionedHashes);
+    }
   }
 
   public static class Builder {
@@ -1557,11 +1577,20 @@ public class Transaction
         final BlobType blobType,
         final List<KZGCommitment> kzgCommitments,
         final List<Blob> blobs,
-        final List<KZGProof> kzgProofs,
-        final CellMask cellMask) {
+        final List<KZGProof> kzgProofs) {
+      this.blobsWithCommitments =
+          new BlobsWithCommitments(blobType, kzgCommitments, blobs, kzgProofs, versionedHashes);
+      return this;
+    }
+
+    public Builder kzgBlobCells(
+        final BlobType blobType,
+        final List<KZGCommitment> kzgCommitments,
+        final List<CellsWithMask> cellsWithMaskList,
+        final List<KZGProof> kzgProofs) {
       this.blobsWithCommitments =
           new BlobsWithCommitments(
-              blobType, kzgCommitments, blobs, kzgProofs, versionedHashes, cellMask);
+              blobType, kzgCommitments, cellsWithMaskList, kzgProofs, versionedHashes);
       return this;
     }
 
