@@ -16,17 +16,15 @@ package org.hyperledger.besu.ethereum.core.kzg;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static ethereum.ckzg4844.CKZG4844JNI.CELLS_PER_EXT_BLOB;
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.List;
 
 import org.apache.tuweni.bytes.Bytes;
 
 /** Fixed-width eth/72 cell availability mask. */
 public record CellMask(Bytes bytes) {
   public static final int BYTE_LENGTH = 16;
-  public static final int CELL_COUNT = CKZG4844Helper.CELL_PROOFS_PER_BLOB;
 
   public static final CellMask EMPTY = new CellMask(Bytes.wrap(new byte[BYTE_LENGTH]));
   public static final CellMask FULL = new CellMask(fullMaskBytes());
@@ -45,6 +43,11 @@ public record CellMask(Bytes bytes) {
     return new CellMask(bytes.copy());
   }
 
+  @Override
+  public Bytes bytes() {
+    return bytes;
+  }
+
   public boolean isEmpty() {
     return bytes.equals(EMPTY.bytes);
   }
@@ -57,18 +60,19 @@ public record CellMask(Bytes bytes) {
     return count;
   }
 
-  public List<Integer> indexes() {
-    final List<Integer> indexes = new ArrayList<>(cardinality());
-    for (int index = 0; index < CELL_COUNT; index++) {
+  public int[] indexes() {
+    final int[] indexes = new int[cardinality()];
+    int arrayIdx = 0;
+    for (int index = 0; index < CELLS_PER_EXT_BLOB; index++) {
       if (isSet(index)) {
-        indexes.add(index);
+        indexes[arrayIdx++] = index;
       }
     }
     return indexes;
   }
 
   public boolean isSet(final int index) {
-    checkArgument(index >= 0 && index < CELL_COUNT, "cell index out of range: %s", index);
+    checkArgument(index >= 0 && index < CELLS_PER_EXT_BLOB, "cell index out of range: %s", index);
     final int byteIndex = index / Byte.SIZE;
     final int bitIndex = index % Byte.SIZE;
     return (Byte.toUnsignedInt(bytes.get(byteIndex)) & (1 << bitIndex)) != 0;
@@ -83,6 +87,15 @@ public record CellMask(Bytes bytes) {
       }
     }
     return true;
+  }
+
+  public CellMask intersection(final CellMask other) {
+    final byte[] intersectionBytes = new byte[BYTE_LENGTH];
+    for (int i = 0; i < BYTE_LENGTH; i++) {
+      intersectionBytes[i] =
+          (byte) (Byte.toUnsignedInt(this.bytes.get(i)) & Byte.toUnsignedInt(other.bytes.get(i)));
+    }
+    return new CellMask(Bytes.wrap(intersectionBytes));
   }
 
   private static Bytes fullMaskBytes() {

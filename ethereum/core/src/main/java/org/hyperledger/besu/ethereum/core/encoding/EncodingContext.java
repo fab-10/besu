@@ -14,6 +14,8 @@
  */
 package org.hyperledger.besu.ethereum.core.encoding;
 
+import org.hyperledger.besu.plugin.data.p2p.Capability;
+
 /**
  * Enum representing the context in which a transaction is being encoded. This context is used to
  * determine the appropriate encoding strategy for a transaction.
@@ -58,5 +60,12 @@ public enum EncodingContext {
 
   public boolean elideBlobs() {
     return elideBlobs;
+  }
+
+  public static EncodingContext pooledTransactionByCapability(final Capability cap) {
+    if (cap.getVersion() >= 72) {
+      return POOLED_TRANSACTION_ETH_72;
+    }
+    return POOLED_TRANSACTION;
   }
 }
