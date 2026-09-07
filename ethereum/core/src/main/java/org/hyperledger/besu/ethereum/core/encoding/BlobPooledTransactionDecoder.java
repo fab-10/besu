@@ -19,14 +19,15 @@ import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.VersionedHash;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.kzg.Blob;
-import org.hyperledger.besu.ethereum.core.kzg.CellMask;
+import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGCommitment;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.rlp.RLP;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 import org.hyperledger.besu.ethereum.rlp.RLPInput;
 
-import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -66,21 +67,15 @@ public class BlobPooledTransactionDecoder {
     txRlp.leaveList();
 
     // eth/72: blobs can be empty
-    final List<Blob> normalizedBlobs;
-    final CellMask cellMask;
     if (blobs.isEmpty()) {
-      cellMask = CellMask.EMPTY;
-      normalizedBlobs = Arrays.asList(new Blob[commitments.size()]);
+      final List<CellsWithMask> cells = new ArrayList<>(proofs.size());
+      Collections.fill(cells, CellsWithMask.EMPTY);
+      builder.kzgBlobCells(BlobType.of(versionId), commitments, cells, proofs);
     } else {
-      cellMask = CellMask.FULL;
-      normalizedBlobs = blobs;
+      builder.kzgBlobs(BlobType.of(versionId), commitments, blobs, proofs);
     }
 
-    final Transaction transaction =
-        builder
-            .kzgBlobs(BlobType.of(versionId), commitments, normalizedBlobs, proofs, cellMask)
-            .sizeForAnnouncement(input.size())
-            .build();
+    final Transaction transaction = builder.sizeForAnnouncement(input.size()).build();
 
     // Validate that each commitment hashes to the versioned hash declared in the tx body.
     // A mismatch means the peer sent a sidecar that does not correspond to the transaction.

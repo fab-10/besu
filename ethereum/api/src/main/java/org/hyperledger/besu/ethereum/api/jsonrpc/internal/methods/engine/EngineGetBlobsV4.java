@@ -29,6 +29,9 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlobCellsAndProofsV1;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
+import org.hyperledger.besu.ethereum.core.kzg.Cell;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
+import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
@@ -37,6 +40,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 import jakarta.validation.constraints.NotNull;
 import org.apache.tuweni.bytes.Bytes;
@@ -86,7 +90,7 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
   @Override
   public JsonRpcResponse syncResponse(final JsonRpcRequestContext requestContext) {
     final VersionedHash[] versionedHashes = extractVersionedHashes(requestContext);
-    final Bytes indicesBitarray = extractIndicesBitarray(requestContext);
+    final CellMask cellMask = extractIndicesBitarray(requestContext);
     if (versionedHashes.length > REQUEST_MAX_VERSIONED_HASHES) {
       return new JsonRpcErrorResponse(
           requestContext.getRequest().getId(),
@@ -103,8 +107,8 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
 
     getBlobsMetrics.increaseRequested(versionedHashes.length);
 
-    final List<Integer> cellIndexes = cellIndexesFor(indicesBitarray);
-    final List<BlobCellsAndProofsV1> result = getBlobV4Result(versionedHashes, cellIndexes);
+    //    final List<Integer> cellIndexes = cellIndexesFor(cellMask);
+    final List<BlobCellsAndProofsV1> result = getBlobV4Result(versionedHashes, cellMask);
 
     // count available blobs (non-null entries)
     final int availableCount = (int) result.stream().filter(Objects::nonNull).count();
@@ -139,7 +143,7 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
     }
   }
 
-  private Bytes extractIndicesBitarray(final JsonRpcRequestContext requestContext) {
+  private CellMask extractIndicesBitarray(final JsonRpcRequestContext requestContext) {
     final Bytes indicesBitarray;
     try {
       indicesBitarray = requestContext.getRequiredParameter(1, Bytes.class);
@@ -155,7 +159,7 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
               .formatted(INDICES_BITARRAY_BYTE_LENGTH, indicesBitarray.size()),
           RpcErrorType.INVALID_INDICES_BITARRAY_PARAMS);
     }
-    return indicesBitarray;
+    return new CellMask(indicesBitarray);
   }
 
   private List<Integer> cellIndexesFor(final Bytes indicesBitarray) {
@@ -171,15 +175,15 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
   }
 
   private @NotNull List<BlobCellsAndProofsV1> getBlobV4Result(
-      final VersionedHash[] versionedHashes, final List<Integer> cellIndexes) {
+      final VersionedHash[] versionedHashes, final CellMask cellMask) {
     return Arrays.stream(versionedHashes)
         .map(transactionPool::getBlobProofBundle)
-        .map(bundle -> getBlobCellsAndProofsV1(bundle, cellIndexes))
+        .map(bundle -> getBlobCellsAndProofsV1(bundle, cellMask))
         .toList();
   }
 
   private @Nullable BlobCellsAndProofsV1 getBlobCellsAndProofsV1(
-      final BlobProofBundle bundle, final List<Integer> cellIndexes) {
+      final BlobProofBundle bundle, final CellMask cellMask) {
     if (bundle == null) {
       return null;
     }
@@ -189,15 +193,29 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
           "Unsupported blob type KZG_PROOF for versioned hash: {}", bundle.getVersionedHash());
       return null;
     }
-    final Bytes blobCells = bundle.getBlobCellsBytes().orElse(null);
-    if (blobCells == null) {
+
+    final Optional<CellsWithMask> maybeCellsWithMask = bundle.getCellsWithMask();
+
+    if (maybeCellsWithMask.isEmpty()) {
       return null;
     }
-    final int cellSize = blobCells.size() / CKZG4844Helper.CELL_PROOFS_PER_BLOB;
-    final List<Bytes> cells =
-        cellIndexes.stream().map(index -> blobCells.slice(index * cellSize, cellSize)).toList();
-    final List<KZGProof> proofs =
-        cellIndexes.stream().map(index -> bundle.getKzgProof().get(index)).toList();
-    return new BlobCellsAndProofsV1(cells, proofs);
+
+    final CellsWithMask cellsWithMask = maybeCellsWithMask.get();
+
+    if (!cellsWithMask.getCellMask().containsAll(cellMask)) {
+      return null;
+    }
+
+    final int[] cellIndexes = cellMask.indexes();
+
+    final List<Cell> resCells = new ArrayList<>(cellIndexes.length);
+    final List<KZGProof> proofs = new ArrayList<>(cellIndexes.length);
+
+    for (final int cellIndex : cellIndexes) {
+      resCells.add(cellsWithMask.getCell(cellIndex));
+      proofs.add(bundle.getKzgProof().get(cellIndex));
+    }
+
+    return new BlobCellsAndProofsV1(resCells, proofs);
   }
 }

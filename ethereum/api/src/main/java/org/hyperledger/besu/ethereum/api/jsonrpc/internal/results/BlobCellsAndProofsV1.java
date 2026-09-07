@@ -14,13 +14,13 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.results;
 
+import org.hyperledger.besu.ethereum.core.kzg.Cell;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 
 import java.util.List;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
-import org.apache.tuweni.bytes.Bytes;
 
 /**
  * The result of the engine_getBlobsV4 JSON-RPC method contains an array of BlobCellsAndProofsV1.
@@ -30,17 +30,17 @@ import org.apache.tuweni.bytes.Bytes;
 @JsonPropertyOrder({"blob_cells", "proofs"})
 public class BlobCellsAndProofsV1 {
 
-  private final List<Bytes> blobCells;
+  private final List<Cell> blobCells;
 
   private final List<KZGProof> proofs;
 
-  public BlobCellsAndProofsV1(final List<Bytes> blobCells, final List<KZGProof> proofs) {
+  public BlobCellsAndProofsV1(final List<Cell> blobCells, final List<KZGProof> proofs) {
     this.blobCells = blobCells;
     this.proofs = proofs;
   }
 
   @JsonProperty("blob_cells")
-  public List<Bytes> getBlobCells() {
+  public List<Cell> getBlobCells() {
     return blobCells;
   }
 
