@@ -48,7 +48,9 @@ public class EthProtocol implements SubProtocol {
             EthProtocolMessages.GET_RECEIPTS,
             EthProtocolMessages.RECEIPTS,
             EthProtocolMessages.GET_BLOCK_ACCESS_LISTS,
-            EthProtocolMessages.BLOCK_ACCESS_LISTS);
+            EthProtocolMessages.BLOCK_ACCESS_LISTS,
+            EthProtocolMessages.GET_CELLS,
+            EthProtocolMessages.CELLS);
     REQUEST_ID_MESSAGES =
         new BitSet(requestIdMessages.stream().mapToInt(i -> i).max().getAsInt() + 1);
     requestIdMessages.forEach(REQUEST_ID_MESSAGES::set);

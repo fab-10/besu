@@ -33,7 +33,6 @@ import org.apache.tuweni.bytes.Bytes;
 public final class CellsMessage extends AbstractMessageData {
 
   private static final int MESSAGE_CODE = EthProtocolMessages.CELLS;
-  //  private List<Transaction> pooledTransactions;
   private final Supplier<MessageFields> fieldsSupplier;
 
   private CellsMessage(final Bytes rlp) {
@@ -77,6 +76,7 @@ public final class CellsMessage extends AbstractMessageData {
     final List<Hash> txHashes = input.readList(rlp -> Hash.wrap(rlp.readBytes32()));
     final Map<Hash, List<Cell>> cellsByTxHash = HashMap.newHashMap(txHashes.size());
     final AtomicInteger idxHash = new AtomicInteger(0);
+    // ToDo EIP-8070: verify cell list have the right length according to cell mask
     input.readList(
         rlp ->
             cellsByTxHash.put(
