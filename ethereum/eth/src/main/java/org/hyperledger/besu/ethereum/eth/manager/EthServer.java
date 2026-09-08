@@ -145,10 +145,11 @@ class EthServer {
     ethMessages.registerResponseConstructor(
         EthProtocolMessages.GET_CELLS,
         (peer, messageData, capability) ->
-            constructGetBlockAccessListsResponse(
-                blockchain,
+            constructGetCellsResponse(
+                transactionPool,
+                peer,
                 messageData,
-                ethereumWireProtocolConfiguration.getMaxGetBlockAccessLists(),
+                ethereumWireProtocolConfiguration.getMaxGetCellsTransactions(),
                 maxMessageSize));
   }
 
@@ -508,8 +509,7 @@ class EthServer {
       final EthPeer peer,
       final MessageData message,
       final int requestLimit,
-      final int maxMessageSize,
-      final Capability capability) {
+      final int maxMessageSize) {
     final GetCellsMessage getCells = GetCellsMessage.readFrom(message);
     final Iterable<Hash> hashes = getCells.pooledTransactions();
     final CellMask reqCellMask = getCells.cellMask();
@@ -539,6 +539,11 @@ class EthServer {
 
     for (final Hash hash : hashesToProcess) {
       if (requestedCount >= requestLimit) {
+        LOG.atTrace()
+            .setMessage("Requested txs limit reached: peer={}, requested hashes={}")
+            .addArgument(peer)
+            .addArgument(hashesToProcess)
+            .log();
         break;
       }
       requestedCount++;

@@ -15,58 +15,38 @@
 package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.kzg.Cell;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
+import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeerImmutableAttributes;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.InvalidPeerTaskResponseException;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.MalformedRlpFromPeerException;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTask;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskValidationResponse;
-import org.hyperledger.besu.ethereum.eth.messages.GetPooledTransactionsMessage;
-import org.hyperledger.besu.ethereum.eth.messages.PooledTransactionsMessage;
-import org.hyperledger.besu.ethereum.eth.transactions.TransactionAnnouncement;
+import org.hyperledger.besu.ethereum.eth.messages.CellsMessage;
+import org.hyperledger.besu.ethereum.eth.messages.GetCellsMessage;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.SubProtocol;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.SequencedSet;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
-public class GetCellsFromPeerTask implements PeerTask<List<Transaction>> {
+public class GetCellsFromPeerTask implements PeerTask<Map<Hash, CellsWithMask>> {
 
   private final SequencedSet<Hash> hashes;
-  // Non-empty when announcements include type and size (eth/68+), used to validate received txs.
-  private final Map<Hash, TransactionAnnouncement> announcementsByHash;
+  private final CellMask cellMask;
 
-  /**
-   * Constructor for use when only hashes are available (e.g. in tests). No type/size validation.
-   */
-  public GetCellsFromPeerTask(final List<Hash> hashes) {
+  public GetCellsFromPeerTask(final List<Hash> hashes, final CellMask cellMask) {
     this.hashes = new LinkedHashSet<>(hashes);
-    this.announcementsByHash = Map.of();
-  }
-
-  private GetCellsFromPeerTask(final Map<Hash, TransactionAnnouncement> announcementsByHash) {
-    this.announcementsByHash = announcementsByHash;
-    this.hashes = new LinkedHashSet<>(announcementsByHash.keySet());
-  }
-
-  /**
-   * Factory method for production use. Validates that received txs match announced type and size.
-   */
-  public static GetCellsFromPeerTask fromAnnouncements(
-      final List<TransactionAnnouncement> announcements) {
-    return new GetCellsFromPeerTask(
-        announcements.stream()
-            .collect(
-                Collectors.toMap(TransactionAnnouncement::hash, Function.identity(), (a, b) -> a)));
+    this.cellMask = cellMask;
   }
 
   @Override
@@ -76,66 +56,56 @@ public class GetCellsFromPeerTask implements PeerTask<List<Transaction>> {
 
   @Override
   public MessageData getRequestMessage(final Set<Capability> agreedCapabilities) {
-    return GetPooledTransactionsMessage.create(hashes);
+    return GetCellsMessage.create(hashes, cellMask);
   }
 
   @Override
-  public List<Transaction> processResponse(
+  public Map<Hash, CellsWithMask> processResponse(
       final MessageData messageData, final Set<Capability> agreedCapabilities)
       throws InvalidPeerTaskResponseException, MalformedRlpFromPeerException {
-    final PooledTransactionsMessage pooledTransactionsMessage =
-        PooledTransactionsMessage.readFrom(messageData);
-    final List<Transaction> responseTransactions;
+    final CellsMessage cellsMessage = CellsMessage.readFrom(messageData);
+    final Map<Hash, List<Cell>> resCellByHash;
+    final CellMask resCellMask;
     try {
-      responseTransactions = pooledTransactionsMessage.transactions();
+      resCellByHash = cellsMessage.cellsByTxHash();
+      resCellMask = cellsMessage.cellMask();
     } catch (RLPException e) {
       throw new MalformedRlpFromPeerException(e, messageData.getData());
     }
-    if (responseTransactions.size() > hashes.size()) {
+    if (resCellByHash.size() > hashes.size()) {
       throw new InvalidPeerTaskResponseException(
-          "Response transaction count does not match request hash count");
+          "Received %d results, more than requested %d"
+              .formatted(resCellByHash.size(), hashes.size()));
     }
-    if (!announcementsByHash.isEmpty()) {
-      for (final Transaction tx : responseTransactions) {
-        final TransactionAnnouncement ann = announcementsByHash.get(tx.getHash());
-        if (ann == null) {
-          continue;
-        }
-        if (!ann.type().equals(tx.getType())) {
-          throw new MalformedRlpFromPeerException(
-              "Transaction type mismatch for hash "
-                  + tx.getHash()
-                  + ": announced "
-                  + ann.type()
-                  + " but received "
-                  + tx.getType(),
-              messageData.getData());
-        }
-        if (ann.size() != tx.getSizeForAnnouncement()) {
-          throw new MalformedRlpFromPeerException(
-              "Transaction size mismatch for hash "
-                  + tx.getHash()
-                  + ": announced "
-                  + ann.size()
-                  + " but received "
-                  + tx.getSizeForAnnouncement(),
-              messageData.getData());
-        }
+
+    if (!cellMask.containsAll(resCellMask)) {
+      throw new InvalidPeerTaskResponseException(
+          "Received cell mask %s is not contained in requested cell mask %s"
+              .formatted(resCellMask.bytes().toHexString(), cellMask.bytes().toHexString()));
+    }
+
+    final Map<Hash, CellsWithMask> result = HashMap.newHashMap(resCellByHash.size());
+
+    for (final var entry : resCellByHash.entrySet()) {
+      final Hash txHash = entry.getKey();
+
+      if (!hashes.contains(txHash)) {
+        throw new InvalidPeerTaskResponseException(
+            "Received not requested cells for tx hash %s".formatted(txHash));
       }
+
+      result.put(txHash, new CellsWithMask(entry.getValue(), resCellMask));
     }
-    return responseTransactions;
+    return result;
   }
 
   @Override
   public Predicate<EthPeerImmutableAttributes> getPeerRequirementFilter() {
-    return (peer) -> true;
+    return _ -> true;
   }
 
   @Override
-  public PeerTaskValidationResponse validateResult(final List<Transaction> result) {
-    if (!result.stream().allMatch((t) -> hashes.contains(t.getHash()))) {
-      return PeerTaskValidationResponse.RESULTS_DO_NOT_MATCH_QUERY;
-    }
+  public PeerTaskValidationResponse validateResult(final Map<Hash, CellsWithMask> result) {
     return PeerTaskValidationResponse.RESULTS_VALID_AND_GOOD;
   }
 }
