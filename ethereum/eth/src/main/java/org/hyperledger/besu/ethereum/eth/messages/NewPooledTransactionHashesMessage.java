@@ -31,7 +31,7 @@ import org.apache.tuweni.bytes.Bytes;
 
 public class NewPooledTransactionHashesMessage extends AbstractMessageData {
   private static final int MESSAGE_CODE = EthProtocolMessages.NEW_POOLED_TRANSACTION_HASHES;
-  private List<TransactionAnnouncement> pendingTransactions;
+  private List<TransactionAnnouncement> txAnnouncements;
   private final Capability capability;
 
   @VisibleForTesting
@@ -67,9 +67,9 @@ public class NewPooledTransactionHashesMessage extends AbstractMessageData {
   }
 
   public List<TransactionAnnouncement> pendingTransactionAnnouncements() {
-    if (pendingTransactions == null) {
-      pendingTransactions = getDecoder(capability).decode(RLP.input(data));
+    if (txAnnouncements == null) {
+      txAnnouncements = getDecoder(capability).decode(RLP.input(data));
     }
-    return pendingTransactions;
+    return txAnnouncements;
   }
 }

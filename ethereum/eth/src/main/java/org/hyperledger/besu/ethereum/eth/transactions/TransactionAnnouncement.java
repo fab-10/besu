@@ -19,26 +19,43 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 
 import java.util.ArrayList;
 import java.util.List;
 
-public record TransactionAnnouncement(Hash hash, TransactionType type, Long size) {
+public record TransactionAnnouncement(
+    Hash hash, TransactionType type, Long size, CellMask cellMask) {
   public TransactionAnnouncement(final Transaction transaction) {
-    this(
-        checkNotNull(transaction, "Transaction cannot be null").getHash(),
-        transaction.getType(),
-        (long) transaction.getSizeForAnnouncement());
+    final Transaction tx = checkNotNull(transaction, "Transaction cannot be null");
+    final TransactionType type = tx.getType();
+    final CellMask cellMask;
+    if (type.supportsBlob()) {
+      cellMask = tx.getBlobsWithCommitments().orElseThrow().getCellMask();
+    } else {
+      cellMask = null;
+    }
+    this(tx.getHash(), type, (long) transaction.getSizeForAnnouncement(), cellMask);
   }
 
-  public TransactionAnnouncement(final Hash hash, final TransactionType type, final Long size) {
+  public TransactionAnnouncement(
+      final Hash hash, final TransactionType type, final Long size, final CellMask cellMask) {
     this.hash = checkNotNull(hash, "Hash cannot be null");
     this.type = checkNotNull(type, "Type cannot be null");
     this.size = checkNotNull(size, "Size cannot be null");
+    this.cellMask = type.supportsBlob() ? checkNotNull(cellMask, "Cell mask cannot be null") : null;
   }
 
   public static List<TransactionAnnouncement> create(
       final List<TransactionType> types, final List<Long> sizes, final List<Hash> hashes) {
+    return create(types, sizes, hashes, null);
+  }
+
+  public static List<TransactionAnnouncement> create(
+      final List<TransactionType> types,
+      final List<Long> sizes,
+      final List<Hash> hashes,
+      final CellMask cellMask) {
     // Check if lists have the same size
     if (!(types.size() == hashes.size() && hashes.size() == sizes.size())) {
       throw new IllegalArgumentException(
@@ -46,7 +63,8 @@ public record TransactionAnnouncement(Hash hash, TransactionType type, Long size
     }
     final List<TransactionAnnouncement> transactions = new ArrayList<>(hashes.size());
     for (int i = 0; i < hashes.size(); i++) {
-      transactions.add(new TransactionAnnouncement(hashes.get(i), types.get(i), sizes.get(i)));
+      transactions.add(
+          new TransactionAnnouncement(hashes.get(i), types.get(i), sizes.get(i), cellMask));
     }
     return transactions;
   }

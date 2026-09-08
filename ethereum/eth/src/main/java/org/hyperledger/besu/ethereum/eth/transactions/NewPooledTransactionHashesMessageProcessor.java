@@ -110,7 +110,7 @@ public class NewPooledTransactionHashesMessageProcessor {
 
       scheduledTasks.computeIfAbsent(
           peer,
-          ethPeer ->
+          _ ->
               ethContext
                   .getScheduler()
                   .scheduleFutureTaskWithFixedDelay(
