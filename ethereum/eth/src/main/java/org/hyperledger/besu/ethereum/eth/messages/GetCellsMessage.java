@@ -40,7 +40,7 @@ public final class GetCellsMessage extends AbstractMessageData {
 
   private GetCellsMessage(final Bytes rlp, final MessageFields messageFields) {
     super(rlp);
-    fieldsSupplier = Suppliers.memoize(() -> messageFields);
+    fieldsSupplier = Suppliers.ofInstance(messageFields);
   }
 
   @Override
