@@ -17,6 +17,7 @@ package org.hyperledger.besu.ethereum.eth.transactions;
 import static org.hyperledger.besu.ethereum.core.Transaction.toHashList;
 
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.messages.NewPooledTransactionHashesMessage;
@@ -44,17 +45,45 @@ class NewPooledTransactionHashesMessageSender {
     final Capability capability = peer.getConnection().capability(EthProtocol.NAME);
     final List<Transaction> txBatch = new ArrayList<>(MAX_TRANSACTIONS_HASHES);
     Transaction announcementToSend;
+
+    CellMask prevCellMask = null;
+
     while ((announcementToSend = transactionTracker.claimAnnouncementToSendToPeer(peer)) != null) {
-      if (!transactionTracker.hasPeerSeenTransactionOrAnnouncement(
-          peer, announcementToSend.getHash())) {
+      final boolean hasPeerSeenTransactionOrAnnouncement =
+          transactionTracker.hasPeerSeenTransactionOrAnnouncement(
+              peer, announcementToSend.getHash());
+
+      if (hasPeerSeenTransactionOrAnnouncement) {
+        continue;
+      }
+
+      // txs are ordered by cell mask, so when we detect a change in cell mask, we send the current
+      // batch and add the current tx to the next batch
+      final boolean sameCellMask;
+      if (announcementToSend.getType().supportsBlob()) {
+        final CellMask currCellMask =
+            announcementToSend.getBlobsWithCommitments().orElseThrow().getCellMask();
+        if (prevCellMask == null) {
+          prevCellMask = currCellMask;
+        }
+        sameCellMask = prevCellMask.equals(currCellMask);
+      } else {
+        sameCellMask = true;
+      }
+
+      if (sameCellMask) {
         txBatch.add(announcementToSend);
       }
 
-      if (txBatch.size() == MAX_TRANSACTIONS_HASHES) {
+      if (!sameCellMask || txBatch.size() == MAX_TRANSACTIONS_HASHES) {
         // send current batch and exit loop if peer no more connected
         final boolean connectionLost = !send(peer, txBatch, capability);
         txBatch.clear();
         if (connectionLost) break;
+      }
+
+      if (!sameCellMask) {
+        txBatch.add(announcementToSend);
       }
     }
 

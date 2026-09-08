@@ -320,8 +320,12 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
     return cellIndices;
   }
 
-  public Optional<CellMask> getCellMask() {
-    return blobProofBundles.getFirst().getCellsWithMask().map(CellsWithMask::getCellMask);
+  public CellMask getCellMask() {
+    return blobProofBundles
+        .getFirst()
+        .getCellsWithMask()
+        .map(CellsWithMask::getCellMask)
+        .orElse(CellMask.FULL);
   }
 
   public boolean hasFullData() {
