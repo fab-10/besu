@@ -1236,9 +1236,7 @@ public class Transaction
                     .map(vh -> new VersionedHash(Bytes32.wrap(vh.getBytes().copy())))
                     .toList());
     final Optional<BlobsWithCommitments> detachedBlobsWithCommitments =
-        blobsWithCommitments.map(
-            withCommitments ->
-                blobsWithCommitmentsDetachedCopy(withCommitments, detachedVersionedHashes.get()));
+        blobsWithCommitments.map(BlobsWithCommitments::detachedCopy);
     final Optional<List<CodeDelegation>> detachedCodeDelegationList =
         maybeCodeDelegationList.map(
             codeDelegations ->
@@ -1289,49 +1287,6 @@ public class Transaction
         detachedAddress,
         codeDelegation.nonce(),
         codeDelegation.signature());
-  }
-
-  private BlobsWithCommitments blobsWithCommitmentsDetachedCopy(
-      final BlobsWithCommitments blobsWithCommitments, final List<VersionedHash> versionedHashes) {
-    final var detachedCommitments =
-        blobsWithCommitments.getKzgCommitments().stream()
-            .map(kc -> new KZGCommitment(kc.getData().copy()))
-            .toList();
-    final var detachedProofs =
-        blobsWithCommitments.getKzgProofs().stream()
-            .map(proof -> new KZGProof(proof.getData().copy()))
-            .toList();
-    if (blobsWithCommitments.hasFullData()) {
-      final var detachedBlobs =
-          blobsWithCommitments.getBlobs().stream()
-              .map(
-                  b ->
-                      Objects.requireNonNull(
-                          b, "Internal error: hasFullData it true but blob is null"))
-              .toList();
-
-      return BlobsWithCommitments.createFromBlobs(
-          blobsWithCommitments.getBlobType(),
-          detachedCommitments,
-          detachedBlobs,
-          detachedProofs,
-          versionedHashes);
-    } else {
-      final var detachedBlobCells =
-          blobsWithCommitments.getCellMask().stream()
-              .map(
-                  b ->
-                      Objects.requireNonNull(
-                          b, "Internal error: hasFullData it true but blob is null"))
-              .toList();
-
-      return BlobsWithCommitments.createFromBlobs(
-          blobsWithCommitments.getBlobType(),
-          detachedCommitments,
-          detachedBlobs,
-          detachedProofs,
-          versionedHashes);
-    }
   }
 
   public static class Builder {
@@ -1579,7 +1534,8 @@ public class Transaction
         final List<Blob> blobs,
         final List<KZGProof> kzgProofs) {
       this.blobsWithCommitments =
-          new BlobsWithCommitments(blobType, kzgCommitments, blobs, kzgProofs, versionedHashes);
+          BlobsWithCommitments.createFromBlobs(
+              blobType, kzgCommitments, blobs, kzgProofs, versionedHashes);
       return this;
     }
 
@@ -1589,7 +1545,7 @@ public class Transaction
         final List<CellsWithMask> cellsWithMaskList,
         final List<KZGProof> kzgProofs) {
       this.blobsWithCommitments =
-          new BlobsWithCommitments(
+          BlobsWithCommitments.createFromBlobCells(
               blobType, kzgCommitments, cellsWithMaskList, kzgProofs, versionedHashes);
       return this;
     }
