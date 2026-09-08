@@ -14,6 +14,8 @@
  */
 package org.hyperledger.besu.ethereum.core.kzg;
 
+import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELL_PROOFS_PER_BLOB;
+
 import java.util.List;
 
 public class CellsWithMask {
@@ -22,13 +24,18 @@ public class CellsWithMask {
   private final Cell[] cells;
   private final CellMask cellMask;
 
+  private CellsWithMask(final Cell[] cells, final CellMask cellMask) {
+    this.cells = cells;
+    this.cellMask = cellMask;
+  }
+
   public CellsWithMask(final List<Cell> cells, final CellMask cellMask) {
-    this.cells = new Cell[CKZG4844Helper.CELL_PROOFS_PER_BLOB];
+    this.cells = new Cell[CELL_PROOFS_PER_BLOB];
     this.cellMask = cellMask;
 
     int listTIdx = 0;
 
-    for (int i = 0; i < CKZG4844Helper.CELL_PROOFS_PER_BLOB; i++) {
+    for (int i = 0; i < CELL_PROOFS_PER_BLOB; i++) {
       final int byteIndex = i / Byte.SIZE;
       final int bitIndex = i % Byte.SIZE;
       if ((Byte.toUnsignedInt(cellMask.bytes().get(byteIndex)) & (1 << bitIndex)) != 0) {
@@ -54,5 +61,14 @@ public class CellsWithMask {
 
   public Cell[] getCells() {
     return cells;
+  }
+
+  public CellsWithMask detachedCopy() {
+    final CellMask detachedCellMask = new CellMask(cellMask.bytes().copy());
+    final Cell[] detachedCells = new Cell[CELL_PROOFS_PER_BLOB];
+    for (int i = 0; i < CELL_PROOFS_PER_BLOB; i++) {
+      detachedCells[i] = new Cell(cells[i].getData().copy());
+    }
+    return new CellsWithMask(detachedCells, detachedCellMask);
   }
 }

@@ -28,7 +28,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSucces
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlobCellsAndProofsV1;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
-import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
 import org.hyperledger.besu.ethereum.core.kzg.Cell;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
@@ -107,7 +106,6 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
 
     getBlobsMetrics.increaseRequested(versionedHashes.length);
 
-    //    final List<Integer> cellIndexes = cellIndexesFor(cellMask);
     final List<BlobCellsAndProofsV1> result = getBlobV4Result(versionedHashes, cellMask);
 
     // count available blobs (non-null entries)
@@ -162,18 +160,6 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
     return new CellMask(indicesBitarray);
   }
 
-  private List<Integer> cellIndexesFor(final Bytes indicesBitarray) {
-    final List<Integer> indexes = new ArrayList<>(CKZG4844Helper.CELL_PROOFS_PER_BLOB);
-    for (int i = 0; i < CKZG4844Helper.CELL_PROOFS_PER_BLOB; i++) {
-      final int byteIndex = i / Byte.SIZE;
-      final int bitIndex = i % Byte.SIZE;
-      if ((Byte.toUnsignedInt(indicesBitarray.get(byteIndex)) & (1 << bitIndex)) != 0) {
-        indexes.add(i);
-      }
-    }
-    return indexes;
-  }
-
   private @NotNull List<BlobCellsAndProofsV1> getBlobV4Result(
       final VersionedHash[] versionedHashes, final CellMask cellMask) {
     return Arrays.stream(versionedHashes)
@@ -183,7 +169,7 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
   }
 
   private @Nullable BlobCellsAndProofsV1 getBlobCellsAndProofsV1(
-      final BlobProofBundle bundle, final CellMask cellMask) {
+      final BlobProofBundle bundle, final CellMask reqCellMask) {
     if (bundle == null) {
       return null;
     }
@@ -202,11 +188,11 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
 
     final CellsWithMask cellsWithMask = maybeCellsWithMask.get();
 
-    if (!cellsWithMask.getCellMask().containsAll(cellMask)) {
+    if (!cellsWithMask.getCellMask().containsAll(reqCellMask)) {
       return null;
     }
 
-    final int[] cellIndexes = cellMask.indexes();
+    final int[] cellIndexes = reqCellMask.indexes();
 
     final List<Cell> resCells = new ArrayList<>(cellIndexes.length);
     final List<KZGProof> proofs = new ArrayList<>(cellIndexes.length);

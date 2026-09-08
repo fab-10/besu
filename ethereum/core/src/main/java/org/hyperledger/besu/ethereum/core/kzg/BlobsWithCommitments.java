@@ -341,4 +341,9 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
   public int hashCode() {
     return Objects.hash(blobProofBundles, blobType);
   }
+
+  public BlobsWithCommitments detachedCopy() {
+    return new BlobsWithCommitments(
+        blobType, blobProofBundles.stream().map(BlobProofBundle::detachedCopy).toList());
+  }
 }

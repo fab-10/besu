@@ -37,7 +37,7 @@ public class Cell {
   @JsonCreator
   public Cell(final Bytes data) {
     Preconditions.checkArgument(
-        data.size() == SIZE, "Invalid cell size %d, expected %d", data.size(), SIZE);
+        data.size() == SIZE, "Invalid cell size %d, expected %d".formatted(data.size(), SIZE));
     this.data = data;
   }
 

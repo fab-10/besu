@@ -15,7 +15,6 @@
 package org.hyperledger.besu.ethereum.eth.messages;
 
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.kzg.Cell;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.AbstractMessageData;
@@ -34,7 +33,7 @@ import org.apache.tuweni.bytes.Bytes;
 public final class CellsMessage extends AbstractMessageData {
 
   private static final int MESSAGE_CODE = EthProtocolMessages.CELLS;
-  private List<Transaction> pooledTransactions;
+  //  private List<Transaction> pooledTransactions;
   private final Supplier<MessageFields> fieldsSupplier;
 
   private CellsMessage(final Bytes rlp) {

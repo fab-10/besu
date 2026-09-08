@@ -25,6 +25,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes32;
 
 /** Represents a bundle of proofs for a blob, including KZG commitments and proofs. */
 public final class BlobProofBundle {
@@ -140,7 +141,7 @@ public final class BlobProofBundle {
   }
 
   public Optional<Bytes> getBlobCellsBytes() {
-    return Optional.ofNullable(cellsWithMask);
+    return null; // ToDo Optional.ofNullable(cellsWithMask);
   }
 
   public Optional<CellsWithMask> getCellsWithMask() {
@@ -166,5 +167,31 @@ public final class BlobProofBundle {
   @Override
   public int hashCode() {
     return Objects.hash(blobType, blob, kzgCommitment, kzgProof, versionedHash);
+  }
+
+  public BlobProofBundle detachedCopy() {
+
+    final KZGCommitment detachedCommitment = new KZGCommitment(kzgCommitment.getData().copy());
+    final List<KZGProof> detachedProofs =
+        kzgProof.stream().map(proof -> new KZGProof(proof.getData().copy())).toList();
+    final VersionedHash detachedVersionedHash =
+        new VersionedHash(Bytes32.wrap(versionedHash.getBytes().copy()));
+
+    if (blob.isPresent()) {
+      final Blob detachedBlob = new Blob(blob.get().getData().copy());
+      return new BlobProofBundle(
+          blobType, detachedBlob, detachedCommitment, detachedProofs, detachedVersionedHash);
+    }
+
+    final CellsWithMask cwm =
+        cellsWithMask.orElseThrow(
+            () ->
+                new IllegalStateException(
+                    "Internal error: cellsWithMask must be present when blob is not"));
+
+    final CellsWithMask detachedCellsWithMask = cwm.detachedCopy();
+
+    return new BlobProofBundle(
+        blobType, detachedCellsWithMask, detachedCommitment, detachedProofs, detachedVersionedHash);
   }
 }
