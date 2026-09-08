@@ -504,6 +504,11 @@ public class PeerTransactionTracker
       }
     }
 
+    // ToDo: EIP-8070
+    //    public int announcementCount() {
+    //      return announcements.cardinality();
+    //    }
+
     public boolean anyHasSeenTransaction() {
       return !transactions.isEmpty();
     }

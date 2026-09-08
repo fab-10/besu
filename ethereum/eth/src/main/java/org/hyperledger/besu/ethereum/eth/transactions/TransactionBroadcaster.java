@@ -19,6 +19,7 @@ import static org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction.
 
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeerImmutableAttributes;
@@ -165,10 +166,13 @@ public class TransactionBroadcaster
   private void sendTransactionHashes(
       final List<Transaction> transactions, final List<EthPeer> transactionHashPeers) {
     if (!transactions.isEmpty()) {
+
+      final List<Transaction> orderedTxs = orderTransactions(transactions);
+
       transactionHashPeers.stream()
           .forEach(
               peer -> {
-                transactionTracker.addToPeerAnnouncementsSendQueue(peer, transactions);
+                transactionTracker.addToPeerAnnouncementsSendQueue(peer, orderedTxs);
                 ethContext
                     .getScheduler()
                     .scheduleSyncWorkerTask(
@@ -177,6 +181,18 @@ public class TransactionBroadcaster
                                 .sendTransactionAnnouncementsToPeer(peer));
               });
     }
+  }
+
+  private List<Transaction> orderTransactions(final List<Transaction> transactions) {
+    // group tx by cell mask, non-blob tx will have Optional.empty()
+    return transactions.stream()
+        .collect(
+            Collectors.groupingBy(
+                tx -> tx.getBlobsWithCommitments().map(BlobsWithCommitments::getCellMask)))
+        .values()
+        .stream()
+        .flatMap(List::stream)
+        .toList();
   }
 
   @Override

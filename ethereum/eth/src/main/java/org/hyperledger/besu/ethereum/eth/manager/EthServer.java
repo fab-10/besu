@@ -564,13 +564,7 @@ class EthServer {
 
       final BlobsWithCommitments bwc = maybeBwc.get();
 
-      final Optional<CellMask> maybeCellMask = bwc.getCellMask();
-
-      if (maybeCellMask.isEmpty()) {
-        continue;
-      }
-
-      final CellMask cellMask = maybeCellMask.get();
+      final CellMask cellMask = bwc.getCellMask();
 
       if (!cellMask.containsAll(reqCellMask)) {
         LOG.atTrace()

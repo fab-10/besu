@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.eth.encoding;
 
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.TransactionType;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAnnouncement;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
@@ -40,20 +41,22 @@ public class TransactionAnnouncementDecoder {
    * @return the correct decoder
    */
   public static Decoder getDecoder(final Capability capability) {
-    return TransactionAnnouncementDecoder::decodeForEth68;
+    return TransactionAnnouncementDecoder::decodeForEth72;
   }
 
   /**
    * Decode the list of transactions in the NewPooledTransactionHashesMessage
    *
-   * @param input input used to decode the NewPooledTransactionHashesMessage after Eth/68
-   *     <p>format: [[type_0: B_1, type_1: B_1, ...], [size_0: P, size_1: P, ...], ...]
-   * @return the list of TransactionAnnouncement decoded from the message with size, type and hash
+   * @param input input used to decode the NewPooledTransactionHashesMessage after Eth/72
+   *     <p>format: [txtypes: B, [txsize₁: P, txsize₂: P, ...], [txhash₁: B_32, txhash₂: B_32, ...],
+   *     cells: B_16]
+   * @return the TransactionsAnnouncement decoded from the message with size, type, hash and cell
+   *     mask
    */
-  private static List<TransactionAnnouncement> decodeForEth68(final RLPInput input) {
+  private static List<TransactionAnnouncement> decodeForEth72(final RLPInput input) {
     final int size = input.enterList();
 
-    final List<TransactionType> types = new ArrayList<>(size);
+    final List<TransactionType> types = new ArrayList<>();
     final byte[] bytes = input.readBytes().toArray();
     for (final byte b : bytes) {
       final var transactionType =
@@ -69,10 +72,13 @@ public class TransactionAnnouncementDecoder {
 
     // use Bytes32::copy to avoid keeping reference to underlying RLP byte array
     final List<Hash> hashes = input.readList(rlp -> Hash.wrap(rlp.readBytes32().copy()));
+
+    final CellMask cellMask = size == 4 ? new CellMask(input.readBytes()) : null;
+
     input.leaveList();
     if (!(types.size() == hashes.size() && hashes.size() == sizes.size())) {
       throw new RLPException("Hashes, sizes and types must have the same number of elements");
     }
-    return TransactionAnnouncement.create(types, sizes, hashes);
+    return TransactionAnnouncement.create(types, sizes, hashes, cellMask);
   }
 }
