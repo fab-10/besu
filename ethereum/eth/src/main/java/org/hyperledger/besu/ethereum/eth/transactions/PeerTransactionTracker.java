@@ -22,6 +22,7 @@ import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.chain.BlockAddedEvent;
 import org.hyperledger.besu.ethereum.chain.BlockAddedObserver;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
@@ -38,8 +39,11 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
+import java.util.SequencedMap;
 import java.util.SequencedSet;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -52,6 +56,7 @@ import org.slf4j.LoggerFactory;
 public class PeerTransactionTracker
     implements EthPeer.DisconnectCallback,
         EthPeers.ConnectCallback,
+        PendingTransactionAddedListener,
         PendingTransactionDroppedListener,
         BlockAddedObserver {
   private static final Logger LOG = LoggerFactory.getLogger(PeerTransactionTracker.class);
@@ -66,6 +71,8 @@ public class PeerTransactionTracker
       new HashMap<>();
   private final Set<Hash> inProgressAnnouncements = new HashSet<>();
   private final BiMap<EthPeer, Integer> peerToSlotIndexMap;
+  private final BlobTransactionTracker blobTracker;
+  private final AtomicReference<CellMask> blobCustodyColumns = new AtomicReference<>(CellMask.FULL);
 
   public PeerTransactionTracker(
       final TransactionPoolConfiguration txPoolConfig,
@@ -78,6 +85,7 @@ public class PeerTransactionTracker
     this.peersSeenStateByHash =
         new FixedCapacityLRUMap<>(txPoolConfig.getUnstable().getMaxTrackedSeenTxs());
     this.peerToSlotIndexMap = HashBiMap.create(ethPeers.getMaxPeers());
+    this.blobTracker = new BlobTransactionTracker();
     ethScheduler.scheduleFutureTaskWithFixedDelay(
         this::logStats, Duration.ofMinutes(1), Duration.ofMinutes(1));
   }
@@ -259,6 +267,7 @@ public class PeerTransactionTracker
 
     final List<TransactionAnnouncement> freshAnnouncements =
         incomingAnnouncements.stream()
+            .peek(txAnnouncement -> blobTracker.receivedAnnouncement(peer, txAnnouncement))
             .filter(txAnnouncement -> !alreadySeenTransaction(txAnnouncement.hash()))
             .toList();
 
@@ -431,6 +440,15 @@ public class PeerTransactionTracker
   }
 
   @Override
+  public void onTransactionAdded(final Transaction transaction) {
+    if (transaction.getType().supportsBlob()) {
+      synchronized (this) {
+        blobTracker.addedToPool(transaction);
+      }
+    }
+  }
+
+  @Override
   public void onBlockAdded(final BlockAddedEvent event) {
     ethScheduler.scheduleServiceTask(
         () -> {
@@ -481,6 +499,14 @@ public class PeerTransactionTracker
         itAnnReqs.remove();
       }
     }
+  }
+
+  public void updateBlobCustodyColumns(final CellMask custodyColumns) {
+    blobCustodyColumns.set(custodyColumns);
+  }
+
+  public CellMask getBlobCustodyColumns() {
+    return blobCustodyColumns.get();
   }
 
   private record PeersSeenState(BitSet transactions, BitSet announcements) {
@@ -557,6 +583,50 @@ public class PeerTransactionTracker
     @Override
     protected void checkCapacity() {
       // no-op since the fixed map never needs to resize
+    }
+  }
+
+  private class BlobTransactionTracker {
+
+    record PeerAndCellMask(EthPeer peer, CellMask cellMask) {}
+
+    final Random random = new Random();
+    final Map<Hash, List<PeerAndCellMask>> trackedBlobs = new HashMap<>();
+    final Map<Hash, Transaction> addedToPool = new HashMap<>();
+    final SequencedMap<Hash, CellMask> fetchable = new LinkedHashMap<>();
+
+    public void receivedAnnouncement(
+        final EthPeer peer, final TransactionAnnouncement txAnnouncement) {
+      final Hash txHash = txAnnouncement.hash();
+      final List<PeerAndCellMask> pcms = trackedBlobs
+              .computeIfAbsent(txHash, _ -> new ArrayList<>());
+
+      pcms.add(new PeerAndCellMask(peer, txAnnouncement.cellMask()));
+
+      if(pcms.size() >= 2 && addedToPool.containsKey(txHash)) {
+        addFetchable(txHash);
+      }
+    }
+
+    public void addedToPool(final Transaction tx) {
+      addedToPool.put(tx.getHash(), tx);
+
+      final List<PeerAndCellMask> pcms = trackedBlobs.getOrDefault(tx.getHash(), List.of());
+
+      if(pcms.size() >= 2) {
+        addFetchable(tx.getHash());
+      }
+    }
+
+    private void addFetchable(final Hash txHash) {
+      final CellMask fetchCellMask;
+      if(random.nextInt(100) < 15) {
+        // fetch all cells
+        fetchCellMask = CellMask.FULL;
+      } else {
+        fetchCellMask = getBlobCustodyColumns();
+      }
+      fetchable.put(txHash, fetchCellMask);
     }
   }
 }

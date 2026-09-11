@@ -38,6 +38,7 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
@@ -125,7 +126,6 @@ public class TransactionPool implements BlockAddedObserver {
   private final ListMultimap<VersionedHash, BlobProofBundle> mapOfBlobsInTransactionPool =
       Multimaps.synchronizedListMultimap(
           Multimaps.newListMultimap(new HashMap<>(), () -> new ArrayList<>(1)));
-  private final AtomicReference<Bytes> blobCustodyColumns = new AtomicReference<>();
 
   public TransactionPool(
       final Supplier<PendingTransactions> pendingTransactionsSupplier,
@@ -246,24 +246,6 @@ public class TransactionPool implements BlockAddedObserver {
     }
     return validationResults;
   }
-
-  /**
-   * The outcome of an attempt to add a transaction to the pool: the validation result, plus the
-   * transaction as it was actually pooled.
-   *
-   * <p>The pooled transaction is not always the one that was submitted: fork specific
-   * pre-processing may rewrite it. EIP-7594 (Osaka) upgrades a locally submitted blob transaction
-   * from the version 0 to the version 1 network wrapper, which changes its pooled encoding, and
-   * therefore its size, without changing its hash. Callers must broadcast and announce the pooled
-   * transaction, because that is the one {@code GetPooledTransactions} will serve, and the size in
-   * a {@code NewPooledTransactionHashes} announcement has to match it.
-   *
-   * @param result the validation result
-   * @param pooledTransaction the transaction as pooled, which is the submitted transaction when no
-   *     pre-processing applied, or when the transaction was not added at all
-   */
-  private record AdditionOutcome(
-      ValidationResult<TransactionInvalidReason> result, Transaction pooledTransaction) {}
 
   private AdditionOutcome addTransaction(
       final Transaction baseTransaction,
@@ -797,12 +779,12 @@ public class TransactionPool implements BlockAddedObserver {
    *
    * @return the 16-byte custody bitarray, or empty if the CL has never reported one.
    */
-  public Optional<Bytes> getBlobCustodyColumns() {
-    return Optional.ofNullable(blobCustodyColumns.get());
+  public CellMask getBlobCustodyColumns() {
+    return transactionBroadcaster.getBlobCustodyColumns();
   }
 
-  public void updateBlobCustodyColumns(final Bytes custodyColumns) {
-    blobCustodyColumns.set(custodyColumns);
+  public void updateBlobCustodyColumns(final CellMask custodyColumns) {
+    transactionBroadcaster.updateBlobCustodyColumns(custodyColumns);
   }
 
   public boolean isEnabled() {
@@ -1101,4 +1083,22 @@ public class TransactionPool implements BlockAddedObserver {
       Files.move(tmp, saveFile.toPath());
     }
   }
+
+  /**
+   * The outcome of an attempt to add a transaction to the pool: the validation result, plus the
+   * transaction as it was actually pooled.
+   *
+   * <p>The pooled transaction is not always the one that was submitted: fork specific
+   * pre-processing may rewrite it. EIP-7594 (Osaka) upgrades a locally submitted blob transaction
+   * from the version 0 to the version 1 network wrapper, which changes its pooled encoding, and
+   * therefore its size, without changing its hash. Callers must broadcast and announce the pooled
+   * transaction, because that is the one {@code GetPooledTransactions} will serve, and the size in
+   * a {@code NewPooledTransactionHashes} announcement has to match it.
+   *
+   * @param result the validation result
+   * @param pooledTransaction the transaction as pooled, which is the submitted transaction when no
+   *     pre-processing applied, or when the transaction was not added at all
+   */
+  public record AdditionOutcome(
+      ValidationResult<TransactionInvalidReason> result, Transaction pooledTransaction) {}
 }
