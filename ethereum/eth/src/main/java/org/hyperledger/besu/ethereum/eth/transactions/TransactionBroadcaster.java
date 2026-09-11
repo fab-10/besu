@@ -20,6 +20,7 @@ import static org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction.
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeerImmutableAttributes;
@@ -31,14 +32,16 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
+import org.apache.tuweni.bytes.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class TransactionBroadcaster
+class TransactionBroadcaster
     implements TransactionBatchAddedListener, PendingTransactionDroppedListener {
   private static final Logger LOG = LoggerFactory.getLogger(TransactionBroadcaster.class);
 
@@ -53,7 +56,7 @@ public class TransactionBroadcaster
   private final EthContext ethContext;
   private final Random random;
 
-  public TransactionBroadcaster(
+  TransactionBroadcaster(
       final EthContext ethContext,
       final PeerTransactionTracker transactionTracker,
       final TransactionsMessageSender transactionsMessageSender,
@@ -198,5 +201,13 @@ public class TransactionBroadcaster
   @Override
   public void onTransactionDropped(final Transaction transaction, final RemovalReason reason) {
     transactionTracker.onTransactionDropped(transaction, reason);
+  }
+
+  public void updateBlobCustodyColumns(final CellMask custodyColumns) {
+    transactionTracker.updateBlobCustodyColumns(custodyColumns);
+  }
+
+  public CellMask getBlobCustodyColumns() {
+    return transactionTracker.getBlobCustodyColumns();
   }
 }
