@@ -114,6 +114,7 @@ public class TransactionPool implements BlockAddedObserver {
   private final ProtocolContext protocolContext;
   private final EthContext ethContext;
   private final TransactionBroadcaster transactionBroadcaster;
+  private final PeerTransactionTracker peerTransactionTracker;
   private final TransactionPoolMetrics metrics;
   private final TransactionPoolConfiguration configuration;
   private final AtomicBoolean isPoolEnabled = new AtomicBoolean(false);
@@ -126,12 +127,14 @@ public class TransactionPool implements BlockAddedObserver {
   private final ListMultimap<VersionedHash, BlobProofBundle> mapOfBlobsInTransactionPool =
       Multimaps.synchronizedListMultimap(
           Multimaps.newListMultimap(new HashMap<>(), () -> new ArrayList<>(1)));
+  private final TransactionLimbo transactionLimbo;
 
   public TransactionPool(
       final Supplier<PendingTransactions> pendingTransactionsSupplier,
       final ProtocolSchedule protocolSchedule,
       final ProtocolContext protocolContext,
       final TransactionBroadcaster transactionBroadcaster,
+      final PeerTransactionTracker peerTransactionTracker,
       final EthContext ethContext,
       final TransactionPoolMetrics metrics,
       final TransactionPoolConfiguration configuration,
@@ -141,16 +144,18 @@ public class TransactionPool implements BlockAddedObserver {
     this.protocolContext = protocolContext;
     this.ethContext = ethContext;
     this.transactionBroadcaster = transactionBroadcaster;
+    this.peerTransactionTracker = peerTransactionTracker;
     this.metrics = metrics;
     this.configuration = configuration;
     this.blockAddedEventOrderedProcessor =
         ethContext.getScheduler().createOrderedProcessor(this::processBlockAddedEvent);
     this.cacheForBlobsOfTransactionsAddedToABlock = blobCache;
+    this.transactionLimbo = new TransactionLimbo(ethContext, peerTransactionTracker);
     initializeBlobMetrics();
     subscribePendingTransactions(this::mapBlobsOnTransactionAdded);
-    subscribeDroppedTransactions(
-        (transaction, reason) -> unmapBlobsOnTransactionDropped(transaction));
-    subscribeDroppedTransactions(transactionBroadcaster);
+    subscribeDroppedTransactions((transaction, _) -> unmapBlobsOnTransactionDropped(transaction));
+    //    subscribePendingTransactions(peerTra/nsactionTracker);
+    subscribeDroppedTransactions(peerTransactionTracker);
   }
 
   @VisibleForTesting
@@ -274,32 +279,36 @@ public class TransactionPool implements BlockAddedObserver {
         validateTransaction(transaction, isLocal, hasPriority);
 
     if (validationResult.result.isValid()) {
-      final TransactionAddedResult status =
-          pendingTransactions.addTransaction(
-              PendingTransaction.newPendingTransaction(transaction, isLocal, hasPriority, score),
-              validationResult.maybeAccount);
-      if (status.isSuccess()) {
-        LOG.atTrace()
-            .setMessage("Added {} transaction {}")
-            .addArgument(() -> isLocal ? "local" : "remote")
-            .addArgument(transaction::toTraceLog)
-            .log();
+      if (incompleteBlob(transaction)) {
+        transactionLimbo.addIncompleteBlob(transaction);
       } else {
-        final var rejectReason =
-            status
-                .maybeInvalidReason()
-                .orElseGet(
-                    () -> {
-                      LOG.warn("Missing invalid reason for status {}", status);
-                      return INTERNAL_ERROR;
-                    });
-        LOG.atTrace()
-            .setMessage("Transaction {} rejected reason {}")
-            .addArgument(transaction::toTraceLog)
-            .addArgument(rejectReason)
-            .log();
-        metrics.incrementRejected(isLocal, hasPriority, rejectReason, "txpool");
-        return new AdditionOutcome(ValidationResult.invalid(rejectReason), transaction);
+        final TransactionAddedResult status =
+            pendingTransactions.addTransaction(
+                PendingTransaction.newPendingTransaction(transaction, isLocal, hasPriority, score),
+                validationResult.maybeAccount);
+        if (status.isSuccess()) {
+          LOG.atTrace()
+              .setMessage("Added {} transaction {}")
+              .addArgument(() -> isLocal ? "local" : "remote")
+              .addArgument(transaction::toTraceLog)
+              .log();
+        } else {
+          final var rejectReason =
+              status
+                  .maybeInvalidReason()
+                  .orElseGet(
+                      () -> {
+                        LOG.warn("Missing invalid reason for status {}", status);
+                        return INTERNAL_ERROR;
+                      });
+          LOG.atTrace()
+              .setMessage("Transaction {} rejected reason {}")
+              .addArgument(transaction::toTraceLog)
+              .addArgument(rejectReason)
+              .log();
+          metrics.incrementRejected(isLocal, hasPriority, rejectReason, "txpool");
+          return new AdditionOutcome(ValidationResult.invalid(rejectReason), transaction);
+        }
       }
     } else {
       LOG.atTrace()
@@ -313,6 +322,13 @@ public class TransactionPool implements BlockAddedObserver {
     }
 
     return new AdditionOutcome(validationResult.result, transaction);
+  }
+
+  private boolean incompleteBlob(final Transaction transaction) {
+    if (transaction.getType().supportsBlob()) {
+      return !transaction.getBlobsWithCommitments().orElseThrow().getCellMask().isFull();
+    }
+    return false;
   }
 
   private Optional<Wei> getMaxGasPrice(final Transaction transaction) {
@@ -780,11 +796,11 @@ public class TransactionPool implements BlockAddedObserver {
    * @return the 16-byte custody bitarray, or empty if the CL has never reported one.
    */
   public CellMask getBlobCustodyColumns() {
-    return transactionBroadcaster.getBlobCustodyColumns();
+    return peerTransactionTracker.getBlobCustodyColumns();
   }
 
   public void updateBlobCustodyColumns(final CellMask custodyColumns) {
-    transactionBroadcaster.updateBlobCustodyColumns(custodyColumns);
+    peerTransactionTracker.updateBlobCustodyColumns(custodyColumns);
   }
 
   public boolean isEnabled() {

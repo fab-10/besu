@@ -133,7 +133,7 @@ public final class EngineForkchoiceUpdatedV4<
     // processing flow of this method.
     requestParameters
         .custodyColumns()
-            .map(CellMask::fromBytes)
+        .map(CellMask::fromBytes)
         .ifPresent(
             custodyColumns -> {
               try {
