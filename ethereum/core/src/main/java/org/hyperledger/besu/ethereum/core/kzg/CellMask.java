@@ -52,6 +52,10 @@ public record CellMask(Bytes bytes) {
     return bytes.equals(EMPTY.bytes);
   }
 
+  public boolean isFull() {
+    return bytes.equals(FULL.bytes);
+  }
+
   public int cardinality() {
     int count = 0;
     for (int i = 0; i < bytes.size(); i++) {

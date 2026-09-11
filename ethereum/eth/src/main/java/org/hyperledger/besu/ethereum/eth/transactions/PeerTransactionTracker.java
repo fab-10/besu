@@ -39,8 +39,6 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
-import java.util.SequencedMap;
 import java.util.SequencedSet;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
@@ -56,7 +54,7 @@ import org.slf4j.LoggerFactory;
 public class PeerTransactionTracker
     implements EthPeer.DisconnectCallback,
         EthPeers.ConnectCallback,
-        PendingTransactionAddedListener,
+        //        PendingTransactionAddedListener,
         PendingTransactionDroppedListener,
         BlockAddedObserver {
   private static final Logger LOG = LoggerFactory.getLogger(PeerTransactionTracker.class);
@@ -439,14 +437,15 @@ public class PeerTransactionTracker
     }
   }
 
-  @Override
-  public void onTransactionAdded(final Transaction transaction) {
-    if (transaction.getType().supportsBlob()) {
-      synchronized (this) {
-        blobTracker.addedToPool(transaction);
-      }
-    }
-  }
+  //
+  //  @Override
+  //  public void onTransactionAdded(final Transaction transaction) {
+  //    if (transaction.getType().supportsBlob()) {
+  //      synchronized (this) {
+  //        blobTracker.addedToPool(transaction);
+  //      }
+  //    }
+  //  }
 
   @Override
   public void onBlockAdded(final BlockAddedEvent event) {
@@ -508,6 +507,14 @@ public class PeerTransactionTracker
   public CellMask getBlobCustodyColumns() {
     return blobCustodyColumns.get();
   }
+
+  synchronized List<PeerAndCellMask> getAnnouncingPeersFor(final Hash hash) {
+    return blobTracker.getAnnouncingPeersFor(hash);
+  }
+
+  synchronized boolean hasEnoughAnnouncements(final Hash hash, final CellMask requestedCellMask) {
+          return blobTracker.hasEnoughAnnouncements(hash);
+    }
 
   private record PeersSeenState(BitSet transactions, BitSet announcements) {
     PeersSeenState(final int maxSlots) {
@@ -586,47 +593,44 @@ public class PeerTransactionTracker
     }
   }
 
+  record PeerAndCellMask(EthPeer peer, CellMask cellMask) {}
+
   private class BlobTransactionTracker {
 
-    record PeerAndCellMask(EthPeer peer, CellMask cellMask) {}
-
-    final Random random = new Random();
     final Map<Hash, List<PeerAndCellMask>> trackedBlobs = new HashMap<>();
-    final Map<Hash, Transaction> addedToPool = new HashMap<>();
-    final SequencedMap<Hash, CellMask> fetchable = new LinkedHashMap<>();
 
     public void receivedAnnouncement(
         final EthPeer peer, final TransactionAnnouncement txAnnouncement) {
-      final Hash txHash = txAnnouncement.hash();
-      final List<PeerAndCellMask> pcms = trackedBlobs
-              .computeIfAbsent(txHash, _ -> new ArrayList<>());
+      if(txAnnouncement.type().supportsBlob()) {
+        final Hash txHash = txAnnouncement.hash();
+        final List<PeerAndCellMask> pcms =
+                trackedBlobs.computeIfAbsent(txHash, _ -> new ArrayList<>());
 
-      pcms.add(new PeerAndCellMask(peer, txAnnouncement.cellMask()));
-
-      if(pcms.size() >= 2 && addedToPool.containsKey(txHash)) {
-        addFetchable(txHash);
+        pcms.add(new PeerAndCellMask(peer, txAnnouncement.cellMask()));
       }
     }
 
-    public void addedToPool(final Transaction tx) {
-      addedToPool.put(tx.getHash(), tx);
-
-      final List<PeerAndCellMask> pcms = trackedBlobs.getOrDefault(tx.getHash(), List.of());
-
-      if(pcms.size() >= 2) {
-        addFetchable(tx.getHash());
-      }
+    public List<PeerAndCellMask> getAnnouncingPeersFor(final Hash txHash) {
+      final List<PeerAndCellMask> pcms = trackedBlobs.get(txHash);
+      return pcms == null ? List.of() : List.copyOf(pcms);
     }
 
-    private void addFetchable(final Hash txHash) {
-      final CellMask fetchCellMask;
-      if(random.nextInt(100) < 15) {
-        // fetch all cells
-        fetchCellMask = CellMask.FULL;
-      } else {
-        fetchCellMask = getBlobCustodyColumns();
+    public boolean hasEnoughAnnouncements(final Hash txHash, final CellMask requestedCellMask) {
+      final List<PeerAndCellMask> pcms = trackedBlobs.getOrDefault(txHash, List.of());
+
+      if(pcms.size() < 2) {
+        return false;
       }
-      fetchable.put(txHash, fetchCellMask);
+
+      CellMask union = pcms.getFirst().cellMask;
+      for(int i = 1; i < pcms.size(); i++) {
+        if(union.containsAll(requestedCellMask)) {
+          return true;
+        }
+        union = union.union(pcms.get(i).cellMask);
+      }
+
+      return false;
     }
   }
 }
