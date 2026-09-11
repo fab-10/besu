@@ -122,6 +122,7 @@ public class TransactionPoolFactory {
                 transactionTracker,
                 transactionsMessageSender,
                 newPooledTransactionHashesMessageSender),
+            transactionTracker,
             ethContext,
             metrics,
             transactionPoolConfiguration,
