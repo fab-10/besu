@@ -591,7 +591,7 @@ class EthServer {
               .toList());
     }
 
-    // ToDo int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;
+    // ToDo EIP-8070: int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;
     final BytesValueRLPOutput rlp = new BytesValueRLPOutput();
 
     rlp.writeList(
