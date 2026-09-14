@@ -151,7 +151,8 @@ public class TransactionPool implements BlockAddedObserver {
     this.blockAddedEventOrderedProcessor =
         ethContext.getScheduler().createOrderedProcessor(this::processBlockAddedEvent);
     this.cacheForBlobsOfTransactionsAddedToABlock = blobCache;
-    this.transactionLimbo = new TransactionsLimbo(ethContext, peerTransactionTracker, blobCustodyColumns::get);
+    this.transactionLimbo =
+        new TransactionsLimbo(ethContext, peerTransactionTracker, blobCustodyColumns::get);
     peerTransactionTracker.subscribeToAnnouncements(transactionLimbo);
     initializeBlobMetrics();
     subscribePendingTransactions(this::mapBlobsOnTransactionAdded);
