@@ -93,15 +93,27 @@ public final class CellMask {
   }
 
   /**
-   * Merges the current CellMask into the specified CellMask by performing a
-   * logical OR operation on their respective BitSet representations.
+   * Changes this CellMask, merging the other CellMask into it by performing a logical OR operation
+   * on their respective BitSet representations.
    *
-   * @param cellMask the target CellMask into which the current CellMask will be merged.
-   * @return the updated target CellMask after the merge operation.
+   * @param other the CellMask to merge into this CellMask.
+   * @return this CellMask updated with the merge operation.
    */
-  public CellMask mergeInto(final CellMask cellMask) {
-    cellMask.mask.or(mask);
-    return cellMask;
+  public CellMask merge(final CellMask other) {
+    mask.or(other.mask);
+    return this;
+  }
+
+  /**
+   * Changes this CellMask, intersecting the other CellMask into it by performing a logical AND
+   * operation on their respective BitSet representations.
+   *
+   * @param other the CellMask to intersect into this CellMask.
+   * @return this CellMask updated with the intersect operation.
+   */
+  public CellMask intersect(final CellMask other) {
+    mask.and(other.mask);
+    return this;
   }
 
   @Override
@@ -126,5 +138,4 @@ public final class CellMask {
     Arrays.fill(bytes, (byte) 0xFF);
     return bytes;
   }
-
 }

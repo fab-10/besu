@@ -21,10 +21,8 @@ import org.hyperledger.besu.ethereum.p2p.rlpx.wire.AbstractMessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
 
-import java.util.HashMap;
+import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 
 import com.google.common.base.Suppliers;
@@ -62,8 +60,8 @@ public final class CellsMessage extends AbstractMessageData {
     return new CellsMessage(message.getData());
   }
 
-  public Map<Hash, List<Cell>> cellsByTxHash() {
-    return fieldsSupplier.get().cellsByTxHash;
+  public MessageFields getFields() {
+    return fieldsSupplier.get();
   }
 
   public CellMask cellMask() {
@@ -74,17 +72,13 @@ public final class CellsMessage extends AbstractMessageData {
     final BytesValueRLPInput input = new BytesValueRLPInput(getData(), false);
     input.enterList();
     final List<Hash> txHashes = input.readList(rlp -> Hash.wrap(rlp.readBytes32()));
-    final Map<Hash, List<Cell>> cellsByTxHash = HashMap.newHashMap(txHashes.size());
-    final AtomicInteger idxHash = new AtomicInteger(0);
+    final List<List<Cell>> cells = new ArrayList<>();
     // ToDo EIP-8070: verify cell list have the right length according to cell mask
-    input.readList(
-        rlp ->
-            cellsByTxHash.put(
-                txHashes.get(idxHash.getAndIncrement()), rlp.readList(Cell::readFrom)));
+    input.readList(rlp -> cells.add(rlp.readList(Cell::readFrom)));
     final CellMask cellMask = CellMask.fromBytes(input.readBytes());
     input.leaveList();
-    return new MessageFields(cellsByTxHash, cellMask);
+    return new MessageFields(txHashes, cells, cellMask);
   }
 
-  private record MessageFields(Map<Hash, List<Cell>> cellsByTxHash, CellMask cellMask) {}
+  public record MessageFields(List<Hash> txHashes, List<List<Cell>> cells, CellMask cellMask) {}
 }
