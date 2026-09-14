@@ -22,11 +22,11 @@ import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.chain.BlockAddedEvent;
 import org.hyperledger.besu.ethereum.chain.BlockAddedObserver;
 import org.hyperledger.besu.ethereum.core.Transaction;
-import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.plugin.data.AddedBlockContext;
+import org.hyperledger.besu.util.Subscribers;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -41,14 +41,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.SequencedSet;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import org.apache.commons.collections4.map.LRUMap;
-import org.hyperledger.besu.util.Subscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -70,7 +68,7 @@ public class PeerTransactionTracker
   private final Set<Hash> inProgressAnnouncements = new HashSet<>();
   private final BiMap<EthPeer, Integer> peerToSlotIndexMap;
   private final Subscribers<TransactionsAnnouncedListener> onAnnouncementsListeners =
-          Subscribers.create();
+      Subscribers.create();
 
   public PeerTransactionTracker(
       final TransactionPoolConfiguration txPoolConfig,
@@ -270,22 +268,22 @@ public class PeerTransactionTracker
       return emptyList();
     }
 
-    onAnnouncementsListeners.forEach(listener -> listener.onTransactionsAnnounced(peer, incomingAnnouncements));
+    onAnnouncementsListeners.forEach(
+        listener -> listener.onTransactionsAnnounced(peer, incomingAnnouncements));
 
     final List<TransactionAnnouncement> freshAnnouncements =
-              incomingAnnouncements.stream()
-                      .filter(txAnnouncement -> !alreadySeenTransaction(txAnnouncement.hash()))
-                      .toList();
+        incomingAnnouncements.stream()
+            .filter(txAnnouncement -> !alreadySeenTransaction(txAnnouncement.hash()))
+            .toList();
 
-      if (!freshAnnouncements.isEmpty()) {
-        final LRUMap<Hash, TransactionAnnouncement> announcementsByHashForPeer =
-                announcementsToRequestByHash.computeIfAbsent(
-                        peer, key -> boundedLRUMap(freshAnnouncements.size(), maxSendQueueSizePerPeer));
-        freshAnnouncements.forEach(ann -> announcementsByHashForPeer.put(ann.hash(), ann));
-      }
+    if (!freshAnnouncements.isEmpty()) {
+      final LRUMap<Hash, TransactionAnnouncement> announcementsByHashForPeer =
+          announcementsToRequestByHash.computeIfAbsent(
+              peer, key -> boundedLRUMap(freshAnnouncements.size(), maxSendQueueSizePerPeer));
+      freshAnnouncements.forEach(ann -> announcementsByHashForPeer.put(ann.hash(), ann));
+    }
 
-      markAnnouncementsAsSeen(peer, incomingAnnouncements);
-
+    markAnnouncementsAsSeen(peer, incomingAnnouncements);
 
     return freshAnnouncements;
   }

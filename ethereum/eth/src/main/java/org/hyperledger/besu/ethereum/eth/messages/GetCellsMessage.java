@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.eth.messages;
 
 import org.hyperledger.besu.datatypes.Hash;
+import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.AbstractMessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
@@ -22,6 +23,7 @@ import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.function.Supplier;
 
 import com.google.common.base.Suppliers;
@@ -49,11 +51,12 @@ public final class GetCellsMessage extends AbstractMessageData {
   }
 
   public static GetCellsMessage create(
-      final Collection<Hash> pooledTransactions, final CellMask cellMask) {
+      final Collection<Transaction> pooledTransactions, final CellMask cellMask) {
     final BytesValueRLPOutput out = new BytesValueRLPOutput();
-    out.writeList(pooledTransactions, (h, w) -> w.writeBytes(h.getBytes()));
+    final List<Hash> hashes = Transaction.toHashList(pooledTransactions);
+    out.writeList(hashes, (h, w) -> w.writeBytes(h.getBytes()));
     out.writeBytes(cellMask.toBytes());
-    return new GetCellsMessage(out.encoded(), new MessageFields(pooledTransactions, cellMask));
+    return new GetCellsMessage(out.encoded(), new MessageFields(hashes, cellMask));
   }
 
   public static GetCellsMessage readFrom(final MessageData message) {
