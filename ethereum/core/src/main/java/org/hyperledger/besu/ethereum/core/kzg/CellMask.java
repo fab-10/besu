@@ -19,15 +19,20 @@ import static com.google.common.base.Preconditions.checkNotNull;
 import static ethereum.ckzg4844.CKZG4844JNI.CELLS_PER_EXT_BLOB;
 
 import java.util.Arrays;
+import java.util.BitSet;
+import java.util.Objects;
+import java.util.stream.IntStream;
 
 import org.apache.tuweni.bytes.Bytes;
 
 /** Fixed-width eth/72 cell availability mask. */
-public record CellMask(Bytes bytes) {
+public final class CellMask {
+  private final BitSet mask;
+
   public static final int BYTE_LENGTH = 16;
 
-  public static final CellMask EMPTY = new CellMask(Bytes.wrap(new byte[BYTE_LENGTH]));
-  public static final CellMask FULL = new CellMask(fullMaskBytes());
+  public static final CellMask EMPTY = new CellMask(new BitSet(128));
+  public static final CellMask FULL = new CellMask(BitSet.valueOf(fullMaskBytes()));
 
   public CellMask(final Bytes bytes) {
     checkNotNull(bytes, "cell mask bytes must not be null");
@@ -36,75 +41,90 @@ public record CellMask(Bytes bytes) {
         "cell mask must be %s bytes, got %s",
         BYTE_LENGTH,
         bytes.size());
-    this.bytes = bytes;
+
+    this.mask = BitSet.valueOf(bytes.toArray());
+  }
+
+  private CellMask(final BitSet mask) {
+    this.mask = mask;
+  }
+
+  public CellMask copy() {
+    return new CellMask((BitSet) mask.clone());
   }
 
   public static CellMask fromBytes(final Bytes bytes) {
-    return new CellMask(bytes.copy());
-  }
-
-  @Override
-  public Bytes bytes() {
-    return bytes;
+    return new CellMask(bytes);
   }
 
   public boolean isEmpty() {
-    return bytes.equals(EMPTY.bytes);
+    return mask.isEmpty();
   }
 
   public boolean isFull() {
-    return bytes.equals(FULL.bytes);
+    return mask.cardinality() == CELLS_PER_EXT_BLOB;
   }
 
   public int cardinality() {
-    int count = 0;
-    for (int i = 0; i < bytes.size(); i++) {
-      count += Integer.bitCount(Byte.toUnsignedInt(bytes.get(i)));
-    }
-    return count;
+    return mask.cardinality();
+  }
+
+  public IntStream streamIndexes() {
+    return mask.stream();
   }
 
   public int[] indexes() {
-    final int[] indexes = new int[cardinality()];
+    final int[] indexes = new int[CELLS_PER_EXT_BLOB];
     int arrayIdx = 0;
     for (int index = 0; index < CELLS_PER_EXT_BLOB; index++) {
-      if (isSet(index)) {
+      if (mask.get(index)) {
         indexes[arrayIdx++] = index;
       }
     }
     return indexes;
   }
 
-  public boolean isSet(final int index) {
-    checkArgument(index >= 0 && index < CELLS_PER_EXT_BLOB, "cell index out of range: %s", index);
-    final int byteIndex = index / Byte.SIZE;
-    final int bitIndex = index % Byte.SIZE;
-    return (Byte.toUnsignedInt(bytes.get(byteIndex)) & (1 << bitIndex)) != 0;
-  }
-
   public boolean containsAll(final CellMask other) {
-    for (int i = 0; i < BYTE_LENGTH; i++) {
-      final int mine = Byte.toUnsignedInt(bytes.get(i));
-      final int theirs = Byte.toUnsignedInt(other.bytes.get(i));
-      if ((mine & theirs) != theirs) {
-        return false;
-      }
-    }
-    return true;
+    return mask.intersects(other.mask);
   }
 
-  public CellMask intersection(final CellMask other) {
-    final byte[] intersectionBytes = new byte[BYTE_LENGTH];
-    for (int i = 0; i < BYTE_LENGTH; i++) {
-      intersectionBytes[i] =
-          (byte) (Byte.toUnsignedInt(this.bytes.get(i)) & Byte.toUnsignedInt(other.bytes.get(i)));
-    }
-    return new CellMask(Bytes.wrap(intersectionBytes));
+  public Bytes toBytes() {
+    return Bytes.wrap(mask.toByteArray());
   }
 
-  private static Bytes fullMaskBytes() {
+  /**
+   * Merges the current CellMask into the specified CellMask by performing a
+   * logical OR operation on their respective BitSet representations.
+   *
+   * @param cellMask the target CellMask into which the current CellMask will be merged.
+   * @return the updated target CellMask after the merge operation.
+   */
+  public CellMask mergeInto(final CellMask cellMask) {
+    cellMask.mask.or(mask);
+    return cellMask;
+  }
+
+  @Override
+  public String toString() {
+    return mask.toString();
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (o == null || getClass() != o.getClass()) return false;
+    final CellMask cellMask = (CellMask) o;
+    return Objects.equals(mask, cellMask.mask);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hashCode(mask);
+  }
+
+  private static byte[] fullMaskBytes() {
     final byte[] bytes = new byte[BYTE_LENGTH];
     Arrays.fill(bytes, (byte) 0xFF);
-    return Bytes.wrap(bytes);
+    return bytes;
   }
+
 }

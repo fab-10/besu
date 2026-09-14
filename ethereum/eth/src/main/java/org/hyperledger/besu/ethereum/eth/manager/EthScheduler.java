@@ -343,8 +343,8 @@ public class EthScheduler {
    * @param <ITEM> the class of item to be processed
    */
   public class OrderedProcessor<ITEM> {
-    private final Queue<ITEM> blockAddedQueue = new ConcurrentLinkedQueue<>();
-    private final ReentrantLock blockAddedLock = new ReentrantLock();
+    private final Queue<ITEM> taskQueue = new ConcurrentLinkedQueue<>();
+    private final ReentrantLock taskLock = new ReentrantLock();
     private final Consumer<ITEM> processor;
 
     private OrderedProcessor(final Consumer<ITEM> processor) {
@@ -353,24 +353,24 @@ public class EthScheduler {
 
     public void submit(final ITEM item) {
       // add the item to the processing queue
-      blockAddedQueue.add(item);
+      taskQueue.add(item);
 
-      if (blockAddedLock.hasQueuedThreads()) {
+      if (taskLock.hasQueuedThreads()) {
         // another thread is already waiting to process the queue with our item, there is no need to
         // schedule another thread
         LOG.trace(
-            "Block added event queue is already being processed and an already queued thread is present, nothing to do");
+            "Task queue is already being processed and an already queued thread is present, nothing to do");
       } else {
         servicesExecutor.submit(
             () -> {
-              blockAddedLock.lock();
+              taskLock.lock();
               try {
                 // now that we have the lock, process as many items as possible
-                for (ITEM i = blockAddedQueue.poll(); i != null; i = blockAddedQueue.poll()) {
+                for (ITEM i = taskQueue.poll(); i != null; i = taskQueue.poll()) {
                   processor.accept(i);
                 }
               } finally {
-                blockAddedLock.unlock();
+                taskLock.unlock();
               }
             });
       }

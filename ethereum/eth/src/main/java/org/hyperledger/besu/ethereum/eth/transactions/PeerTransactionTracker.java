@@ -48,13 +48,13 @@ import java.util.stream.IntStream;
 import com.google.common.collect.BiMap;
 import com.google.common.collect.HashBiMap;
 import org.apache.commons.collections4.map.LRUMap;
+import org.hyperledger.besu.util.Subscribers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public class PeerTransactionTracker
     implements EthPeer.DisconnectCallback,
         EthPeers.ConnectCallback,
-        //        PendingTransactionAddedListener,
         PendingTransactionDroppedListener,
         BlockAddedObserver {
   private static final Logger LOG = LoggerFactory.getLogger(PeerTransactionTracker.class);
@@ -69,8 +69,8 @@ public class PeerTransactionTracker
       new HashMap<>();
   private final Set<Hash> inProgressAnnouncements = new HashSet<>();
   private final BiMap<EthPeer, Integer> peerToSlotIndexMap;
-  private final BlobTransactionTracker blobTracker;
-  private final AtomicReference<CellMask> blobCustodyColumns = new AtomicReference<>(CellMask.FULL);
+  private final Subscribers<TransactionsAnnouncedListener> onAnnouncementsListeners =
+          Subscribers.create();
 
   public PeerTransactionTracker(
       final TransactionPoolConfiguration txPoolConfig,
@@ -83,7 +83,6 @@ public class PeerTransactionTracker
     this.peersSeenStateByHash =
         new FixedCapacityLRUMap<>(txPoolConfig.getUnstable().getMaxTrackedSeenTxs());
     this.peerToSlotIndexMap = HashBiMap.create(ethPeers.getMaxPeers());
-    this.blobTracker = new BlobTransactionTracker();
     ethScheduler.scheduleFutureTaskWithFixedDelay(
         this::logStats, Duration.ofMinutes(1), Duration.ofMinutes(1));
   }
@@ -95,6 +94,14 @@ public class PeerTransactionTracker
     announcementsToSend.clear();
     announcementsToRequestByHash.clear();
     inProgressAnnouncements.clear();
+  }
+
+  long subscribeToAnnouncements(final TransactionsAnnouncedListener listener) {
+    return onAnnouncementsListeners.subscribe(listener);
+  }
+
+  void unsubscribeFromAnnouncements(final long subscriptionId) {
+    onAnnouncementsListeners.unsubscribe(subscriptionId);
   }
 
   private synchronized void logStats() {
@@ -263,20 +270,22 @@ public class PeerTransactionTracker
       return emptyList();
     }
 
+    onAnnouncementsListeners.forEach(listener -> listener.onTransactionsAnnounced(peer, incomingAnnouncements));
+
     final List<TransactionAnnouncement> freshAnnouncements =
-        incomingAnnouncements.stream()
-            .peek(txAnnouncement -> blobTracker.receivedAnnouncement(peer, txAnnouncement))
-            .filter(txAnnouncement -> !alreadySeenTransaction(txAnnouncement.hash()))
-            .toList();
+              incomingAnnouncements.stream()
+                      .filter(txAnnouncement -> !alreadySeenTransaction(txAnnouncement.hash()))
+                      .toList();
 
-    if (!freshAnnouncements.isEmpty()) {
-      final LRUMap<Hash, TransactionAnnouncement> announcementsByHashForPeer =
-          announcementsToRequestByHash.computeIfAbsent(
-              peer, key -> boundedLRUMap(freshAnnouncements.size(), maxSendQueueSizePerPeer));
-      freshAnnouncements.forEach(ann -> announcementsByHashForPeer.put(ann.hash(), ann));
-    }
+      if (!freshAnnouncements.isEmpty()) {
+        final LRUMap<Hash, TransactionAnnouncement> announcementsByHashForPeer =
+                announcementsToRequestByHash.computeIfAbsent(
+                        peer, key -> boundedLRUMap(freshAnnouncements.size(), maxSendQueueSizePerPeer));
+        freshAnnouncements.forEach(ann -> announcementsByHashForPeer.put(ann.hash(), ann));
+      }
 
-    markAnnouncementsAsSeen(peer, incomingAnnouncements);
+      markAnnouncementsAsSeen(peer, incomingAnnouncements);
+
 
     return freshAnnouncements;
   }
@@ -437,16 +446,6 @@ public class PeerTransactionTracker
     }
   }
 
-  //
-  //  @Override
-  //  public void onTransactionAdded(final Transaction transaction) {
-  //    if (transaction.getType().supportsBlob()) {
-  //      synchronized (this) {
-  //        blobTracker.addedToPool(transaction);
-  //      }
-  //    }
-  //  }
-
   @Override
   public void onBlockAdded(final BlockAddedEvent event) {
     ethScheduler.scheduleServiceTask(
@@ -500,22 +499,6 @@ public class PeerTransactionTracker
     }
   }
 
-  public void updateBlobCustodyColumns(final CellMask custodyColumns) {
-    blobCustodyColumns.set(custodyColumns);
-  }
-
-  public CellMask getBlobCustodyColumns() {
-    return blobCustodyColumns.get();
-  }
-
-  synchronized List<PeerAndCellMask> getAnnouncingPeersFor(final Hash hash) {
-    return blobTracker.getAnnouncingPeersFor(hash);
-  }
-
-  synchronized boolean hasEnoughAnnouncements(final Hash hash, final CellMask requestedCellMask) {
-          return blobTracker.hasEnoughAnnouncements(hash);
-    }
-
   private record PeersSeenState(BitSet transactions, BitSet announcements) {
     PeersSeenState(final int maxSlots) {
       this(new BitSet(maxSlots), new BitSet(maxSlots));
@@ -536,11 +519,6 @@ public class PeerTransactionTracker
         announcements.set(peerIdx);
       }
     }
-
-    // ToDo: EIP-8070
-    //    public int announcementCount() {
-    //      return announcements.cardinality();
-    //    }
 
     public boolean anyHasSeenTransaction() {
       return !transactions.isEmpty();
@@ -590,47 +568,6 @@ public class PeerTransactionTracker
     @Override
     protected void checkCapacity() {
       // no-op since the fixed map never needs to resize
-    }
-  }
-
-  record PeerAndCellMask(EthPeer peer, CellMask cellMask) {}
-
-  private class BlobTransactionTracker {
-
-    final Map<Hash, List<PeerAndCellMask>> trackedBlobs = new HashMap<>();
-
-    public void receivedAnnouncement(
-        final EthPeer peer, final TransactionAnnouncement txAnnouncement) {
-      if(txAnnouncement.type().supportsBlob()) {
-        final Hash txHash = txAnnouncement.hash();
-        final List<PeerAndCellMask> pcms =
-                trackedBlobs.computeIfAbsent(txHash, _ -> new ArrayList<>());
-
-        pcms.add(new PeerAndCellMask(peer, txAnnouncement.cellMask()));
-      }
-    }
-
-    public List<PeerAndCellMask> getAnnouncingPeersFor(final Hash txHash) {
-      final List<PeerAndCellMask> pcms = trackedBlobs.get(txHash);
-      return pcms == null ? List.of() : List.copyOf(pcms);
-    }
-
-    public boolean hasEnoughAnnouncements(final Hash txHash, final CellMask requestedCellMask) {
-      final List<PeerAndCellMask> pcms = trackedBlobs.getOrDefault(txHash, List.of());
-
-      if(pcms.size() < 2) {
-        return false;
-      }
-
-      CellMask union = pcms.getFirst().cellMask;
-      for(int i = 1; i < pcms.size(); i++) {
-        if(union.containsAll(requestedCellMask)) {
-          return true;
-        }
-        union = union.union(pcms.get(i).cellMask);
-      }
-
-      return false;
     }
   }
 }

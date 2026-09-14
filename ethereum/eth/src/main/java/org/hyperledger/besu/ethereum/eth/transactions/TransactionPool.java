@@ -127,7 +127,8 @@ public class TransactionPool implements BlockAddedObserver {
   private final ListMultimap<VersionedHash, BlobProofBundle> mapOfBlobsInTransactionPool =
       Multimaps.synchronizedListMultimap(
           Multimaps.newListMultimap(new HashMap<>(), () -> new ArrayList<>(1)));
-  private final TransactionLimbo transactionLimbo;
+  private final AtomicReference<CellMask> blobCustodyColumns = new AtomicReference<>(CellMask.FULL);
+  private final TransactionsLimbo transactionLimbo;
 
   public TransactionPool(
       final Supplier<PendingTransactions> pendingTransactionsSupplier,
@@ -150,7 +151,8 @@ public class TransactionPool implements BlockAddedObserver {
     this.blockAddedEventOrderedProcessor =
         ethContext.getScheduler().createOrderedProcessor(this::processBlockAddedEvent);
     this.cacheForBlobsOfTransactionsAddedToABlock = blobCache;
-    this.transactionLimbo = new TransactionLimbo(ethContext, peerTransactionTracker);
+    this.transactionLimbo = new TransactionsLimbo(ethContext, peerTransactionTracker, blobCustodyColumns::get);
+    peerTransactionTracker.subscribeToAnnouncements(transactionLimbo);
     initializeBlobMetrics();
     subscribePendingTransactions(this::mapBlobsOnTransactionAdded);
     subscribeDroppedTransactions((transaction, _) -> unmapBlobsOnTransactionDropped(transaction));
@@ -796,11 +798,11 @@ public class TransactionPool implements BlockAddedObserver {
    * @return the 16-byte custody bitarray, or empty if the CL has never reported one.
    */
   public CellMask getBlobCustodyColumns() {
-    return peerTransactionTracker.getBlobCustodyColumns();
+    return blobCustodyColumns.get();
   }
 
   public void updateBlobCustodyColumns(final CellMask custodyColumns) {
-    peerTransactionTracker.updateBlobCustodyColumns(custodyColumns);
+    blobCustodyColumns.set(custodyColumns);
   }
 
   public boolean isEnabled() {
