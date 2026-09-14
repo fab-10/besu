@@ -14,41 +14,36 @@
  */
 package org.hyperledger.besu.ethereum.core.kzg;
 
+import static com.google.common.base.Preconditions.checkArgument;
 import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELL_PROOFS_PER_BLOB;
 
 import java.util.List;
+import java.util.PrimitiveIterator;
 
 public class CellsWithMask {
   public static final CellsWithMask EMPTY = new CellsWithMask(List.of(), CellMask.EMPTY);
 
-  private final Cell[] cells;
+  private final List<Cell> cells;
   private final CellMask cellMask;
+  private final int[] indexMap;
 
-  private CellsWithMask(final Cell[] cells, final CellMask cellMask) {
+  private CellsWithMask(final List<Cell> cells, final CellMask cellMask, final int[] indexMap) {
     this.cells = cells;
     this.cellMask = cellMask;
+    this.indexMap = indexMap;
   }
 
   public CellsWithMask(final List<Cell> cells, final CellMask cellMask) {
-    this.cells = new Cell[CELL_PROOFS_PER_BLOB];
-    this.cellMask = cellMask;
+    checkArgument(cells.size() != cellMask.cardinality(), "Cell list does not match mask");
+    final int[] indexMap = new int[CELL_PROOFS_PER_BLOB];
 
-    int listTIdx = 0;
-
-    for (int i = 0; i < CELL_PROOFS_PER_BLOB; i++) {
-      final int byteIndex = i / Byte.SIZE;
-      final int bitIndex = i % Byte.SIZE;
-      if ((Byte.toUnsignedInt(cellMask.bytes().get(byteIndex)) & (1 << bitIndex)) != 0) {
-        if (listTIdx >= cells.size()) {
-          throw new IllegalArgumentException("Not enough cells provided");
-        }
-        this.cells[i] = cells.get(listTIdx++);
-      }
+    int listIdx = 0;
+    final PrimitiveIterator.OfInt itMask = cellMask.streamIndexes().iterator();
+    while (itMask.hasNext()) {
+      indexMap[itMask.next()] = listIdx++;
     }
 
-    if (listTIdx != cells.size()) {
-      throw new IllegalArgumentException("Too many cells provided");
-    }
+    this(cells, cellMask, indexMap);
   }
 
   public CellMask getCellMask() {
@@ -56,19 +51,16 @@ public class CellsWithMask {
   }
 
   public Cell getCell(final int index) {
-    return cells[index];
+    return cells.get(indexMap[index]);
   }
 
-  public Cell[] getCells() {
+  public List<Cell> getCells() {
     return cells;
   }
 
   public CellsWithMask detachedCopy() {
-    final CellMask detachedCellMask = new CellMask(cellMask.bytes().copy());
-    final Cell[] detachedCells = new Cell[CELL_PROOFS_PER_BLOB];
-    for (int i = 0; i < CELL_PROOFS_PER_BLOB; i++) {
-      detachedCells[i] = new Cell(cells[i].getData().copy());
-    }
-    return new CellsWithMask(detachedCells, detachedCellMask);
+    final List<Cell> detachedCells =
+        cells.stream().map(cell -> cell.getData().copy()).map(Cell::new).toList();
+    return new CellsWithMask(detachedCells, cellMask);
   }
 }

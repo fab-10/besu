@@ -535,7 +535,7 @@ class EthServer {
     int requestedCount = 0;
     //    int returnedCount = 0;
 
-    final Map<Hash, List<Cell[]>> matchingCells = new HashMap<>();
+    final Map<Hash, List<List<Cell>>> matchingCells = new HashMap<>();
 
     for (final Hash hash : hashesToProcess) {
       if (requestedCount >= requestLimit) {
@@ -599,8 +599,8 @@ class EthServer {
     rlp.writeList(
         matchingCells.values(),
         (cellsList, rlpOutput) ->
-            cellsList.forEach(cells -> rlpOutput.writeList(Arrays.asList(cells), Cell::writeTo)));
-    rlp.writeBytes(reqCellMask.bytes());
+            cellsList.forEach(cells -> rlpOutput.writeList(cells, Cell::writeTo)));
+    rlp.writeBytes(reqCellMask.toBytes());
 
     return PooledTransactionsMessage.createUnsafe(rlp.encoded());
   }

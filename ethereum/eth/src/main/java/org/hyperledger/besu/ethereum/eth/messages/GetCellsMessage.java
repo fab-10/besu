@@ -52,7 +52,7 @@ public final class GetCellsMessage extends AbstractMessageData {
       final Collection<Hash> pooledTransactions, final CellMask cellMask) {
     final BytesValueRLPOutput out = new BytesValueRLPOutput();
     out.writeList(pooledTransactions, (h, w) -> w.writeBytes(h.getBytes()));
-    out.writeBytes(cellMask.bytes());
+    out.writeBytes(cellMask.toBytes());
     return new GetCellsMessage(out.encoded(), new MessageFields(pooledTransactions, cellMask));
   }
 

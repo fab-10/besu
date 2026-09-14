@@ -81,7 +81,7 @@ public class GetCellsFromPeerTask implements PeerTask<Map<Hash, CellsWithMask>> 
     if (!cellMask.containsAll(resCellMask)) {
       throw new InvalidPeerTaskResponseException(
           "Received cell mask %s is not contained in requested cell mask %s"
-              .formatted(resCellMask.bytes().toHexString(), cellMask.bytes().toHexString()));
+              .formatted(resCellMask.toString(), cellMask.toString()));
     }
 
     final Map<Hash, CellsWithMask> result = HashMap.newHashMap(resCellByHash.size());
