@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.kzg.Cell;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
@@ -31,28 +32,22 @@ import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.SubProtocol;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 
-import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
-import java.util.SequencedSet;
 import java.util.Set;
 import java.util.function.Predicate;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class GetCellsFromPeerTask implements PeerTask<Map<Hash, List<CellsWithMask>>> {
+public class GetCellsFromPeerTask implements PeerTask<List<CellsWithMask>> {
   private static final Logger LOG = LoggerFactory.getLogger(GetCellsFromPeerTask.class);
 
-  private final SequencedSet<Transaction> txs;
-  private final CellMask cellMask;
+  private final Transaction requestedTx;
+  private final CellMask requestedCellMask;
 
-  public GetCellsFromPeerTask(final Collection<Transaction> txs, final CellMask cellMask) {
-    this.txs = new LinkedHashSet<>(txs);
-    this.cellMask = cellMask;
+  public GetCellsFromPeerTask(final Transaction requestedTx, final CellMask requestedCellMask) {
+    this.requestedTx = requestedTx;
+    this.requestedCellMask = requestedCellMask;
   }
 
   @Override
@@ -62,69 +57,62 @@ public class GetCellsFromPeerTask implements PeerTask<Map<Hash, List<CellsWithMa
 
   @Override
   public MessageData getRequestMessage(final Set<Capability> agreedCapabilities) {
-    return GetCellsMessage.create(txs, cellMask);
+    return GetCellsMessage.create(List.of(requestedTx), requestedCellMask);
   }
 
   @Override
-  public Map<Hash, List<CellsWithMask>> processResponse(
+  public List<CellsWithMask> processResponse(
       final MessageData messageData, final Set<Capability> agreedCapabilities)
       throws InvalidPeerTaskResponseException, MalformedRlpFromPeerException {
     final CellsMessage cellsMessage = CellsMessage.readFrom(messageData);
-    final CellsMessage.MessageFields messageFields;
+    final List<Hash> resTxHashes;
+    final List<List<Cell>> resCellsList;
     final CellMask resCellMask;
     try {
-      messageFields = cellsMessage.getFields();
+      resTxHashes = cellsMessage.txHashes();
+      resCellsList = cellsMessage.cellsList();
       resCellMask = cellsMessage.cellMask();
     } catch (RLPException e) {
       throw new MalformedRlpFromPeerException(e, messageData.getData());
     }
 
-    if (messageFields.txHashes().size() > txs.size()) {
-      throw new InvalidPeerTaskResponseException(
-          "Received results for %d txs, more than requested %d"
-              .formatted(messageFields.txHashes().size(), txs.size()));
+    if (resTxHashes.isEmpty()) {
+      LOG.debug("Not received cells for tx hash {}", requestedTx.getHash());
+      return List.of();
     }
 
-    if (!cellMask.containsAll(resCellMask)) {
+    if (resTxHashes.size() > 1) {
+      throw new InvalidPeerTaskResponseException(
+          "Received results for %d txs, more than requested %d".formatted(resTxHashes.size(), 1));
+    }
+
+    if (!resTxHashes.contains(requestedTx.getHash())) {
+      throw new InvalidPeerTaskResponseException(
+          "Received cells for not requested tx hashes: " + resTxHashes);
+    }
+
+    if (!requestedCellMask.containsAll(resCellMask)) {
       throw new InvalidPeerTaskResponseException(
           "Received cell mask %s is not contained in requested cell mask %s"
-              .formatted(resCellMask.toString(), cellMask.toString()));
+              .formatted(resCellMask.toString(), requestedCellMask.toString()));
     }
 
-    final Map<Hash, List<CellsWithMask>> result =
-        HashMap.newHashMap(messageFields.txHashes().size());
+    final int txBlobCount = requestedTx.getBlobCount();
 
-    int consumedCells = 0;
-
-    final Set<Hash> receivedHashes = new HashSet<>(messageFields.txHashes());
-
-    for (final Transaction requestedTx : txs) {
-      if (!receivedHashes.remove(requestedTx.getHash())) {
-        LOG.debug("Not received cells for tx hash {}", requestedTx.getHash());
-      }
-
-      final int txBlobCount = requestedTx.getBlobCount();
-      if (messageFields.cells().size() < consumedCells + txBlobCount) {
-        throw new InvalidPeerTaskResponseException(
-            "Received cells count %d is less than requested %d"
-                .formatted(messageFields.cells().size(), txBlobCount + consumedCells));
-      }
-
-      final List<CellsWithMask> cellsWithMask =
-          messageFields.cells().subList(consumedCells, consumedCells + txBlobCount).stream()
-              .map(cells -> new CellsWithMask(cells, resCellMask))
-              .toList();
-
-      result.put(requestedTx.getHash(), cellsWithMask);
-      consumedCells += txBlobCount;
-    }
-
-    if (!receivedHashes.isEmpty()) {
+    if (resCellsList.size() != txBlobCount) {
       throw new InvalidPeerTaskResponseException(
-          "Received cells for not requested tx hashes: " + receivedHashes);
+          "Received cells list count %d does not match tx blob count %d"
+              .formatted(resCellsList.size(), txBlobCount));
     }
 
-    return result;
+    if (!resCellMask.containsAll(requestedCellMask)) {
+      LOG.debug(
+          "Received partial cells, requested mask {}, received mask {}",
+          requestedCellMask,
+          resCellMask);
+    }
+
+    return resCellsList.stream().map(cells -> new CellsWithMask(cells, resCellMask)).toList();
   }
 
   @Override
@@ -133,7 +121,7 @@ public class GetCellsFromPeerTask implements PeerTask<Map<Hash, List<CellsWithMa
   }
 
   @Override
-  public PeerTaskValidationResponse validateResult(final Map<Hash, List<CellsWithMask>> result) {
+  public PeerTaskValidationResponse validateResult(final List<CellsWithMask> result) {
     return PeerTaskValidationResponse.RESULTS_VALID_AND_GOOD;
   }
 

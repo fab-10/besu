@@ -21,7 +21,7 @@ import java.util.List;
 import java.util.PrimitiveIterator;
 
 public class CellsWithMask {
-  public static final CellsWithMask EMPTY = new CellsWithMask(List.of(), CellMask.EMPTY);
+  public static final CellsWithMask EMPTY = new CellsWithMask(List.of(), CellMask.EMPTY.copy());
 
   private final List<Cell> cells;
   private final CellMask cellMask;
