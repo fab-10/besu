@@ -431,22 +431,6 @@ public sealed class EngineNewPayloadV1<
                 .log();
     }
 
-  private JsonRpcResponse respondWithAccepted(
-      final Object requestId, final ExecutionPayloadV1 param) {
-    logger()
-        .atDebug()
-        .setMessage("New payload: number: {}, hash: {}, parentHash: {}, status: ACCEPTED")
-        .addArgument(param::getBlockNumber)
-        .addArgument(param::getBlockHash)
-        .addArgument(param::getParentHash)
-        .log();
-    return new JsonRpcSuccessResponse(requestId, createAcceptedPayloadStatus());
-  }
-
-  protected PayloadStatusV1 createAcceptedPayloadStatus() {
-    return new PayloadStatusV1(ACCEPTED);
-  }
-
   private JsonRpcResponse respondWithSyncing(final Object requestId) {
     return new JsonRpcSuccessResponse(requestId, createSyncingPayloadStatus());
   }
