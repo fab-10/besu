@@ -178,10 +178,6 @@ public class InclusionListWorkflowIntegrationTest {
     when(protocolSchedule.milestoneFor(BOGOTA)).thenReturn(Optional.of(AMSTERDAM_MILESTONE));
     when(protocolSchedule.hardforkFor(any())).thenReturn(Optional.of(AMSTERDAM_HARDFORK));
 
-    getInclusionListMethod =
-        new EngineGetInclusionListV1(
-            vertx, protocolContext, engineCallListener, transactionPool, metricsSystem);
-
     final var constructorArguments =
         new ConstructorArgumentsBuilder()
             .protocolSchedule(protocolSchedule)
@@ -194,6 +190,8 @@ public class InclusionListWorkflowIntegrationTest {
             .transactionPool(transactionPool)
             .maxRequestBlocks(0)
             .build();
+
+    getInclusionListMethod = new EngineGetInclusionListV1(constructorArguments, BOGOTA, null);
 
     forkchoiceUpdatedMethod = new EngineForkchoiceUpdatedV5<>(constructorArguments, BOGOTA, null);
 
@@ -267,7 +265,7 @@ public class InclusionListWorkflowIntegrationTest {
     final JsonRpcResponse newPayloadResp = callNewPayload(payloadHeader, emptyList(), emptyList());
 
     final PayloadStatusV1 npResult = fromSuccessResp(newPayloadResp);
-    assertThat(npResult.getStatusAsString()).isEqualTo(VALID.name());
+    assertThat(npResult.getStatus()).isEqualTo(VALID);
   }
 
   @Test
@@ -278,7 +276,7 @@ public class InclusionListWorkflowIntegrationTest {
     final JsonRpcResponse resp = callNewPayload(payloadHeader, emptyList(), emptyList());
 
     final PayloadStatusV1 result = fromSuccessResp(resp);
-    assertThat(result.getStatusAsString()).isEqualTo(VALID.name());
+    assertThat(result.getStatus()).isEqualTo(VALID);
   }
 
   @Test

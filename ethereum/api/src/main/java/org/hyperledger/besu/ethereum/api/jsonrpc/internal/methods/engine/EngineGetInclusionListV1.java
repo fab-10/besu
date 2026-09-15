@@ -14,7 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
-import org.hyperledger.besu.ethereum.ProtocolContext;
+import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod;
@@ -24,13 +24,11 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
-import org.hyperledger.besu.plugin.services.MetricsSystem;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
 
 import java.time.Duration;
 import java.util.List;
 
-import io.vertx.core.Vertx;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -43,23 +41,25 @@ public class EngineGetInclusionListV1 extends ExecutionEngineJsonRpcMethod {
   private final Counter selectorDurationMsCounter;
 
   public EngineGetInclusionListV1(
-      final Vertx vertx,
-      final ProtocolContext protocolContext,
-      final EngineCallListener engineCallListener,
-      final TransactionPool transactionPool,
-      final MetricsSystem metricsSystem) {
-    super(vertx, protocolContext, engineCallListener);
-    this.transactionPool = transactionPool;
+      final ConstructorArguments constructorArguments,
+      final HardforkId minSupportedFork,
+      final HardforkId firstUnsupportedFork) {
+    super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    this.transactionPool = constructorArguments.transactionPool();
     this.transactionsGeneratedCounter =
-        metricsSystem.createCounter(
-            BesuMetricCategory.RPC,
-            "engine_inclusion_list_transactions_generated",
-            "Total number of transactions generated for inclusion lists");
+        constructorArguments
+            .metricsSystem()
+            .createCounter(
+                BesuMetricCategory.RPC,
+                "engine_inclusion_list_transactions_generated",
+                "Total number of transactions generated for inclusion lists");
     this.selectorDurationMsCounter =
-        metricsSystem.createCounter(
-            BesuMetricCategory.RPC,
-            "engine_inclusion_list_selector_duration_ms",
-            "Total time spent selecting inclusion list transactions in milliseconds");
+        constructorArguments
+            .metricsSystem()
+            .createCounter(
+                BesuMetricCategory.RPC,
+                "engine_inclusion_list_selector_duration_ms",
+                "Total time spent selecting inclusion list transactions in milliseconds");
   }
 
   @Override

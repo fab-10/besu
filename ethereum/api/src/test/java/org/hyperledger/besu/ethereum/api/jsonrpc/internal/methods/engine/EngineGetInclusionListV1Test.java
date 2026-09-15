@@ -15,7 +15,9 @@
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.BOGOTA;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.consensus.merge.MergeContext;
@@ -24,21 +26,21 @@ import org.hyperledger.besu.crypto.SECPPrivateKey;
 import org.hyperledger.besu.crypto.SignatureAlgorithm;
 import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
 import org.hyperledger.besu.datatypes.Address;
-import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.datatypes.Wei;
 import org.hyperledger.besu.ethereum.ProtocolContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ConstructorArgumentsBuilder;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
-import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
-import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
+import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.metrics.StubMetricsSystem;
 import org.hyperledger.besu.plugin.services.rpc.RpcResponseType;
 
@@ -73,16 +75,10 @@ public class EngineGetInclusionListV1Test {
   private static final KeyPair KEYS1 =
       new KeyPair(PRIVATE_KEY1, SIGNATURE_ALGORITHM.get().createPublicKey(PRIVATE_KEY1));
 
-  private static final Hash KNOWN_PARENT_HASH =
-      Hash.fromHexString("0x0000000000000000000000000000000000000000000000000000000000000001");
-  private static final Hash UNKNOWN_PARENT_HASH =
-      Hash.fromHexString("0x0000000000000000000000000000000000000000000000000000000000000099");
-
   @Mock private ProtocolContext protocolContext;
+  @Mock private ProtocolSchedule protocolSchedule;
   @Mock private EngineCallListener engineCallListener;
-  @Mock private MutableBlockchain blockchain;
   @Mock private TransactionPool transactionPool;
-  @Mock private BlockHeader parentBlockHeader;
   @Mock private MergeContext mergeContext;
 
   private EngineGetInclusionListV1 method;
@@ -92,15 +88,23 @@ public class EngineGetInclusionListV1Test {
   @BeforeEach
   public void beforeEach() {
     when(protocolContext.safeConsensusContext(any())).thenReturn(Optional.ofNullable(mergeContext));
-    when(protocolContext.getBlockchain()).thenReturn(blockchain);
-    when(blockchain.getBlockHeader(KNOWN_PARENT_HASH)).thenReturn(Optional.of(parentBlockHeader));
-    when(blockchain.getBlockHeader(UNKNOWN_PARENT_HASH)).thenReturn(Optional.empty());
-    when(parentBlockHeader.getBaseFee()).thenReturn(Optional.of(Wei.of(7)));
+    when(protocolSchedule.milestoneFor(BOGOTA)).thenReturn(Optional.of(0L));
 
     this.metricsSystem = new StubMetricsSystem();
     this.method =
         new EngineGetInclusionListV1(
-            vertx, protocolContext, engineCallListener, transactionPool, metricsSystem);
+            new ConstructorArgumentsBuilder()
+                .protocolSchedule(protocolSchedule)
+                .protocolContext(protocolContext)
+                .vertx(vertx)
+                .engineCallListener(engineCallListener)
+                .ethPeers(mock(EthPeers.class))
+                .metricsSystem(metricsSystem)
+                .transactionPool(transactionPool)
+                .maxRequestBlocks(0)
+                .build(),
+            BOGOTA,
+            null);
   }
 
   @Test
@@ -112,7 +116,7 @@ public class EngineGetInclusionListV1Test {
   public void shouldReturnEmptyListWhenNoTransactionsInPool() {
     when(transactionPool.getInclusionListPendingTransactions()).thenReturn(List.of());
 
-    final JsonRpcResponse response = resp(KNOWN_PARENT_HASH);
+    final JsonRpcResponse response = resp();
     assertThat(response.getType()).isEqualTo(RpcResponseType.SUCCESS);
 
     final List<Transaction> result = fromSuccessResp(response);
@@ -130,7 +134,7 @@ public class EngineGetInclusionListV1Test {
 
     when(transactionPool.getInclusionListPendingTransactions()).thenReturn(List.of(pt1, pt2));
 
-    final JsonRpcResponse response = resp(KNOWN_PARENT_HASH);
+    final JsonRpcResponse response = resp();
     assertThat(response.getType()).isEqualTo(RpcResponseType.SUCCESS);
 
     final List<Transaction> result = fromSuccessResp(response);
@@ -147,7 +151,7 @@ public class EngineGetInclusionListV1Test {
 
     when(transactionPool.getInclusionListPendingTransactions()).thenReturn(List.of(pt));
 
-    final JsonRpcResponse response = resp(KNOWN_PARENT_HASH);
+    final JsonRpcResponse response = resp();
     assertThat(response.getType()).isEqualTo(RpcResponseType.SUCCESS);
 
     final List<Transaction> result = fromSuccessResp(response);
@@ -162,7 +166,7 @@ public class EngineGetInclusionListV1Test {
 
     when(transactionPool.getInclusionListPendingTransactions()).thenReturn(List.of(pt1));
 
-    resp(KNOWN_PARENT_HASH);
+    resp();
 
     assertThat(metricsSystem.getCounterValue("engine_inclusion_list_transactions_generated"))
         .isEqualTo(1);
@@ -176,19 +180,11 @@ public class EngineGetInclusionListV1Test {
 
     when(transactionPool.getInclusionListPendingTransactions()).thenReturn(List.of(pt1));
 
-    resp(KNOWN_PARENT_HASH);
+    resp();
 
     // Duration may be 0ms for fast execution, but the counter should exist
     assertThat(metricsSystem.getCounterValue("engine_inclusion_list_selector_duration_ms"))
         .isGreaterThanOrEqualTo(0);
-  }
-
-  @Test
-  public void shouldNotIncrementMetricsOnUnknownParent() {
-    resp(UNKNOWN_PARENT_HASH);
-
-    assertThat(metricsSystem.getCounterValue("engine_inclusion_list_transactions_generated"))
-        .isEqualTo(0);
   }
 
   private Transaction createLegacyTransaction(final long nonce, final Wei gasPrice) {
@@ -202,13 +198,11 @@ public class EngineGetInclusionListV1Test {
         .createTransaction(KEYS1);
   }
 
-  private JsonRpcResponse resp(final Hash parentHash) {
+  private JsonRpcResponse resp() {
     return method.response(
         new JsonRpcRequestContext(
             new JsonRpcRequest(
-                "2.0",
-                RpcMethod.ENGINE_GET_INCLUSION_LIST_V1.getMethodName(),
-                new Object[] {parentHash.toHexString()})));
+                "2.0", RpcMethod.ENGINE_GET_INCLUSION_LIST_V1.getMethodName(), new Object[0])));
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})

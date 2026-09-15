@@ -276,7 +276,7 @@ public sealed class EngineNewPayloadV1<
         // we respond with SYNCING here to ensure a VALID newPayload is not marked INVALID.
         // however besu should not trigger a worldstate resync until/unless this chain is
         // finalized via forkchoiceUpdated.
-        return respondWith(reqId, blockParam, null, SYNCING);
+        return respondWithSyncing(reqId);
       }
       if (executionResult.causedBy().isPresent()) {
         Throwable causedBy = executionResult.causedBy().get();
@@ -400,22 +400,6 @@ public sealed class EngineNewPayloadV1<
       final Hash latestValidHash,
       final PayloadPostExecutionValidationResultV1 postExecutionResult) {
     return new PayloadStatusV1(VALID, latestValidHash);
-  }
-
-  private JsonRpcResponse respondWithAccepted(
-      final Object requestId, final ExecutionPayloadV1 param) {
-    logger()
-        .atDebug()
-        .setMessage("New payload: number: {}, hash: {}, parentHash: {}, status: ACCEPTED")
-        .addArgument(param::getBlockNumber)
-        .addArgument(param::getBlockHash)
-        .addArgument(param::getParentHash)
-        .log();
-    return new JsonRpcSuccessResponse(requestId, createAcceptedPayloadStatus());
-  }
-
-  protected PayloadStatusV1 createAcceptedPayloadStatus() {
-    return new PayloadStatusV1(ACCEPTED);
   }
 
   private JsonRpcResponse respondWithSyncing(final Object requestId) {

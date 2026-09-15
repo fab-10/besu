@@ -14,7 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
-import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.EngineStatus.ACCEPTED;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.EngineStatus.SYNCING;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.EngineStatus.VALID;
 
@@ -126,11 +125,6 @@ public final class EngineNewPayloadV6<
   protected PayloadStatusV2 createInvalidPayloadStatus(
       final EngineStatus invalidStatus, final Hash latestValidHash, final String validationError) {
     return new PayloadStatusV2(invalidStatus, latestValidHash, validationError);
-  }
-
-  @Override
-  protected PayloadStatusV2 createAcceptedPayloadStatus() {
-    return new PayloadStatusV2(ACCEPTED);
   }
 
   @Override

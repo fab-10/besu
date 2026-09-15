@@ -151,21 +151,12 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
           createEngineExchangeTransitionConfigurationMethods(constructorArguments));
       executionEngineApisSupported.addAll(createGetBlobsMethods(constructorArguments));
       executionEngineApisSupported.addAll(createGetBlobsV4Methods(constructorArguments));
+      executionEngineApisSupported.addAll(createGetInclusionListMethods(constructorArguments));
 
       executionEngineApisSupported.addAll(
           Arrays.asList(
               new EngineExchangeCapabilities(constructorArguments),
               new EngineGetClientVersionV1(constructorArguments, clientVersion, commit)));
-
-      if (protocolSchedule.milestoneFor(BOGOTA).isPresent()) {
-        executionEngineApisSupported.add(
-            new EngineGetInclusionListV1(
-                consensusEngineServer,
-                protocolContext,
-                engineQosTimer,
-                transactionPool,
-                metricsSystem));
-      }
 
       return mapOf(executionEngineApisSupported);
     } else {
@@ -259,12 +250,18 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
         .build(constructorArguments);
   }
 
+  private Collection<? extends JsonRpcMethod> createGetInclusionListMethods(
+      final ConstructorArguments constructorArguments) {
+    return VersionScheduler.startsFrom(BOGOTA, EngineGetInclusionListV1::new)
+        .build(constructorArguments);
+  }
+
   @VisibleForTesting
   static class VersionScheduler {
     final List<MethodVersionBuildData> readyMethods = new ArrayList<>();
     List<MethodVersionBuildData> pendingMethods = new ArrayList<>();
 
-    /**
+    /*
      * Creates one version of an engine method. Since all versioned engine methods share the same
      * constructor signature, their constructor references can be used directly, keeping method
      * instantiation free of reflection.
