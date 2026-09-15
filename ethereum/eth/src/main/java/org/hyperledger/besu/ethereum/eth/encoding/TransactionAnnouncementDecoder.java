@@ -16,6 +16,8 @@ package org.hyperledger.besu.ethereum.eth.encoding;
 
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.TransactionType;
+import org.hyperledger.besu.ethereum.eth.EthProtocolVersion;
+import org.hyperledger.besu.ethereum.eth.transactions.CellMask;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAnnouncement;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
@@ -23,6 +25,7 @@ import org.hyperledger.besu.ethereum.rlp.RLPInput;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class TransactionAnnouncementDecoder {
 
@@ -40,7 +43,9 @@ public class TransactionAnnouncementDecoder {
    * @return the correct decoder
    */
   public static Decoder getDecoder(final Capability capability) {
-    return TransactionAnnouncementDecoder::decodeForEth68;
+    return capability.getVersion() >= EthProtocolVersion.V72
+        ? TransactionAnnouncementDecoder::decodeForEth72
+        : TransactionAnnouncementDecoder::decodeForEth68;
   }
 
   /**
@@ -74,5 +79,54 @@ public class TransactionAnnouncementDecoder {
       throw new RLPException("Hashes, sizes and types must have the same number of elements");
     }
     return TransactionAnnouncement.create(types, sizes, hashes);
+  }
+
+  private static List<TransactionAnnouncement> decodeForEth72(final RLPInput input) {
+    input.enterList();
+
+    final List<TransactionType> types = new ArrayList<>();
+    final byte[] bytes = input.readBytes().toArray();
+    for (final byte b : bytes) {
+      final var transactionType =
+          TransactionType.fromEthSerializedType(b)
+              .orElseThrow(
+                  () ->
+                      new RLPException(
+                          "Invalid transaction type 0x%02x".formatted(Byte.toUnsignedInt(b))));
+      types.add(transactionType);
+    }
+
+    final List<Long> sizes = input.readList(RLPInput::readUnsignedIntScalar);
+    final List<Hash> hashes = input.readList(rlp -> Hash.wrap(rlp.readBytes32().copy()));
+    final Optional<CellMask> cellMask = readCellMask(input, types);
+
+    input.leaveList();
+    if (!(types.size() == hashes.size() && hashes.size() == sizes.size())) {
+      throw new RLPException("Hashes, sizes and types must have the same number of elements");
+    }
+    return TransactionAnnouncement.create(types, sizes, hashes, cellMask);
+  }
+
+  private static Optional<CellMask> readCellMask(
+      final RLPInput input, final List<TransactionType> types) {
+    final boolean containsBlobTransaction = types.stream().anyMatch(TransactionType.BLOB::equals);
+    if (input.nextIsNull()) {
+      input.skipNext();
+      if (containsBlobTransaction) {
+        throw new RLPException("eth/72 blob transaction announcements must include a cell mask");
+      }
+      return Optional.empty();
+    }
+
+    final var maskBytes = input.readBytes();
+    if (maskBytes.size() != CellMask.BYTE_LENGTH) {
+      throw new RLPException(
+          "Invalid eth/72 cell mask length %s, expected %s"
+              .formatted(maskBytes.size(), CellMask.BYTE_LENGTH));
+    }
+    if (!containsBlobTransaction) {
+      throw new RLPException("eth/72 non-blob announcements must use nil cell mask");
+    }
+    return Optional.of(CellMask.fromBytes(maskBytes));
   }
 }

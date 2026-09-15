@@ -18,6 +18,7 @@ import static org.hyperledger.besu.ethereum.eth.encoding.TransactionAnnouncement
 import static org.hyperledger.besu.ethereum.eth.encoding.TransactionAnnouncementEncoder.getEncoder;
 
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.eth.EthProtocolVersion;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAnnouncement;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.AbstractMessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
@@ -49,6 +50,18 @@ public class NewPooledTransactionHashesMessage extends AbstractMessageData {
       final List<Transaction> pendingTransactions, final Capability capability) {
     return new NewPooledTransactionHashesMessage(
         getEncoder(capability).encode(pendingTransactions), capability);
+  }
+
+  public static NewPooledTransactionHashesMessage createAnnouncements(
+      final List<TransactionAnnouncement> pendingTransactions, final Capability capability) {
+    if (capability.getVersion() < EthProtocolVersion.V72) {
+      throw new IllegalArgumentException(
+          "Explicit transaction announcement cell masks require eth/72 or later");
+    }
+    return new NewPooledTransactionHashesMessage(
+        org.hyperledger.besu.ethereum.eth.encoding.TransactionAnnouncementEncoder
+            .encodeAnnouncementsForEth72(pendingTransactions),
+        capability);
   }
 
   public static NewPooledTransactionHashesMessage readFrom(

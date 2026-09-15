@@ -87,7 +87,7 @@ public abstract class AbstractTransactionPoolTest extends AbstractTransactionPoo
   public void blobCustodyColumnsStartsEmptyAndRoundTripsAfterUpdate() {
     assertThat(transactionPool.getBlobCustodyColumns()).isEmpty();
 
-    final Bytes custodyColumns = Bytes.repeat((byte) 0xAB, 16);
+    final CellMask custodyColumns = CellMask.fromBytes(Bytes.repeat((byte) 0xAB, 16));
     transactionPool.updateBlobCustodyColumns(custodyColumns);
 
     assertThat(transactionPool.getBlobCustodyColumns()).contains(custodyColumns);
