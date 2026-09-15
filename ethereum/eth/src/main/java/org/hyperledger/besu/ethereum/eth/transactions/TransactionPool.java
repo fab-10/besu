@@ -114,7 +114,7 @@ public class TransactionPool implements BlockAddedObserver {
   private final ProtocolContext protocolContext;
   private final EthContext ethContext;
   private final TransactionBroadcaster transactionBroadcaster;
-  private final PeerTransactionTracker peerTransactionTracker;
+  //  private final PeerTransactionTracker peerTransactionTracker;
   private final TransactionPoolMetrics metrics;
   private final TransactionPoolConfiguration configuration;
   private final AtomicBoolean isPoolEnabled = new AtomicBoolean(false);
@@ -145,14 +145,15 @@ public class TransactionPool implements BlockAddedObserver {
     this.protocolContext = protocolContext;
     this.ethContext = ethContext;
     this.transactionBroadcaster = transactionBroadcaster;
-    this.peerTransactionTracker = peerTransactionTracker;
+    //    this.peerTransactionTracker = peerTransactionTracker;
     this.metrics = metrics;
     this.configuration = configuration;
     this.blockAddedEventOrderedProcessor =
         ethContext.getScheduler().createOrderedProcessor(this::processBlockAddedEvent);
     this.cacheForBlobsOfTransactionsAddedToABlock = blobCache;
     this.transactionLimbo =
-        new TransactionsLimbo(ethContext, peerTransactionTracker, blobCustodyColumns::get);
+        new TransactionsLimbo(
+            ethContext, peerTransactionTracker, blobCustodyColumns::get, this::addTransaction);
     peerTransactionTracker.subscribeToAnnouncements(transactionLimbo);
     initializeBlobMetrics();
     subscribePendingTransactions(this::mapBlobsOnTransactionAdded);
@@ -283,7 +284,7 @@ public class TransactionPool implements BlockAddedObserver {
 
     if (validationResult.result.isValid()) {
       if (incompleteBlob(transaction)) {
-        transactionLimbo.addIncompleteBlob(transaction);
+        transactionLimbo.addIncompleteBlob(transaction, isLocal, hasPriority, score);
       } else {
         final TransactionAddedResult status =
             pendingTransactions.addTransaction(
@@ -1118,6 +1119,11 @@ public class TransactionPool implements BlockAddedObserver {
    * @param pooledTransaction the transaction as pooled, which is the submitted transaction when no
    *     pre-processing applied, or when the transaction was not added at all
    */
-  public record AdditionOutcome(
+  record AdditionOutcome(
       ValidationResult<TransactionInvalidReason> result, Transaction pooledTransaction) {}
+
+  interface TransactionResubmitter {
+    AdditionOutcome submit(
+        Transaction transaction, boolean isLocal, boolean hasPriority, byte score);
+  }
 }

@@ -60,8 +60,12 @@ public final class CellsMessage extends AbstractMessageData {
     return new CellsMessage(message.getData());
   }
 
-  public MessageFields getFields() {
-    return fieldsSupplier.get();
+  public List<Hash> txHashes() {
+    return fieldsSupplier.get().txHashes;
+  }
+
+  public List<List<Cell>> cellsList() {
+    return fieldsSupplier.get().cellsList;
   }
 
   public CellMask cellMask() {
@@ -80,5 +84,6 @@ public final class CellsMessage extends AbstractMessageData {
     return new MessageFields(txHashes, cells, cellMask);
   }
 
-  public record MessageFields(List<Hash> txHashes, List<List<Cell>> cells, CellMask cellMask) {}
+  private record MessageFields(
+      List<Hash> txHashes, List<List<Cell>> cellsList, CellMask cellMask) {}
 }

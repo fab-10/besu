@@ -138,4 +138,9 @@ public final class CellMask {
     Arrays.fill(bytes, (byte) 0xFF);
     return bytes;
   }
+
+  public CellMask andNot(final CellMask peerRequestMask) {
+    mask.andNot(peerRequestMask.mask);
+    return this;
+  }
 }

@@ -169,6 +169,10 @@ public class EthScheduler {
     return promise;
   }
 
+  public <T> CompletableFuture<T> scheduleServiceTaskDirect(final Supplier<T> task) {
+    return CompletableFuture.supplyAsync(task, servicesExecutor);
+  }
+
   @SuppressWarnings("CollectionUndefinedEquality") // CompletableFuture uses identity equality
   public CompletableFuture<Void> startPipeline(final Pipeline<?> pipeline) {
     final CompletableFuture<Void> pipelineFuture = pipeline.start(servicesExecutor);
