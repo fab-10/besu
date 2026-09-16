@@ -47,6 +47,7 @@ import org.hyperledger.besu.ethereum.core.BlobTestFixture;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
+import org.hyperledger.besu.ethereum.core.kzg.Cell;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
@@ -208,7 +209,8 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
     int cellSize = blobCells.size() / CKZG4844Helper.CELL_PROOFS_PER_BLOB;
     Bytes expectedCell0 = blobCells.slice(0, cellSize);
     Bytes expectedCell127 = blobCells.slice(127 * cellSize, cellSize);
-    assertThat(result.getFirst().getBlobCells()).containsExactly(expectedCell0, expectedCell127);
+    assertThat(result.getFirst().getBlobCells())
+        .containsExactly(new Cell(expectedCell0), new Cell(expectedCell127));
     assertThat(result.getFirst().getProofs())
         .containsExactly(bundle.getKzgProof().get(0), bundle.getKzgProof().get(127));
   }

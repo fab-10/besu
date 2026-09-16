@@ -50,6 +50,7 @@ import org.hyperledger.besu.ethereum.core.MiningConfiguration;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PeerTransactionTracker;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
@@ -154,6 +155,7 @@ public class BftBlockCreatorTest {
             protocolSchedule,
             protContext,
             mock(TransactionBroadcaster.class),
+            mock(PeerTransactionTracker.class),
             ethContext,
             new TransactionPoolMetrics(metricsSystem),
             poolConf,
@@ -302,6 +304,7 @@ public class BftBlockCreatorTest {
             protocolSchedule,
             protContext,
             mock(TransactionBroadcaster.class),
+            mock(PeerTransactionTracker.class),
             ethContext,
             new TransactionPoolMetrics(metricsSystem),
             poolConf,
@@ -436,6 +439,7 @@ public class BftBlockCreatorTest {
             protocolSchedule,
             protContext,
             mock(TransactionBroadcaster.class),
+            mock(PeerTransactionTracker.class),
             ethContext,
             new TransactionPoolMetrics(metricsSystem),
             poolConf,
@@ -571,6 +575,7 @@ public class BftBlockCreatorTest {
             protocolSchedule,
             protContext,
             mock(TransactionBroadcaster.class),
+            mock(PeerTransactionTracker.class),
             ethContext,
             new TransactionPoolMetrics(metricsSystem),
             poolConf,

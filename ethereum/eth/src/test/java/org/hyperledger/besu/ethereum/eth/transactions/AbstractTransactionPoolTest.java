@@ -47,6 +47,7 @@ import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Difficulty;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthProtocolManagerTestUtil;
 import org.hyperledger.besu.ethereum.eth.manager.RespondingEthPeer;
@@ -84,13 +85,15 @@ import org.mockito.junit.jupiter.MockitoSettings;
 public abstract class AbstractTransactionPoolTest extends AbstractTransactionPoolTestBase {
 
   @Test
-  public void blobCustodyColumnsStartsEmptyAndRoundTripsAfterUpdate() {
-    assertThat(transactionPool.getBlobCustodyColumns()).isEmpty();
+  public void blobCustodyColumnsDefaultsToFullAndRoundTripsAfterUpdate() {
+    // eth/72 changed this from Optional<Bytes>, empty until the CL reported a custody set, to a
+    // CellMask that starts out full, so the pool behaves as a supernode until told otherwise.
+    assertThat(transactionPool.getBlobCustodyColumns()).isEqualTo(CellMask.FULL);
 
-    final Bytes custodyColumns = Bytes.repeat((byte) 0xAB, 16);
+    final CellMask custodyColumns = CellMask.fromBytes(Bytes.repeat((byte) 0xAB, 16));
     transactionPool.updateBlobCustodyColumns(custodyColumns);
 
-    assertThat(transactionPool.getBlobCustodyColumns()).contains(custodyColumns);
+    assertThat(transactionPool.getBlobCustodyColumns()).isEqualTo(custodyColumns);
   }
 
   @ParameterizedTest

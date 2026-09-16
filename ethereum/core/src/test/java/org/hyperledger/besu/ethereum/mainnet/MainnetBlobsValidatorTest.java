@@ -45,6 +45,13 @@ public class MainnetBlobsValidatorTest {
   private Transaction transaction;
   private BlobsWithCommitments blobsWithCommitments;
 
+  /**
+   * Every case here is rejected before the completeness check, so any params work; the mempool ones
+   * are used because that is the path blob validation matters most on.
+   */
+  private final TransactionValidationParams transactionValidationParams =
+      TransactionValidationParams.transactionPool();
+
   @BeforeEach
   void setUp() {
     blobsValidator =

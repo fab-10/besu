@@ -14,6 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.core.kzg;
 
+import org.hyperledger.besu.ethereum.rlp.RLPException;
 import org.hyperledger.besu.ethereum.rlp.RLPInput;
 import org.hyperledger.besu.ethereum.rlp.RLPOutput;
 
@@ -46,9 +47,15 @@ public class Cell {
    *
    * @param input to read from.
    * @return the Cell.
+   * @throws RLPException if the encoded cell does not have the expected size. Peer supplied data
+   *     reaches this method, so a malformed size is reported as an RLP error rather than as an
+   *     unchecked argument error.
    */
   public static Cell readFrom(final RLPInput input) {
     final Bytes bytes = input.readBytes();
+    if (bytes.size() != SIZE) {
+      throw new RLPException("Invalid cell size %d, expected %d".formatted(bytes.size(), SIZE));
+    }
     return new Cell(bytes);
   }
 

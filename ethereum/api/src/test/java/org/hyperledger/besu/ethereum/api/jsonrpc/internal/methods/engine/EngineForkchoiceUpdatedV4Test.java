@@ -35,6 +35,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSucces
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.Quantity;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
 
@@ -250,7 +251,7 @@ public class EngineForkchoiceUpdatedV4Test extends EngineForkchoiceUpdatedV3Test
             custodyColumns);
 
     assertThat(resp).isInstanceOf(JsonRpcSuccessResponse.class);
-    verify(transactionPool).updateBlobCustodyColumns(custodyColumns);
+    verify(transactionPool).updateBlobCustodyColumns(CellMask.fromBytes(custodyColumns));
   }
 
   @Test
