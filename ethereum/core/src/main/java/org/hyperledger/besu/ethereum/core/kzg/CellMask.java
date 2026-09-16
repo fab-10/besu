@@ -97,11 +97,9 @@ public final class CellMask {
    * on their respective BitSet representations.
    *
    * @param other the CellMask to merge into this CellMask.
-   * @return this CellMask updated with the merge operation.
    */
-  public CellMask merge(final CellMask other) {
+  public void merge(final CellMask other) {
     mask.or(other.mask);
-    return this;
   }
 
   /**
@@ -109,11 +107,9 @@ public final class CellMask {
    * operation on their respective BitSet representations.
    *
    * @param other the CellMask to intersect into this CellMask.
-   * @return this CellMask updated with the intersect operation.
    */
-  public CellMask intersect(final CellMask other) {
+  public void intersect(final CellMask other) {
     mask.and(other.mask);
-    return this;
   }
 
   @Override

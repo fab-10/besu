@@ -114,7 +114,6 @@ public class TransactionPool implements BlockAddedObserver {
   private final ProtocolContext protocolContext;
   private final EthContext ethContext;
   private final TransactionBroadcaster transactionBroadcaster;
-  //  private final PeerTransactionTracker peerTransactionTracker;
   private final TransactionPoolMetrics metrics;
   private final TransactionPoolConfiguration configuration;
   private final AtomicBoolean isPoolEnabled = new AtomicBoolean(false);
@@ -145,20 +144,17 @@ public class TransactionPool implements BlockAddedObserver {
     this.protocolContext = protocolContext;
     this.ethContext = ethContext;
     this.transactionBroadcaster = transactionBroadcaster;
-    //    this.peerTransactionTracker = peerTransactionTracker;
     this.metrics = metrics;
     this.configuration = configuration;
     this.blockAddedEventOrderedProcessor =
         ethContext.getScheduler().createOrderedProcessor(this::processBlockAddedEvent);
     this.cacheForBlobsOfTransactionsAddedToABlock = blobCache;
     this.transactionLimbo =
-        new TransactionsLimbo(
-            ethContext, peerTransactionTracker, blobCustodyColumns::get, this::addTransaction);
+        new TransactionsLimbo(ethContext, blobCustodyColumns::get, this::addTransaction);
     peerTransactionTracker.subscribeToAnnouncements(transactionLimbo);
     initializeBlobMetrics();
     subscribePendingTransactions(this::mapBlobsOnTransactionAdded);
     subscribeDroppedTransactions((transaction, _) -> unmapBlobsOnTransactionDropped(transaction));
-    //    subscribePendingTransactions(peerTra/nsactionTracker);
     subscribeDroppedTransactions(peerTransactionTracker);
   }
 
