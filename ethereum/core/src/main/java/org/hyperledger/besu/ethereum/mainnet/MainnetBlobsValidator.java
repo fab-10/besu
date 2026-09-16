@@ -74,16 +74,20 @@ public class MainnetBlobsValidator {
    * versions) and, if present, validates the blobs and commitments themselves.
    *
    * @param transaction the transaction to validate
+   * @param transactionValidationParams the params governing this validation, notably whether a
+   *     transaction holding only a subset of its blob cells is acceptable
    * @return a {@link ValidationResult} indicating validity or the reason for rejection
    */
-  public ValidationResult<TransactionInvalidReason> validate(final Transaction transaction) {
+  public ValidationResult<TransactionInvalidReason> validate(
+      final Transaction transaction,
+      final TransactionValidationParams transactionValidationParams) {
     ValidationResult<TransactionInvalidReason> blobTransactionResult =
         validateBlobTransaction(transaction);
     if (!blobTransactionResult.isValid()) {
       return blobTransactionResult;
     }
     if (transaction.getBlobsWithCommitments().isPresent()) {
-      return validateBlobsWithCommitments(transaction);
+      return validateBlobsWithCommitments(transaction, transactionValidationParams);
     }
     return ValidationResult.valid();
   }
@@ -147,14 +151,21 @@ public class MainnetBlobsValidator {
    * <ul>
    *   <li>Ensures blobs and commitments are present and sizes match.
    *   <li>Validates that commitment hashes match the provided versioned hashes.
-   *   <li>Verifies KZG proofs for all commitments.
+   *   <li>Verifies KZG proofs for all commitments, when every cell is present.
    * </ul>
    *
+   * <p>When only a subset of the cells is held, the KZG proofs cannot be verified as a batch over
+   * all 128 cells, so the transaction is rejected unless {@code transactionValidationParams} allows
+   * an incomplete blob.
+   *
    * @param transaction the transaction containing blobs and commitments
+   * @param transactionValidationParams the params governing this validation, notably whether a
+   *     transaction holding only a subset of its blob cells is acceptable
    * @return a {@link ValidationResult} indicating success or reason for failure
    */
   private ValidationResult<TransactionInvalidReason> validateBlobsWithCommitments(
-      final Transaction transaction) {
+      final Transaction transaction,
+      final TransactionValidationParams transactionValidationParams) {
 
     if (transaction.getBlobsWithCommitments().isEmpty()) {
       return ValidationResult.invalid(
@@ -202,11 +213,16 @@ public class MainnetBlobsValidator {
       }
     }
 
-    // Verify KZG proofs for the blobs
-    if (!verify4844Kzg(blobsWithCommitments)) {
+    if (blobsWithCommitments.allCellsPresent()) {
+      // Verify KZG proofs for the blobs
+      if (!verify4844Kzg(blobsWithCommitments)) {
+        return ValidationResult.invalid(
+            TransactionInvalidReason.INVALID_BLOBS,
+            "transaction blobs kzg proof verification failed");
+      }
+    } else if (!transactionValidationParams.allowIncompleteBlob()) {
       return ValidationResult.invalid(
-          TransactionInvalidReason.INVALID_BLOBS,
-          "transaction blobs kzg proof verification failed");
+          TransactionInvalidReason.INVALID_BLOBS, "not all cells present");
     }
     return ValidationResult.valid();
   }

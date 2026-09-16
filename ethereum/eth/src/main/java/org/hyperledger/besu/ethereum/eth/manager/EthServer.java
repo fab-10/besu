@@ -38,6 +38,7 @@ import org.hyperledger.besu.ethereum.eth.manager.exceptions.ProtocolViolationExc
 import org.hyperledger.besu.ethereum.eth.messages.BlockAccessListsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.BlockBodiesMessage;
 import org.hyperledger.besu.ethereum.eth.messages.BlockHeadersMessage;
+import org.hyperledger.besu.ethereum.eth.messages.CellsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.EthProtocolMessages;
 import org.hyperledger.besu.ethereum.eth.messages.GetBlockAccessListsMessage;
 import org.hyperledger.besu.ethereum.eth.messages.GetBlockBodiesMessage;
@@ -601,6 +602,6 @@ class EthServer {
             cellsList.forEach(cells -> rlpOutput.writeList(cells, Cell::writeTo)));
     rlp.writeBytes(reqCellMask.toBytes());
 
-    return PooledTransactionsMessage.createUnsafe(rlp.encoded());
+    return CellsMessage.createUnsafe(rlp.encoded());
   }
 }

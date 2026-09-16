@@ -37,7 +37,7 @@ public class CellsWithMask {
   }
 
   public CellsWithMask(final List<Cell> cells, final CellMask cellMask) {
-    checkArgument(cells.size() != cellMask.cardinality(), "Cell list does not match mask");
+    checkArgument(cells.size() == cellMask.cardinality(), "Cell list does not match mask");
     final int[] indexMap = new int[CELL_PROOFS_PER_BLOB];
     Arrays.fill(indexMap, -1);
 
