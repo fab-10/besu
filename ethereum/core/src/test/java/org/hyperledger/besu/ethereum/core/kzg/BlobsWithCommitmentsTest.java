@@ -25,7 +25,9 @@ import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.VersionedHash;
 
 import java.util.List;
+import java.util.Optional;
 
+import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
 
 public class BlobsWithCommitmentsTest {
@@ -42,8 +44,8 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () ->
-                    new BlobsWithCommitments(
-                        KZG_PROOF, List.of(), List.of(), List.of(), List.of(), CellMask.FULL))
+                    BlobsWithCommitments.createFromBlobs(
+                        KZG_PROOF, List.of(), List.of(), List.of(), List.of()))
             .getMessage();
     final String expectedMessage =
         "There needs to be a minimum of one blob in a blob transaction with commitments";
@@ -58,8 +60,8 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                new BlobsWithCommitments(
-                    KZG_PROOF, wrongCommitments, blobs, kzgProofs, versionedHashes, CellMask.FULL));
+                BlobsWithCommitments.createFromBlobs(
+                    KZG_PROOF, wrongCommitments, blobs, kzgProofs, versionedHashes));
 
     assertEquals("Invalid number of kzgCommitments, expected 2, got 1", exception.getMessage());
   }
@@ -72,13 +74,8 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                new BlobsWithCommitments(
-                    KZG_PROOF,
-                    kzgCommitments,
-                    blobs,
-                    kzgProofs,
-                    wrongVersionedHashes,
-                    CellMask.FULL));
+                BlobsWithCommitments.createFromBlobs(
+                    KZG_PROOF, kzgCommitments, blobs, kzgProofs, wrongVersionedHashes));
     assertEquals("Invalid number of versionedHashes, expected 2, got 1", exception.getMessage());
   }
 
@@ -89,13 +86,8 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                new BlobsWithCommitments(
-                    KZG_PROOF,
-                    kzgCommitments,
-                    blobs,
-                    wrongKzgProofs,
-                    versionedHashes,
-                    CellMask.FULL));
+                BlobsWithCommitments.createFromBlobs(
+                    KZG_PROOF, kzgCommitments, blobs, wrongKzgProofs, versionedHashes));
     String error = String.format("Invalid number of proofs (%s), expected 2, got 1", KZG_PROOF);
     assertEquals(error, exception.getMessage());
   }
@@ -107,8 +99,8 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                new BlobsWithCommitments(
-                    KZG_PROOF, wrongCommitments, blobs, kzgProofs, versionedHashes, CellMask.FULL));
+                BlobsWithCommitments.createFromBlobs(
+                    KZG_PROOF, wrongCommitments, blobs, kzgProofs, versionedHashes));
     assertEquals("Invalid number of kzgCommitments, expected 2, got 1", exception.getMessage());
   }
 
@@ -119,13 +111,12 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                new BlobsWithCommitments(
+                BlobsWithCommitments.createFromBlobs(
                     BlobType.KZG_CELL_PROOFS,
                     kzgCommitments,
                     blobs,
                     kzgProofs,
-                    wrongVersionedHashes,
-                    CellMask.FULL));
+                    wrongVersionedHashes));
     String error = String.format("Invalid number of versionedHashes, expected 2, got 1");
     assertEquals(error, exception.getMessage());
   }
@@ -139,13 +130,8 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                new BlobsWithCommitments(
-                    blobType,
-                    kzgCommitments,
-                    blobs,
-                    wrongKzgProofs,
-                    versionedHashes,
-                    CellMask.FULL));
+                BlobsWithCommitments.createFromBlobs(
+                    blobType, kzgCommitments, blobs, wrongKzgProofs, versionedHashes));
     String error = String.format("Invalid number of proofs (%s), expected 256, got 2", blobType);
     assertEquals(error, exception.getMessage());
   }
@@ -169,9 +155,89 @@ public class BlobsWithCommitmentsTest {
     assertEquals("BlobProofBundles list cannot be empty", exception.getMessage());
   }
 
+  @Test
+  public void shouldAcceptBlobProofBundlesSharingOneCellMask() {
+    final CellMask mask = CellMask.fromBytes(Bytes.fromHexString("0x05" + "00".repeat(15)));
+    final BlobsWithCommitments bwc =
+        new BlobsWithCommitments(
+            List.of(
+                mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, mask),
+                mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, mask)));
+
+    // With the invariant enforced, the shared mask can be read from the first bundle alone.
+    assertThat(bwc.getCellMask()).isEqualTo(mask);
+    assertThat(bwc.allCellsPresent()).isFalse();
+  }
+
+  @Test
+  public void shouldThrowExceptionWhenBlobProofBundlesHaveDifferentCellMasks() {
+    // A cell index is transaction level, referring to the same cell of every blob, so per-blob
+    // divergence is not representable on the wire and must not be constructible.
+    final CellMask indexZero = CellMask.fromBytes(Bytes.fromHexString("0x01" + "00".repeat(15)));
+    final CellMask indexTwo = CellMask.fromBytes(Bytes.fromHexString("0x04" + "00".repeat(15)));
+
+    IllegalArgumentException exception =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                new BlobsWithCommitments(
+                    List.of(
+                        mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, indexZero),
+                        mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, indexTwo))));
+    assertEquals("BlobProofBundles must have the same cell mask", exception.getMessage());
+  }
+
+  @Test
+  public void shouldThrowExceptionWhenOnlySomeBlobProofBundlesHaveCells() {
+    // Mixing a bundle that carries cells with one that does not is just as invalid as two
+    // differing masks, in either order.
+    final CellMask mask = CellMask.fromBytes(Bytes.fromHexString("0x01" + "00".repeat(15)));
+
+    assertEquals(
+        "BlobProofBundles must have the same cell mask",
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                    new BlobsWithCommitments(
+                        List.of(
+                            mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, mask),
+                            mockBlobProofBundle(BlobType.KZG_CELL_PROOFS))))
+            .getMessage());
+
+    assertEquals(
+        "BlobProofBundles must have the same cell mask",
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                    new BlobsWithCommitments(
+                        List.of(
+                            mockBlobProofBundle(BlobType.KZG_CELL_PROOFS),
+                            mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, mask))))
+            .getMessage());
+  }
+
+  @Test
+  public void shouldThrowExceptionWhenBundleBlobTypeDiffersFromDeclaredOne() {
+    IllegalArgumentException exception =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                new BlobsWithCommitments(
+                    BlobType.KZG_PROOF, List.of(mockBlobProofBundle(BlobType.KZG_CELL_PROOFS))));
+    assertEquals("BlobProofBundles must have the same BlobType", exception.getMessage());
+  }
+
   private BlobProofBundle mockBlobProofBundle(final BlobType blobType) {
     BlobProofBundle bundle = mock(BlobProofBundle.class);
     when(bundle.getBlobType()).thenReturn(blobType);
+    return bundle;
+  }
+
+  private BlobProofBundle mockBlobProofBundle(final BlobType blobType, final CellMask cellMask) {
+    BlobProofBundle bundle = mockBlobProofBundle(blobType);
+    final CellsWithMask cellsWithMask = mock(CellsWithMask.class);
+    when(cellsWithMask.getCellMask()).thenReturn(cellMask);
+    when(bundle.getCellsWithMask()).thenReturn(Optional.of(cellsWithMask));
     return bundle;
   }
 }

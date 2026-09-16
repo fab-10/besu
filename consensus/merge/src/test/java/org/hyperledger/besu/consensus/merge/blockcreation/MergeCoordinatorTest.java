@@ -67,6 +67,7 @@ import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.sync.backwardsync.BackwardSyncContext;
 import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PeerTransactionTracker;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
@@ -231,6 +232,7 @@ public class MergeCoordinatorTest implements MergeGenesisConfigHelper {
             protocolSchedule,
             protocolContext,
             mock(TransactionBroadcaster.class),
+            mock(PeerTransactionTracker.class),
             ethContext,
             new TransactionPoolMetrics(metricsSystem),
             poolConf,

@@ -32,6 +32,7 @@ import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.SubProtocol;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -97,14 +98,7 @@ public class GetCellsFromPeerTask implements PeerTask<List<CellsWithMask>> {
               .formatted(resCellMask.toString(), requestedCellMask.toString()));
     }
 
-    final int txBlobCount = requestedTx.getBlobCount();
-
-    if (resCellsList.size() != txBlobCount) {
-      throw new InvalidPeerTaskResponseException(
-          "Received cells list count %d does not match tx blob count %d"
-              .formatted(resCellsList.size(), txBlobCount));
-    }
-
+    // The responder MAY truncate its response, so receiving fewer cells than requested is valid.
     if (!resCellMask.containsAll(requestedCellMask)) {
       LOG.debug(
           "Received partial cells, requested mask {}, received mask {}",
@@ -112,7 +106,32 @@ public class GetCellsFromPeerTask implements PeerTask<List<CellsWithMask>> {
           resCellMask);
     }
 
-    return resCellsList.stream().map(cells -> new CellsWithMask(cells, resCellMask)).toList();
+    if (resCellsList.size() != 1) {
+      throw new InvalidPeerTaskResponseException(
+          "Received %d cell lists, expected 1 for the single requested tx"
+              .formatted(resCellsList.size()));
+    }
+
+    // A transaction's group arrives blob major: for each blob in transaction order, its cells by
+    // ascending index. So blob b owns the contiguous run [b * cellsPerBlob, (b+1) * cellsPerBlob). Split it into one CellsWithMask per blob.
+    final int txBlobCount = requestedTx.getBlobCount();
+    final int cellsPerBlob = resCellMask.cardinality();
+    final List<Cell> txCells = resCellsList.getFirst();
+
+    if (txCells.size() != txBlobCount * cellsPerBlob) {
+      throw new InvalidPeerTaskResponseException(
+          "Received %d cells, expected %d (%d blobs x %d cells)"
+              .formatted(txCells.size(), txBlobCount * cellsPerBlob, txBlobCount, cellsPerBlob));
+    }
+
+    final List<CellsWithMask> cellsPerBlobList = new ArrayList<>(txBlobCount);
+    for (int blobIndex = 0; blobIndex < txBlobCount; blobIndex++) {
+      cellsPerBlobList.add(
+          new CellsWithMask(
+              txCells.subList(blobIndex * cellsPerBlob, (blobIndex + 1) * cellsPerBlob),
+              resCellMask));
+    }
+    return cellsPerBlobList;
   }
 
   @Override

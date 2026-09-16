@@ -36,47 +36,71 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
   private final BlobType blobType;
   private final List<BlobProofBundle> blobProofBundles;
 
+  /**
+   * Canonical constructor: every other construction path funnels through here, so this is where the
+   * class invariants are enforced.
+   *
+   * <ul>
+   *   <li>the bundle list is not empty
+   *   <li>every bundle carries the declared {@link BlobType}
+   *   <li>every bundle shares one cell availability mask, or none of them has one
+   * </ul>
+   *
+   * @param blobType the blob type every bundle must declare
+   * @param blobProofBundles the bundles, one per blob
+   */
   public BlobsWithCommitments(
       final BlobType blobType, final List<BlobProofBundle> blobProofBundles) {
+    checkArgument(!blobProofBundles.isEmpty(), "BlobProofBundles list cannot be empty");
+    checkArgument(
+        blobProofBundles.stream().map(BlobProofBundle::getBlobType).allMatch(blobType::equals),
+        "BlobProofBundles must have the same BlobType");
+    checkSharedCellMask(blobProofBundles);
+
     this.blobType = blobType;
     this.blobProofBundles = blobProofBundles;
   }
 
   /**
-   * Constructs an instance from a list of {@link BlobProofBundle}.
+   * Constructs an instance from a list of {@link BlobProofBundle}, taking the blob type from the
+   * first bundle.
    *
    * @param blobProofBundles the list of blob proof bundles to be attached to the transaction.
    */
   public BlobsWithCommitments(final List<BlobProofBundle> blobProofBundles) {
-    checkArgument(!blobProofBundles.isEmpty(), "BlobProofBundles list cannot be empty");
+    this(firstBlobType(blobProofBundles), blobProofBundles);
+  }
 
-    BlobType blobType = blobProofBundles.getFirst().getBlobType();
+  private static BlobType firstBlobType(final List<BlobProofBundle> blobProofBundles) {
+    checkArgument(!blobProofBundles.isEmpty(), "BlobProofBundles list cannot be empty");
+    return blobProofBundles.getFirst().getBlobType();
+  }
+
+  /**
+   * Enforces that all blobs of a transaction share one cell availability mask.
+   *
+   * <p>This is a property of the protocol, not an implementation convenience: an eth/72 cell index
+   * is transaction level, referring to the corresponding cell of <em>every</em> blob in the
+   * transaction, so per-blob divergence is not representable on the wire. Announcements, {@code
+   * GetCells} requests and {@code Cells} responses all carry a single mask per transaction.
+   *
+   * <p>Enforcing it here lets {@link #getCellMask()} and {@link #allCellsPresent()} answer from the
+   * first bundle alone, and lets consumers read cells for any index the mask reports without
+   * re-checking each bundle.
+   *
+   * @param blobProofBundles the bundles to check
+   */
+  private static void checkSharedCellMask(final List<BlobProofBundle> blobProofBundles) {
+    // Comparing Optionals covers both directions: all bundles hold an equal mask, or none holds
+    // one at all. A mix of the two is just as invalid as two differing masks.
+    final Optional<CellMask> firstCellMask =
+        blobProofBundles.getFirst().getCellsWithMask().map(CellsWithMask::getCellMask);
     checkArgument(
         blobProofBundles.stream()
             .skip(1)
-            .map(BlobProofBundle::getBlobType)
-            .allMatch(blobType::equals),
-        "BlobProofBundles must have the same BlobType");
-
-    final Optional<CellsWithMask> firstCellsWithMask =
-        blobProofBundles.getFirst().getCellsWithMask();
-    firstCellsWithMask.ifPresent(
-        cellsWithMask -> {
-          final CellMask firstCellMask = cellsWithMask.getCellMask();
-          checkArgument(
-              blobProofBundles.stream()
-                  .skip(1)
-                  .allMatch(
-                      bundle ->
-                          bundle
-                              .getCellsWithMask()
-                              .map(cwm -> cwm.getCellMask().equals(firstCellMask))
-                              .orElse(Boolean.FALSE)),
-              "BlobProofBundles must have the same cell mask");
-        });
-
-    this.blobProofBundles = blobProofBundles;
-    this.blobType = blobType;
+            .map(bundle -> bundle.getCellsWithMask().map(CellsWithMask::getCellMask))
+            .allMatch(firstCellMask::equals),
+        "BlobProofBundles must have the same cell mask");
   }
 
   /**
@@ -95,7 +119,7 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
       final List<Blob> blobs,
       final List<KZGProof> kzgProofs,
       final List<VersionedHash> versionedHashes) {
-    checkArgument(blobs.stream().anyMatch(Objects::isNull), "all blobs must be non null");
+    checkArgument(blobs.stream().noneMatch(Objects::isNull), "all blobs must be non null");
     commonValidateInputParameters(
         blobType, kzgCommitments, kzgProofs, versionedHashes, blobs.size());
 
@@ -323,6 +347,13 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
     return cellIndices;
   }
 
+  /**
+   * The cell availability mask shared by every blob of this transaction. Reading the first bundle
+   * is sufficient because the constructor enforces that they all agree; see {@link
+   * #checkSharedCellMask(List)}.
+   *
+   * @return the shared mask, or a full mask for blob types that do not carry cells
+   */
   public CellMask getCellMask() {
     return blobProofBundles
         .getFirst()

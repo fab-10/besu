@@ -38,7 +38,7 @@ import com.google.common.annotations.VisibleForTesting;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class TransactionBroadcaster implements TransactionBatchAddedListener {
+public class TransactionBroadcaster implements TransactionBatchAddedListener {
   private static final Logger LOG = LoggerFactory.getLogger(TransactionBroadcaster.class);
 
   private static final EnumSet<TransactionType> ANNOUNCE_HASH_ONLY_TX_TYPES = EnumSet.of(BLOB);
@@ -52,7 +52,7 @@ class TransactionBroadcaster implements TransactionBatchAddedListener {
   private final EthContext ethContext;
   private final Random random;
 
-  TransactionBroadcaster(
+  public TransactionBroadcaster(
       final EthContext ethContext,
       final PeerTransactionTracker transactionTracker,
       final TransactionsMessageSender transactionsMessageSender,

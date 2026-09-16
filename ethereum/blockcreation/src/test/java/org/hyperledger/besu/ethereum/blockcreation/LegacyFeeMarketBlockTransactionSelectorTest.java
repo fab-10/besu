@@ -26,6 +26,7 @@ import org.hyperledger.besu.ethereum.core.MiningConfiguration;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PeerTransactionTracker;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
@@ -97,6 +98,7 @@ public class LegacyFeeMarketBlockTransactionSelectorTest
             protocolSchedule,
             protocolContext,
             mock(TransactionBroadcaster.class),
+            mock(PeerTransactionTracker.class),
             ethContext,
             new TransactionPoolMetrics(metricsSystem),
             poolConf,
