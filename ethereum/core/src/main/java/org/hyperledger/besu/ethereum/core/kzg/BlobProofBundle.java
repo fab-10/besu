@@ -141,7 +141,10 @@ public final class BlobProofBundle {
   }
 
   public Optional<Bytes> getBlobCellsBytes() {
-    return null; // ToDo Optional.ofNullable(cellsWithMask);
+    return cellsWithMask
+        .filter(cwm -> cwm.getCellMask().isFull())
+        .map(CellsWithMask::getCells)
+        .map(cells -> Bytes.wrap(cells.stream().map(Cell::getData).toList()));
   }
 
   public Optional<CellsWithMask> getCellsWithMask() {
