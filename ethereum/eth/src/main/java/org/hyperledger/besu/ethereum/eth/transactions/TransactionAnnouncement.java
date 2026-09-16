@@ -38,6 +38,19 @@ public record TransactionAnnouncement(
     this(tx.getHash(), type, (long) transaction.getSizeForAnnouncement(), cellMask);
   }
 
+  /**
+   * Announces a transaction with no cell mask. Valid only for non blob types; a blob announcement
+   * must carry the announcer's availability, so the canonical constructor rejects a null mask for
+   * those. Mirrors the pre eth/72 {@link #create(List, List, List)} overload.
+   *
+   * @param hash the transaction hash
+   * @param type the transaction type, which must not support blobs
+   * @param size the announced size
+   */
+  public TransactionAnnouncement(final Hash hash, final TransactionType type, final Long size) {
+    this(hash, type, size, null);
+  }
+
   public TransactionAnnouncement(
       final Hash hash, final TransactionType type, final Long size, final CellMask cellMask) {
     this.hash = checkNotNull(hash, "Hash cannot be null");

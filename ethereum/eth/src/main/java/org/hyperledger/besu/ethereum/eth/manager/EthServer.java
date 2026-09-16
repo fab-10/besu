@@ -59,9 +59,7 @@ import org.hyperledger.besu.ethereum.rlp.RLP;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -531,11 +529,11 @@ class EthServer {
       hashesToProcess = hashes;
     }
 
-    //  final List<Hash> returnedHashes = traceEnabled ? new ArrayList<>() : null;
     int requestedCount = 0;
-    //    int returnedCount = 0;
 
-    final Map<Hash, List<List<Cell>>> matchingCells = new HashMap<>();
+    // Indexed in parallel: returnedCells.get(i) holds the cells for returnedHashes.get(i).
+    final List<Hash> returnedHashes = new ArrayList<>();
+    final List<List<Cell>> returnedCells = new ArrayList<>();
 
     for (final Hash hash : hashesToProcess) {
       if (requestedCount >= requestLimit) {
@@ -547,6 +545,7 @@ class EthServer {
         break;
       }
       requestedCount++;
+
       final Optional<Transaction> maybeTx = transactionPool.getTransactionByHash(hash);
       if (maybeTx.isEmpty()) {
         continue;
@@ -564,6 +563,8 @@ class EthServer {
 
       final BlobsWithCommitments bwc = maybeBwc.get();
 
+      // All blobs of a transaction share one mask, enforced by BlobsWithCommitments, so a single
+      // check covers every bundle read below.
       final CellMask cellMask = bwc.getCellMask();
 
       if (!cellMask.containsAll(reqCellMask)) {
@@ -577,31 +578,30 @@ class EthServer {
         continue;
       }
 
-      matchingCells.put(
-          hash,
-          bwc.getBlobProofBundles().stream()
-              .map(BlobProofBundle::getCellsWithMask)
-              .map(
-                  maybe ->
-                      maybe.orElseThrow(
-                          () ->
-                              new IllegalStateException(
-                                  "Internal error: at this point CellsWithMask should not be empty")))
-              .map(CellsWithMask::getCells)
-              .toList());
+      // Serve exactly the requested cells, so the response matches the cell mask it is labelled
+      // with. The group is ordered blob major: for each blob in transaction order, its requested
+      // cells by ascending index.
+      final List<BlobProofBundle> bundles = bwc.getBlobProofBundles();
+      // Safe for every bundle: the mask checked above is shared by all of them.
+      final List<Cell> txCells = new ArrayList<>(reqCellMask.cardinality() * bundles.size());
+      for (final BlobProofBundle bundle : bundles) {
+        final CellsWithMask cellsWithMask = bundle.getCellsWithMask().orElseThrow();
+        reqCellMask.streamIndexes().forEach(index -> txCells.add(cellsWithMask.getCell(index)));
+      }
+      returnedHashes.add(hash);
+      returnedCells.add(txCells);
     }
 
-    // ToDo EIP-8070: int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;
-    final BytesValueRLPOutput rlp = new BytesValueRLPOutput();
+    LOG.atTrace()
+        .setMessage("Sending cells: peer={}, returned hashes={}, cell mask={}")
+        .addArgument(peer)
+        .addArgument(returnedHashes)
+        .addArgument(reqCellMask)
+        .log();
 
-    rlp.writeList(
-        matchingCells.keySet(), (hash, rlpOutput) -> rlpOutput.writeBytes(hash.getBytes()));
-    rlp.writeList(
-        matchingCells.values(),
-        (cellsList, rlpOutput) ->
-            cellsList.forEach(cells -> rlpOutput.writeList(cells, Cell::writeTo)));
-    rlp.writeBytes(reqCellMask.toBytes());
-
-    return CellsMessage.createUnsafe(rlp.encoded());
+    // ToDo EIP-8070: bound the response by maxMessageSize, as
+    // constructGetPooledTransactionsResponse does. Until then a large request produces an
+    // unbounded response.
+    return CellsMessage.create(returnedHashes, returnedCells, reqCellMask);
   }
 }

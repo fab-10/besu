@@ -45,7 +45,6 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.core.kzg.Blob;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
-import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGCommitment;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
@@ -818,13 +817,12 @@ public class MainnetTransactionValidatorTest extends TrustedSetupClassLoaderExte
             .maxPriorityFeePerGas(Optional.of(Wei.of(1)))
             .blobsWithCommitments(
                 Optional.of(
-                    new BlobsWithCommitments(
+                    BlobsWithCommitments.createFromBlobs(
                         BlobType.KZG_PROOF,
                         List.of(new KZGCommitment(Bytes48.ZERO)),
                         List.of(new Blob(Bytes.EMPTY)),
                         List.of(new KZGProof(Bytes48.ZERO)),
-                        List.of(VersionedHash.DEFAULT_VERSIONED_HASH),
-                        CellMask.FULL)))
+                        List.of(VersionedHash.DEFAULT_VERSIONED_HASH))))
             .versionedHashes(Optional.of(List.of(VersionedHash.DEFAULT_VERSIONED_HASH)))
             .createTransaction(senderKeys);
     var validationResult =

@@ -21,6 +21,7 @@ import org.hyperledger.besu.ethereum.p2p.rlpx.wire.AbstractMessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
+import org.hyperledger.besu.ethereum.rlp.RLP;
 
 import java.util.Collection;
 import java.util.List;
@@ -50,13 +51,35 @@ public final class GetCellsMessage extends AbstractMessageData {
     return MESSAGE_CODE;
   }
 
+  /**
+   * Encodes a GetCells request.
+   *
+   * <p>devp2p schema: {@code [request-id: P, [txhash1: B_32, txhash2: B_32, ...], cells: B_16]}
+   *
+   * <p>The request id is prepended later by {@link
+   * org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData#wrapMessageData}, so the body encoded
+   * here is the two remaining elements as separate top level RLP items, not wrapped in a list of
+   * their own. {@link BytesValueRLPOutput} only accepts a top level byte string as its very first
+   * write, so the two items are encoded separately and concatenated; RLP items are self delimiting,
+   * so the result is a valid two item stream.
+   *
+   * @param pooledTransactions the transactions whose cells are being requested
+   * @param cellMask the cell indexes being requested
+   * @return the encoded message
+   */
   public static GetCellsMessage create(
       final Collection<Transaction> pooledTransactions, final CellMask cellMask) {
-    final BytesValueRLPOutput out = new BytesValueRLPOutput();
     final List<Hash> hashes = Transaction.toHashList(pooledTransactions);
-    out.writeList(hashes, (h, w) -> w.writeBytes(h.getBytes()));
-    out.writeBytes(cellMask.toBytes());
-    return new GetCellsMessage(out.encoded(), new MessageFields(hashes, cellMask));
+
+    final BytesValueRLPOutput hashesOut = new BytesValueRLPOutput();
+    hashesOut.writeList(hashes, (h, w) -> w.writeBytes(h.getBytes()));
+
+    final BytesValueRLPOutput cellsOut = new BytesValueRLPOutput();
+    cellsOut.writeBytes(cellMask.toBytes());
+
+    return new GetCellsMessage(
+        Bytes.concatenate(hashesOut.encoded(), cellsOut.encoded()),
+        new MessageFields(hashes, cellMask));
   }
 
   public static GetCellsMessage readFrom(final MessageData message) {
@@ -81,11 +104,18 @@ public final class GetCellsMessage extends AbstractMessageData {
   }
 
   private MessageFields parse() {
-    final BytesValueRLPInput input = new BytesValueRLPInput(getData(), false);
-    input.enterList();
-    final Iterable<Hash> pooledTransactions = input.readList(rlp -> Hash.wrap(rlp.readBytes32()));
-    final CellMask cellMask = CellMask.fromBytes(input.readBytes());
-    input.leaveList();
+    // Two sibling top level items, not a list; see create(). A single BytesValueRLPInput cannot
+    // read past the first item when that item is a list, because it clamps its size to that item,
+    // so the body is split by item size first, as MessageData#unwrapMessageData does.
+    final Bytes data = getData();
+    final int hashesSize = RLP.calculateSize(data);
+
+    final Iterable<Hash> pooledTransactions =
+        new BytesValueRLPInput(data.slice(0, hashesSize), false)
+            .readList(rlp -> Hash.wrap(rlp.readBytes32()));
+    final CellMask cellMask =
+        CellMask.fromBytes(new BytesValueRLPInput(data.slice(hashesSize), false).readBytes());
+
     return new MessageFields(pooledTransactions, cellMask);
   }
 

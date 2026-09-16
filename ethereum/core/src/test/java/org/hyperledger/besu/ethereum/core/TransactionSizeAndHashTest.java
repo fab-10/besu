@@ -31,7 +31,6 @@ import org.hyperledger.besu.ethereum.core.encoding.TransactionDecoder;
 import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
 import org.hyperledger.besu.ethereum.core.kzg.Blob;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
-import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGCommitment;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 
@@ -328,13 +327,12 @@ public class TransactionSizeAndHashTest {
         .maxFeePerBlobGas(Wei.of(250L))
         .versionedHashes(List.of(versionedHash))
         .blobsWithCommitments(
-            new BlobsWithCommitments(
+            BlobsWithCommitments.createFromBlobs(
                 BlobType.KZG_PROOF,
                 List.of(commitment),
                 List.of(new Blob(Bytes.fromHexString("0x0987"))),
                 List.of(new KZGProof(Bytes48.fromHexStringLenient("0x1234"))),
-                List.of(versionedHash),
-                CellMask.FULL))
+                List.of(versionedHash)))
         .signature(FAKE_SIGNATURE)
         .build();
   }

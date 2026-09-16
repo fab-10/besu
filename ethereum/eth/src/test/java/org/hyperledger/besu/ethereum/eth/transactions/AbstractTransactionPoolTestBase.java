@@ -283,6 +283,7 @@ public abstract class AbstractTransactionPoolTestBase extends TrustedSetupClassL
             protocolSchedule,
             protocolContext,
             transactionBroadcaster,
+            peerTransactionTracker,
             ethContext,
             new TransactionPoolMetrics(metricsSystem),
             poolConfig,

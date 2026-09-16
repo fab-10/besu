@@ -74,6 +74,8 @@ public class EthProtocol implements SubProtocol {
       case EthProtocolVersion.V68 -> 17;
       case EthProtocolVersion.V69, EthProtocolVersion.V70 -> 18;
       case EthProtocolVersion.V71 -> 20;
+      // eth/72 adds GetCells (0x14) and Cells (0x15)
+      case EthProtocolVersion.V72 -> 22;
       default -> 0;
     };
   }

@@ -45,6 +45,7 @@ import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PeerTransactionTracker;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
@@ -418,6 +419,7 @@ class TestingBuildBlockIntegrationTest {
             executionContextTestFixture.getProtocolSchedule(),
             executionContextTestFixture.getProtocolContext(),
             mock(TransactionBroadcaster.class),
+            mock(PeerTransactionTracker.class),
             ethContext,
             new TransactionPoolMetrics(new NoOpMetricsSystem()),
             poolConf,

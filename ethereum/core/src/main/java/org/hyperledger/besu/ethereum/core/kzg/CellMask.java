@@ -74,22 +74,34 @@ public final class CellMask {
   }
 
   public int[] indexes() {
-    final int[] indexes = new int[CELLS_PER_EXT_BLOB];
-    int arrayIdx = 0;
-    for (int index = 0; index < CELLS_PER_EXT_BLOB; index++) {
-      if (mask.get(index)) {
-        indexes[arrayIdx++] = index;
-      }
-    }
-    return indexes;
+    return mask.stream().toArray();
   }
 
+  /**
+   * Tests whether every index set in {@code other} is also set in this mask, i.e. whether {@code
+   * other} is a subset of this mask.
+   *
+   * @param other the mask that must be covered by this one
+   * @return true if this mask contains all the indexes of the other mask
+   */
   public boolean containsAll(final CellMask other) {
-    return mask.intersects(other.mask);
+    final BitSet notCovered = (BitSet) other.mask.clone();
+    notCovered.andNot(mask);
+    return notCovered.isEmpty();
   }
 
+  /**
+   * Serializes this mask to its fixed width wire representation. {@link BitSet#toByteArray()} trims
+   * trailing zero bytes, so the result is right padded to {@link #BYTE_LENGTH}, otherwise a mask
+   * with no high indexes set would not round trip through {@link #fromBytes(Bytes)}.
+   *
+   * @return exactly {@link #BYTE_LENGTH} bytes
+   */
   public Bytes toBytes() {
-    return Bytes.wrap(mask.toByteArray());
+    final byte[] bytes = new byte[BYTE_LENGTH];
+    final byte[] setBytes = mask.toByteArray();
+    System.arraycopy(setBytes, 0, bytes, 0, setBytes.length);
+    return Bytes.wrap(bytes);
   }
 
   /**
@@ -135,8 +147,7 @@ public final class CellMask {
     return bytes;
   }
 
-  public CellMask andNot(final CellMask peerRequestMask) {
+  public void andNot(final CellMask peerRequestMask) {
     mask.andNot(peerRequestMask.mask);
-    return this;
   }
 }
