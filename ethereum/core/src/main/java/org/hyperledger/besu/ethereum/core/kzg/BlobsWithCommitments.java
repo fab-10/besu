@@ -300,6 +300,9 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
    * @return the blob cells as a byte array
    */
   byte[] getBlobCellsByteArray() {
+    if (!getCellMask().isFull()) {
+      throw new IllegalStateException("Not all cells are present");
+    }
     return Bytes.wrap(
             blobProofBundles.stream().map(cell -> cell.getBlobCellsBytes().orElseThrow()).toList())
         .toArrayUnsafe();
@@ -328,9 +331,8 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
         .orElse(CellMask.FULL);
   }
 
-  public boolean hasFullData() {
-    return blobProofBundles.stream()
-        .allMatch(blobProofBundle -> blobProofBundle.getBlob().isPresent());
+  public boolean allCellsPresent() {
+    return getCellMask().isFull();
   }
 
   @Override

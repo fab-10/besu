@@ -70,7 +70,7 @@ public class MainnetBlobsValidatorTest {
     when(blobsWithCommitments.getBlobs()).thenReturn(List.of(mock(Blob.class)));
     when(blobsWithCommitments.getKzgCommitments()).thenReturn(List.of());
 
-    var result = blobsValidator.validate(transaction);
+    var result = blobsValidator.validate(transaction, transactionValidationParams);
 
     assertInvalidResult(
         result,
@@ -82,7 +82,7 @@ public class MainnetBlobsValidatorTest {
   void shouldRejectBlobTransactionWithoutRecipient() {
     when(transaction.getType()).thenReturn(TransactionType.BLOB);
     when(transaction.getTo()).thenReturn(Optional.empty());
-    var result = blobsValidator.validate(transaction);
+    var result = blobsValidator.validate(transaction, transactionValidationParams);
     assertInvalidResult(
         result,
         TransactionInvalidReason.INVALID_TRANSACTION_FORMAT,
@@ -95,7 +95,7 @@ public class MainnetBlobsValidatorTest {
     when(transaction.getTo())
         .thenReturn(Optional.of(mock(org.hyperledger.besu.datatypes.Address.class)));
     when(transaction.getVersionedHashes()).thenReturn(Optional.empty());
-    var result = blobsValidator.validate(transaction);
+    var result = blobsValidator.validate(transaction, transactionValidationParams);
     assertInvalidResult(
         result,
         TransactionInvalidReason.INVALID_BLOBS,
@@ -110,7 +110,7 @@ public class MainnetBlobsValidatorTest {
     when(transaction.getTo())
         .thenReturn(Optional.of(mock(org.hyperledger.besu.datatypes.Address.class)));
     when(transaction.getVersionedHashes()).thenReturn(Optional.of(List.of(invalidVersionedHash)));
-    var result = blobsValidator.validate(transaction);
+    var result = blobsValidator.validate(transaction, transactionValidationParams);
     assertInvalidResult(
         result,
         TransactionInvalidReason.INVALID_BLOBS,
@@ -131,7 +131,7 @@ public class MainnetBlobsValidatorTest {
     // Add the same hash twice to create a size mismatch
     when(transaction.getVersionedHashes()).thenReturn(Optional.of(List.of(hash1, hash1)));
     when(transaction.getBlobsWithCommitments()).thenReturn(Optional.of(blobsWithCommitments));
-    var result = blobsValidator.validate(transaction);
+    var result = blobsValidator.validate(transaction, transactionValidationParams);
     assertInvalidResult(
         result,
         TransactionInvalidReason.INVALID_BLOBS,
@@ -159,7 +159,7 @@ public class MainnetBlobsValidatorTest {
             Set.of(BlobType.KZG_PROOF, BlobType.KZG_CELL_PROOFS),
             gasLimitCalculator,
             gasCalculator);
-    var result = blobsValidator.validate(transaction);
+    var result = blobsValidator.validate(transaction, transactionValidationParams);
     assertInvalidResult(
         result,
         TransactionInvalidReason.TOTAL_BLOB_GAS_TOO_HIGH,
@@ -183,7 +183,7 @@ public class MainnetBlobsValidatorTest {
             Set.of(BlobType.KZG_PROOF), // Only accept KZG_PROOF
             mock(GasLimitCalculator.class),
             mock(GasCalculator.class));
-    var result = blobsValidator.validate(transaction);
+    var result = blobsValidator.validate(transaction, transactionValidationParams);
     assertInvalidResult(
         result,
         TransactionInvalidReason.INVALID_BLOBS,
