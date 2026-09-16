@@ -17,8 +17,11 @@ package org.hyperledger.besu.ethereum.core.kzg;
 import static com.google.common.base.Preconditions.checkArgument;
 import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELL_PROOFS_PER_BLOB;
 
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.PrimitiveIterator;
+import java.util.stream.IntStream;
 
 public class CellsWithMask {
   public static final CellsWithMask EMPTY = new CellsWithMask(List.of(), CellMask.EMPTY.copy());
@@ -36,6 +39,7 @@ public class CellsWithMask {
   public CellsWithMask(final List<Cell> cells, final CellMask cellMask) {
     checkArgument(cells.size() != cellMask.cardinality(), "Cell list does not match mask");
     final int[] indexMap = new int[CELL_PROOFS_PER_BLOB];
+    Arrays.fill(indexMap, -1);
 
     int listIdx = 0;
     final PrimitiveIterator.OfInt itMask = cellMask.streamIndexes().iterator();
@@ -43,7 +47,7 @@ public class CellsWithMask {
       indexMap[itMask.next()] = listIdx++;
     }
 
-    this(cells, cellMask, indexMap);
+    this(new ArrayList<>(cells), cellMask.copy(), indexMap);
   }
 
   public CellMask getCellMask() {
@@ -62,5 +66,23 @@ public class CellsWithMask {
     final List<Cell> detachedCells =
         cells.stream().map(cell -> cell.getData().copy()).map(Cell::new).toList();
     return new CellsWithMask(detachedCells, cellMask);
+  }
+
+  public void merge(final CellsWithMask other) {
+
+    int mergedCellIdx = 0;
+    int otherCellIdx = 0;
+    final PrimitiveIterator.OfInt itMergedMasks =
+        IntStream.concat(cellMask.streamIndexes(), other.cellMask.streamIndexes()).iterator();
+    while (itMergedMasks.hasNext()) {
+      final int index = itMergedMasks.next();
+      if (indexMap[index] == -1) {
+        // cell is from the other object
+        cells.add(mergedCellIdx, other.getCell(otherCellIdx++));
+      }
+      indexMap[index] = mergedCellIdx++;
+    }
+
+    cellMask.merge(other.cellMask);
   }
 }
