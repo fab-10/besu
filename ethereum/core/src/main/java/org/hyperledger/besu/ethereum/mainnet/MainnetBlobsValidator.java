@@ -213,16 +213,21 @@ public class MainnetBlobsValidator {
       }
     }
 
-    if (blobsWithCommitments.allCellsPresent()) {
-      // Verify KZG proofs for the blobs
-      if (!verify4844Kzg(blobsWithCommitments)) {
-        return ValidationResult.invalid(
-            TransactionInvalidReason.INVALID_BLOBS,
-            "transaction blobs kzg proof verification failed");
-      }
-    } else if (!transactionValidationParams.allowIncompleteBlob()) {
+    // Blocks need every cell, so only contexts that opted in may accept a partial transaction.
+    if (!blobsWithCommitments.allCellsPresent()
+        && !transactionValidationParams.allowIncompleteBlob()) {
       return ValidationResult.invalid(
           TransactionInvalidReason.INVALID_BLOBS, "not all cells present");
+    }
+
+    // Verify the KZG proofs. For a partially sampled transaction this covers the cells actually
+    // held: the commitments are already bound to the transaction by the versioned hash check
+    // above, but nothing has yet tied the cells to those commitments, and the cells arrive from
+    // whichever peer answered GetCells.
+    if (!verify4844Kzg(blobsWithCommitments)) {
+      return ValidationResult.invalid(
+          TransactionInvalidReason.INVALID_BLOBS,
+          "transaction blobs kzg proof verification failed");
     }
     return ValidationResult.valid();
   }

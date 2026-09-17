@@ -140,11 +140,24 @@ public final class BlobProofBundle {
     return versionedHash;
   }
 
+  /**
+   * The cells this bundle holds, concatenated in ascending cell index order.
+   *
+   * <p>Only the cells the mask reports are included, so a partially sampled bundle yields fewer
+   * than {@link CKZG4844Helper#CELL_PROOFS_PER_BLOB}. Cells are looked up by index rather than read
+   * in list order, so the result is ordered correctly no matter how the cells were accumulated.
+   *
+   * @return the held cells, or empty when this bundle carries no cells at all
+   */
   public Optional<Bytes> getBlobCellsBytes() {
-    return cellsWithMask
-        .filter(cwm -> cwm.getCellMask().isFull())
-        .map(CellsWithMask::getCells)
-        .map(cells -> Bytes.wrap(cells.stream().map(Cell::getData).toList()));
+    return cellsWithMask.map(
+        cwm ->
+            Bytes.wrap(
+                cwm.getCellMask()
+                    .streamIndexes()
+                    .mapToObj(cwm::getCell)
+                    .map(Cell::getData)
+                    .toList()));
   }
 
   public Optional<CellsWithMask> getCellsWithMask() {
