@@ -28,6 +28,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSucces
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool.AdditionOutcome;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 
@@ -140,7 +141,8 @@ public class EthSendRawTransactionTest {
   @Test
   public void validTransactionIsSentToTransactionPool() {
     when(transactionPool.addTransactionViaApi(any(Transaction.class)))
-        .thenReturn(ValidationResult.valid());
+        .thenAnswer(
+            inv -> new AdditionOutcome(ValidationResult.valid(), inv.getArgument(0), false));
 
     final JsonRpcRequestContext request =
         new JsonRpcRequestContext(
@@ -222,7 +224,10 @@ public class EthSendRawTransactionTest {
   private void verifyErrorForInvalidTransaction(
       final TransactionInvalidReason transactionInvalidReason, final RpcErrorType expectedError) {
     when(transactionPool.addTransactionViaApi(any(Transaction.class)))
-        .thenReturn(ValidationResult.invalid(transactionInvalidReason));
+        .thenAnswer(
+            inv ->
+                new AdditionOutcome(
+                    ValidationResult.invalid(transactionInvalidReason), inv.getArgument(0), false));
 
     final JsonRpcRequestContext request =
         new JsonRpcRequestContext(

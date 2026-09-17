@@ -184,9 +184,15 @@ public class BaseFeePendingTransactionsSorter extends AbstractPendingTransaction
 
       private Optional<PendingTransaction> getNextOptional(
           final Iterator<PendingTransaction> pendingTxsIterator) {
-        return pendingTxsIterator.hasNext()
-            ? Optional.of(pendingTxsIterator.next())
-            : Optional.empty();
+        while (pendingTxsIterator.hasNext()) {
+          final PendingTransaction pendingTx = pendingTxsIterator.next();
+          // Skip only blob transactions still being sampled; everything else is selectable.
+          if (pendingTx.getTransaction().hasIncompleteBlobCells()) {
+            continue;
+          }
+          return Optional.of(pendingTx);
+        }
+        return Optional.empty();
       }
     };
   }

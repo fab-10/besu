@@ -786,6 +786,26 @@ public class Transaction
     return blobsWithCommitments;
   }
 
+  /**
+   * Whether this is a blob transaction whose cells are only partially available, as happens while
+   * an eth/72 node is still sampling it.
+   *
+   * <p>Such a transaction is a valid pool member and is served to peers, but it cannot go into a
+   * block this node builds, because block validation requires every cell. Both pending transaction
+   * implementations must therefore keep it away from block selection, so they share this predicate
+   * rather than restating it.
+   *
+   * <p>A blob transaction carrying no sidecar at all reports false: it is not something sampling
+   * can complete, and this is called from block building, where throwing would be worse than
+   * letting ordinary validation reject it.
+   *
+   * @return true if blob cells are missing
+   */
+  public boolean hasIncompleteBlobCells() {
+    return transactionType.supportsBlob()
+        && blobsWithCommitments.map(bwc -> !bwc.allCellsPresent()).orElse(false);
+  }
+
   @Override
   public Optional<List<CodeDelegation>> getCodeDelegationList() {
     return maybeCodeDelegationList;

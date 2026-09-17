@@ -150,7 +150,7 @@ public class TransactionPool implements BlockAddedObserver {
         ethContext.getScheduler().createOrderedProcessor(this::processBlockAddedEvent);
     this.cacheForBlobsOfTransactionsAddedToABlock = blobCache;
     this.transactionLimbo =
-        new TransactionsLimbo(ethContext, blobCustodyColumns::get, this::addTransaction);
+        new TransactionsLimbo(ethContext, blobCustodyColumns::get, this::resubmitTransaction);
     peerTransactionTracker.subscribeToAnnouncements(transactionLimbo);
     initializeBlobMetrics();
     subscribePendingTransactions(this::mapBlobsOnTransactionAdded);
@@ -164,8 +164,7 @@ public class TransactionPool implements BlockAddedObserver {
         peer, pendingTransactions.getPendingTransactions());
   }
 
-  public ValidationResult<TransactionInvalidReason> addTransactionViaApi(
-      final Transaction transaction) {
+  public AdditionOutcome addTransactionViaApi(final Transaction transaction) {
 
     final boolean hasPriority = isPriorityTransaction(transaction, true);
     final var outcome = addTransaction(transaction, true, hasPriority, MAX_SCORE);
@@ -174,14 +173,16 @@ public class TransactionPool implements BlockAddedObserver {
       localSenders.add(transaction.getSender());
       // broadcast the pooled representation, not the submitted one: they can differ (see
       // AdditionOutcome) and peers must be announced the transaction we will actually serve.
-      transactionBroadcaster.onTransactionsAdded(List.of(outcome.pooledTransaction()));
+      if (!outcome.parked()) {
+        transactionBroadcaster.onTransactionsAdded(List.of(outcome.pooledTransaction()));
+      }
     } else {
       logInvalid(transaction, result, true, hasPriority);
     }
-    return result;
+    return outcome;
   }
 
-  public Map<Hash, ValidationResult<TransactionInvalidReason>> addRemoteTransactions(
+  public Map<Hash, AdditionOutcome> addRemoteTransactions(
       final Collection<Transaction> transactions) {
     final long started = System.nanoTime();
     final int initialCount = transactions.size();
@@ -201,38 +202,40 @@ public class TransactionPool implements BlockAddedObserver {
                   }
                 });
 
-    final var validationResults =
+    final Map<Hash, AdditionOutcome> addOutcomes =
         sortedBySenderAndNonce(txStream)
             .collect(
                 Collectors.toMap(
                     Transaction::getHash,
                     transaction -> {
                       final boolean hasPriority = isPriorityTransaction(transaction, false);
-                      ValidationResult<TransactionInvalidReason> result;
+                      AdditionOutcome addOutcome;
                       try {
-                        final var outcome =
-                            addTransaction(transaction, false, hasPriority, MAX_SCORE);
-                        result = outcome.result();
-                        if (result.isValid()) {
-                          addedTransactions.add(outcome.pooledTransaction());
-                          return result;
+                        addOutcome = addTransaction(transaction, false, hasPriority, MAX_SCORE);
+                        if (addOutcome.result().isValid()) {
+                          if (!addOutcome.parked()) {
+                            addedTransactions.add(addOutcome.pooledTransaction());
+                          }
+                          return addOutcome;
                         }
                       } catch (final RuntimeException e) {
                         LOG.warn(
                             "Unexpected error validating transaction {}, treating as invalid",
                             transaction.getHash(),
                             e);
-                        result =
-                            ValidationResult.invalid(
-                                INTERNAL_ERROR,
-                                "unexpected error during validation: " + e.getMessage());
+                        addOutcome =
+                            new AdditionOutcome(
+                                ValidationResult.invalid(
+                                    INTERNAL_ERROR,
+                                    "unexpected error during validation: " + e.getMessage()),
+                                transaction);
                         metrics.incrementRejected(
-                            false, hasPriority, result.getInvalidReason(), "txpool");
+                            false, hasPriority, addOutcome.result().getInvalidReason(), "txpool");
                       }
-                      logInvalid(transaction, result, false, hasPriority);
-                      return result;
+                      logInvalid(transaction, addOutcome.result(), false, hasPriority);
+                      return addOutcome;
                     },
-                    (transaction1, transaction2) -> transaction1));
+                    (transaction1, _) -> transaction1));
 
     if (isEnabled()) {
       TransactionPoolStructuredLogUtils.logStats(pendingTransactions);
@@ -249,7 +252,23 @@ public class TransactionPool implements BlockAddedObserver {
     if (!addedTransactions.isEmpty()) {
       transactionBroadcaster.onTransactionsAdded(addedTransactions);
     }
-    return validationResults;
+    return addOutcomes;
+  }
+
+  private AdditionOutcome resubmitTransaction(
+      final Transaction transaction,
+      final boolean isLocal,
+      final boolean hasPriority,
+      final byte score) {
+    final AdditionOutcome outcome = addTransaction(transaction, isLocal, hasPriority, score);
+    if (outcome.result().isValid()) {
+      if (!outcome.parked()) {
+        transactionBroadcaster.onTransactionsAdded(List.of(outcome.pooledTransaction()));
+      }
+    } else {
+      logInvalid(transaction, outcome.result(), isLocal, hasPriority);
+    }
+    return outcome;
   }
 
   private AdditionOutcome addTransaction(
@@ -281,34 +300,34 @@ public class TransactionPool implements BlockAddedObserver {
     if (validationResult.result.isValid()) {
       if (incompleteBlob(transaction)) {
         transactionLimbo.addIncompleteBlob(transaction, isLocal, hasPriority, score);
+        return new AdditionOutcome(validationResult.result, transaction, true);
+      }
+      final TransactionAddedResult status =
+          pendingTransactions.addTransaction(
+              PendingTransaction.newPendingTransaction(transaction, isLocal, hasPriority, score),
+              validationResult.maybeAccount);
+      if (status.isSuccess()) {
+        LOG.atTrace()
+            .setMessage("Added {} transaction {}")
+            .addArgument(() -> isLocal ? "local" : "remote")
+            .addArgument(transaction::toTraceLog)
+            .log();
       } else {
-        final TransactionAddedResult status =
-            pendingTransactions.addTransaction(
-                PendingTransaction.newPendingTransaction(transaction, isLocal, hasPriority, score),
-                validationResult.maybeAccount);
-        if (status.isSuccess()) {
-          LOG.atTrace()
-              .setMessage("Added {} transaction {}")
-              .addArgument(() -> isLocal ? "local" : "remote")
-              .addArgument(transaction::toTraceLog)
-              .log();
-        } else {
-          final var rejectReason =
-              status
-                  .maybeInvalidReason()
-                  .orElseGet(
-                      () -> {
-                        LOG.warn("Missing invalid reason for status {}", status);
-                        return INTERNAL_ERROR;
-                      });
-          LOG.atTrace()
-              .setMessage("Transaction {} rejected reason {}")
-              .addArgument(transaction::toTraceLog)
-              .addArgument(rejectReason)
-              .log();
-          metrics.incrementRejected(isLocal, hasPriority, rejectReason, "txpool");
-          return new AdditionOutcome(ValidationResult.invalid(rejectReason), transaction);
-        }
+        final var rejectReason =
+            status
+                .maybeInvalidReason()
+                .orElseGet(
+                    () -> {
+                      LOG.warn("Missing invalid reason for status {}", status);
+                      return INTERNAL_ERROR;
+                    });
+        LOG.atTrace()
+            .setMessage("Transaction {} rejected reason {}")
+            .addArgument(transaction::toTraceLog)
+            .addArgument(rejectReason)
+            .log();
+        metrics.incrementRejected(isLocal, hasPriority, rejectReason, "txpool");
+        return new AdditionOutcome(ValidationResult.invalid(rejectReason), transaction);
       }
     } else {
       LOG.atTrace()
@@ -326,7 +345,7 @@ public class TransactionPool implements BlockAddedObserver {
 
   private boolean incompleteBlob(final Transaction transaction) {
     if (transaction.getType().supportsBlob()) {
-      return !transaction.getBlobsWithCommitments().orElseThrow().getCellMask().isFull();
+      return transaction.getBlobsWithCommitments().orElseThrow().getCellMask().isEmpty();
     }
     return false;
   }
@@ -1101,8 +1120,8 @@ public class TransactionPool implements BlockAddedObserver {
   }
 
   /**
-   * The outcome of an attempt to add a transaction to the pool: the validation result, plus the
-   * transaction as it was actually pooled.
+   * The outcome of an attempt to add a transaction to the pool: the validation result, the
+   * transaction as it was actually pooled, and whether it reached the pool at all.
    *
    * <p>The pooled transaction is not always the one that was submitted: fork specific
    * pre-processing may rewrite it. EIP-7594 (Osaka) upgrades a locally submitted blob transaction
@@ -1111,12 +1130,35 @@ public class TransactionPool implements BlockAddedObserver {
    * transaction, because that is the one {@code GetPooledTransactions} will serve, and the size in
    * a {@code NewPooledTransactionHashes} announcement has to match it.
    *
+   * <p>A valid result does not by itself mean the transaction is in the pool. An eth/72 blob
+   * transaction that arrives with no cells is handed to {@link TransactionsLimbo} to be sampled
+   * instead, and is reported as valid but {@code parked}. Callers must not announce a parked
+   * transaction: we cannot serve what we do not hold yet. It is announced later, once sampling
+   * completes and it is resubmitted.
+   *
    * @param result the validation result
    * @param pooledTransaction the transaction as pooled, which is the submitted transaction when no
    *     pre-processing applied, or when the transaction was not added at all
+   * @param parked true if the transaction was routed to the limbo to await its blob cells rather
+   *     than added to the pool
    */
-  record AdditionOutcome(
-      ValidationResult<TransactionInvalidReason> result, Transaction pooledTransaction) {}
+  public record AdditionOutcome(
+      ValidationResult<TransactionInvalidReason> result,
+      Transaction pooledTransaction,
+      boolean parked) {
+
+    /**
+     * An outcome for a transaction that was not parked, which is every path except the blob limbo.
+     *
+     * @param result the validation result
+     * @param pooledTransaction the transaction as pooled
+     */
+    AdditionOutcome(
+        final ValidationResult<TransactionInvalidReason> result,
+        final Transaction pooledTransaction) {
+      this(result, pooledTransaction, false);
+    }
+  }
 
   interface TransactionResubmitter {
     AdditionOutcome submit(

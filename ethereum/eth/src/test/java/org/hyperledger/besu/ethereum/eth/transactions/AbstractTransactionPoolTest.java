@@ -412,7 +412,7 @@ public abstract class AbstractTransactionPoolTest extends AbstractTransactionPoo
     // trying to re-add the same tx should return transaction already known and no
     // access to the transaction validator factory should be done
     final var result = transactionPool.addRemoteTransactions(singletonList(transaction0));
-    assertThat(result.get(transaction0.getHash()))
+    assertThat(result.get(transaction0.getHash()).result())
         .isEqualTo(ValidationResult.invalid(TRANSACTION_ALREADY_KNOWN));
 
     verifyNoInteractions(transactionValidatorFactory);
