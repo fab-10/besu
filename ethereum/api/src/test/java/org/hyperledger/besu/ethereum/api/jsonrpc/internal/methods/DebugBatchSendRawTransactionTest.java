@@ -25,6 +25,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.DebugBatchSend
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool.AdditionOutcome;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
 import java.util.List;
@@ -60,7 +61,8 @@ public class DebugBatchSendRawTransactionTest {
                   "0xf868808203e882520894627306090abab3a6e1400e9345bc60c78a8bef57872386f26fc10000801ba0ac74ecfa0e9b85785f042c143ead4780931234cc9a032fce99fab1f45e0d90faa02fd17e8eb433d4ca47727653232045d4f81322619c0852d3fe8ddcfcedb66a43"
                 }));
     when(transactionPool.addTransactionViaApi(any(Transaction.class)))
-        .thenReturn(ValidationResult.valid());
+        .thenAnswer(
+            inv -> new AdditionOutcome(ValidationResult.valid(), inv.getArgument(0), false));
     final JsonRpcSuccessResponse response = (JsonRpcSuccessResponse) method.response(request);
     assertThat(response).isNotNull();
     final List<ExecutionStatus> result = (List<ExecutionStatus>) response.getResult();
@@ -79,7 +81,8 @@ public class DebugBatchSendRawTransactionTest {
                   "0xf868018203e882520894627306090abab3a6e1400e9345bc60c78a8bef57876a94d74f430000801ba092faeec7bcb7418a79cd9f74c739237d72d52b5ab25aa08e332053304456e129a0386e3e9205a3553ecc5e85fc753c93196484c0fdeaaacdd61425caeb11bc6e5a"
                 }));
     when(transactionPool.addTransactionViaApi(any(Transaction.class)))
-        .thenReturn(ValidationResult.valid());
+        .thenAnswer(
+            inv -> new AdditionOutcome(ValidationResult.valid(), inv.getArgument(0), false));
     final JsonRpcSuccessResponse response = (JsonRpcSuccessResponse) method.response(request);
     assertThat(response).isNotNull();
     final List<ExecutionStatus> result = (List<ExecutionStatus>) response.getResult();

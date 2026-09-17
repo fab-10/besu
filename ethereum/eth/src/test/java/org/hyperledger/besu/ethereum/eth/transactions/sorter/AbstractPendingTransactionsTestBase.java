@@ -389,6 +389,27 @@ public abstract class AbstractPendingTransactionsTestBase {
   }
 
   @Test
+  public void shouldSelectTransactionsThatCarryNoBlobs() {
+    // Selection skips blob transactions that are still being sampled, since they cannot go into a
+    // block we build. That filter must not touch anything else: expressed as the complement of
+    // "is an incomplete blob" it is easy to invert by accident, and inverting it silently drops
+    // all ordinary traffic from block building rather than failing visibly.
+    transactions.addTransaction(createRemotePendingTransaction(transaction1), Optional.empty());
+    transactions.addTransaction(createRemotePendingTransaction(transaction2), Optional.empty());
+    transactions.addTransaction(createRemotePendingTransaction(transaction3), Optional.empty());
+
+    final List<Transaction> selected = new ArrayList<>();
+    transactions.selectTransactions(
+        pendingTxs -> {
+          pendingTxs.forEach(pendingTx -> selected.add(pendingTx.getTransaction()));
+          return pendingTxs.stream()
+              .collect(Collectors.toMap(pendingTx -> pendingTx, pendingTx -> SELECTED));
+        });
+
+    assertThat(selected).containsExactlyInAnyOrder(transaction1, transaction2, transaction3);
+  }
+
+  @Test
   public void shouldNotSelectReplacedTransaction() {
     final Transaction transaction1 = transactionWithNonceSenderAndGasPrice(1, KEYS1, 1);
     final Transaction transaction2 = transactionWithNonceSenderAndGasPrice(1, KEYS1, 2);

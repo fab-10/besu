@@ -48,6 +48,7 @@ import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool.AdditionOutcome;
 import org.hyperledger.besu.ethereum.mainnet.HeaderValidationMode;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import org.hyperledger.besu.ethereum.p2p.network.P2PNetwork;
@@ -148,10 +149,16 @@ public abstract class AbstractJsonRpcHttpServiceTest {
   protected TransactionPool createTransactionPoolMock() {
     final TransactionPool transactionPoolMock = mock(TransactionPool.class);
     when(transactionPoolMock.addTransactionViaApi(any(Transaction.class)))
-        .thenReturn(ValidationResult.valid());
+        .thenAnswer(
+            inv -> new AdditionOutcome(ValidationResult.valid(), inv.getArgument(0), false));
     // nonce too low tests uses a tx with nonce=16
     when(transactionPoolMock.addTransactionViaApi(argThat(tx -> tx.getNonce() == 16)))
-        .thenReturn(ValidationResult.invalid(TransactionInvalidReason.NONCE_TOO_LOW));
+        .thenAnswer(
+            inv ->
+                new AdditionOutcome(
+                    ValidationResult.invalid(TransactionInvalidReason.NONCE_TOO_LOW),
+                    inv.getArgument(0),
+                    false));
     return transactionPoolMock;
   }
 

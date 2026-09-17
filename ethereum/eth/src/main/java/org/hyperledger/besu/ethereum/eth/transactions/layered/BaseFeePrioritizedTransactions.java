@@ -167,6 +167,12 @@ public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransacti
 
   @Override
   protected boolean promotionFilter(final PendingTransaction pendingTransaction) {
+    // a blob tx still being sampled cannot go into a block we build, so keep it out of the
+    // prioritized layer; it stays in the pool and is still served to peers
+    if (pendingTransaction.getTransaction().hasIncompleteBlobCells()) {
+      return false;
+    }
+
     // check if the tx is willing to pay at least the base fee
     if (nextBlockBaseFee
         .map(pendingTransaction.getTransaction().getMaxGasPrice()::lessThan)

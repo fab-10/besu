@@ -83,7 +83,7 @@ public abstract class AbstractLayeredTransactionPoolTest extends AbstractTransac
 
     addAndAssertTransactionViaApiInvalid(invalidTx, EXCEEDS_BLOCK_GAS_LIMIT);
     final ValidationResult<TransactionInvalidReason> result =
-        transactionPool.addTransactionViaApi(nextTx);
+        transactionPool.addTransactionViaApi(nextTx).result();
 
     assertThat(result.isValid()).isTrue();
   }

@@ -77,7 +77,8 @@ public class DebugBatchSendRawTransaction implements JsonRpcMethod {
       final ValidationResult<TransactionInvalidReason> validationResult =
           transactionPool
               .get()
-              .addTransactionViaApi(DomainObjectDecodeUtils.decodeRawTransaction(rawTransaction));
+              .addTransactionViaApi(DomainObjectDecodeUtils.decodeRawTransaction(rawTransaction))
+              .result();
       return validationResult.either(
           () -> new ExecutionStatus(index),
           errorReason -> new ExecutionStatus(index, false, errorReason.name()));
