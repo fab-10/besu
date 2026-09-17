@@ -113,7 +113,8 @@ public class GetCellsFromPeerTask implements PeerTask<List<CellsWithMask>> {
     }
 
     // A transaction's group arrives blob major: for each blob in transaction order, its cells by
-    // ascending index. So blob b owns the contiguous run [b * cellsPerBlob, (b+1) * cellsPerBlob). Split it into one CellsWithMask per blob.
+    // ascending index. So blob b owns the contiguous run [b * cellsPerBlob, (b+1) * cellsPerBlob).
+    // Split it into one CellsWithMask per blob.
     final int txBlobCount = requestedTx.getBlobCount();
     final int cellsPerBlob = resCellMask.cardinality();
     final List<Cell> txCells = resCellsList.getFirst();

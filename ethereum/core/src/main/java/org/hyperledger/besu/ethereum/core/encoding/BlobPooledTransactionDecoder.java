@@ -26,9 +26,8 @@ import org.hyperledger.besu.ethereum.rlp.RLP;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 import org.hyperledger.besu.ethereum.rlp.RLPInput;
 
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.stream.Stream;
 
 import org.apache.tuweni.bytes.Bytes;
 
@@ -66,10 +65,13 @@ public class BlobPooledTransactionDecoder {
     final List<KZGProof> proofs = txRlp.readList(KZGProof::readFrom);
     txRlp.leaveList();
 
-    // eth/72: blobs can be empty
+    // eth/72: a peer answering GetPooledTransactions elides the blob payloads, sending the empty
+    // list in their place. The transaction is then held as cells, none of which are known yet, so
+    // each blob starts with its own empty cell set for the blobpool to fill in via GetCells.
+    // One cell set per blob, i.e. one per commitment: proofs.size() is 128x that for cell proofs.
     if (blobs.isEmpty()) {
-      final List<CellsWithMask> cells = new ArrayList<>(proofs.size());
-      Collections.fill(cells, CellsWithMask.EMPTY);
+      final List<CellsWithMask> cells =
+          Stream.generate(CellsWithMask::empty).limit(commitments.size()).toList();
       builder.kzgBlobCells(BlobType.of(versionId), commitments, cells, proofs);
     } else {
       builder.kzgBlobs(BlobType.of(versionId), commitments, blobs, proofs);
