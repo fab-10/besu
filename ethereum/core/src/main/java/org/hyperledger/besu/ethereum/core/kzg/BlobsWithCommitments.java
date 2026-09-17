@@ -273,8 +273,31 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
    * @return the KZG proofs as a byte array
    */
   byte[] getKzgProofsByteArray() {
-    return Bytes.wrap(getKzgProofs().stream().map(kp -> (Bytes) kp.getData()).toList())
-        .toArrayUnsafe();
+    final List<KZGProof> proofs =
+        (blobType == BlobType.KZG_CELL_PROOFS) ? proofsForHeldCells() : getKzgProofs();
+    return Bytes.wrap(proofs.stream().map(kp -> (Bytes) kp.getData()).toList()).toArrayUnsafe();
+  }
+
+  /**
+   * The cell proofs matching the cells we hold, one per held cell per blob, in the same order as
+   * {@link #getBlobCellsByteArray()}.
+   *
+   * <p>Proofs are never elided on the wire, so a bundle always carries all {@link
+   * CKZG4844Helper#CELL_PROOFS_PER_BLOB} of them; only the subset covering the cells we actually
+   * have can be verified.
+   *
+   * @return the proofs for the held cells
+   */
+  private List<KZGProof> proofsForHeldCells() {
+    final int[] heldIndexes = getCellMask().indexes();
+    final List<KZGProof> proofs = new ArrayList<>(heldIndexes.length * blobProofBundles.size());
+    for (final BlobProofBundle bundle : blobProofBundles) {
+      final List<KZGProof> blobProofs = bundle.getKzgProof();
+      for (final int heldIndex : heldIndexes) {
+        proofs.add(blobProofs.get(heldIndex));
+      }
+    }
+    return proofs;
   }
 
   /**
@@ -308,10 +331,13 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
    * @return a new list of KZG commitments, extended to match the number of cell proofs per blob.
    */
   private List<KZGCommitment> extendCommitments(final List<KZGCommitment> commitments) {
-    int newSize = commitments.size() * CELL_PROOFS_PER_BLOB;
-    ArrayList<KZGCommitment> extendedCommitments = new ArrayList<>(newSize);
-    for (KZGCommitment kzgCommitment : commitments) {
-      for (int i = 0; i < CELL_PROOFS_PER_BLOB; i++) {
+    // verifyCellKzgProofBatch takes four parallel arrays, one entry per cell being verified, so a
+    // blob's commitment is repeated once per cell we actually hold, not once per possible cell.
+    final int cellsPerBlob = getCellMask().cardinality();
+    final ArrayList<KZGCommitment> extendedCommitments =
+        new ArrayList<>(commitments.size() * cellsPerBlob);
+    for (final KZGCommitment kzgCommitment : commitments) {
+      for (int i = 0; i < cellsPerBlob; i++) {
         extendedCommitments.add(new KZGCommitment(kzgCommitment.getData()));
       }
     }
@@ -324,9 +350,6 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
    * @return the blob cells as a byte array
    */
   byte[] getBlobCellsByteArray() {
-    if (!getCellMask().isFull()) {
-      throw new IllegalStateException("Not all cells are present");
-    }
     return Bytes.wrap(
             blobProofBundles.stream().map(cell -> cell.getBlobCellsBytes().orElseThrow()).toList())
         .toArrayUnsafe();
@@ -338,10 +361,12 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
    * @return an array of cell indexes
    */
   long[] getCellIndexes() {
-    long[] cellIndices = new long[CELL_PROOFS_PER_BLOB * blobProofBundles.size()];
+    // The indexes we actually hold, repeated per blob, parallel to getBlobCellsByteArray().
+    final int[] heldIndexes = getCellMask().indexes();
+    final long[] cellIndices = new long[heldIndexes.length * blobProofBundles.size()];
     for (int blobIndex = 0; blobIndex < blobProofBundles.size(); blobIndex++) {
-      for (int index = 0; index < CELL_PROOFS_PER_BLOB; index++) {
-        cellIndices[blobIndex * CELL_PROOFS_PER_BLOB + index] = index;
+      for (int index = 0; index < heldIndexes.length; index++) {
+        cellIndices[blobIndex * heldIndexes.length + index] = heldIndexes[index];
       }
     }
     return cellIndices;

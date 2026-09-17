@@ -142,6 +142,10 @@ public class CKZG4844Helper {
   /**
    * Verifies the KZG proofs in the given BlobsWithCommitments.
    *
+   * <p>For {@link BlobType#KZG_CELL_PROOFS} this verifies the cells currently held, which under
+   * eth/72 may be a subset: a sampling node only ever obtains its custody columns. Holding fewer
+   * cells is not itself an error, but every cell held must open its blob's commitment.
+   *
    * @param blobsWithCommitments the BlobsWithCommitments to verify.
    * @return true if the KZG proofs are valid, false otherwise.
    */
@@ -153,12 +157,19 @@ public class CKZG4844Helper {
               blobsWithCommitments.getKzgCommitmentsByteArray(),
               blobsWithCommitments.getKzgProofsByteArray(),
               blobsWithCommitments.getBlobProofBundles().size());
-      case KZG_CELL_PROOFS ->
-          CKZG4844JNI.verifyCellKzgProofBatch(
-              blobsWithCommitments.getKzgCommitmentsByteArray(),
-              blobsWithCommitments.getCellIndexes(),
-              blobsWithCommitments.getBlobCellsByteArray(),
-              blobsWithCommitments.getKzgProofsByteArray());
+      case KZG_CELL_PROOFS -> {
+        if (blobsWithCommitments.getCellMask().isEmpty()) {
+          // An eth/72 transaction arrives with its blobs elided and no cells at all, so there is
+          // nothing to verify yet. Its commitments were already checked against the versioned
+          // hashes; each cell is verified as it is sampled.
+          yield true;
+        }
+        yield CKZG4844JNI.verifyCellKzgProofBatch(
+            blobsWithCommitments.getKzgCommitmentsByteArray(),
+            blobsWithCommitments.getCellIndexes(),
+            blobsWithCommitments.getBlobCellsByteArray(),
+            blobsWithCommitments.getKzgProofsByteArray());
+      }
     };
   }
 }
