@@ -17,6 +17,7 @@ package org.hyperledger.besu.ethereum.eth.encoding;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
+import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAnnouncement;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
@@ -41,7 +42,10 @@ public class TransactionAnnouncementDecoder {
    * @return the correct decoder
    */
   public static Decoder getDecoder(final Capability capability) {
-    return TransactionAnnouncementDecoder::decodeForEth72;
+    if (EthProtocol.isEth72Compatible(capability)) {
+      return TransactionAnnouncementDecoder::decodeForEth72;
+    }
+    return TransactionAnnouncementDecoder::decodeForEth68;
   }
 
   /**
@@ -54,7 +58,25 @@ public class TransactionAnnouncementDecoder {
    *     mask
    */
   private static List<TransactionAnnouncement> decodeForEth72(final RLPInput input) {
-    final int size = input.enterList();
+    return decode(input, true);
+  }
+
+  /**
+   * Decode the list of transactions in the NewPooledTransactionHashesMessage sent by a peer on
+   * eth/68 through eth/71.
+   *
+   * <p>format: {@code [txtypes: B, [txsize1: P, ...], [txhash1: B_32, ...]]}
+   *
+   * @param input input used to decode the NewPooledTransactionHashesMessage
+   * @return the decoded announcements
+   */
+  private static List<TransactionAnnouncement> decodeForEth68(final RLPInput input) {
+    return decode(input, false);
+  }
+
+  private static List<TransactionAnnouncement> decode(
+      final RLPInput input, final boolean hasCellMask) {
+    input.enterList();
 
     final List<TransactionType> types = new ArrayList<>();
     final byte[] bytes = input.readBytes().toArray();
@@ -73,7 +95,9 @@ public class TransactionAnnouncementDecoder {
     // use Bytes32::copy to avoid keeping reference to underlying RLP byte array
     final List<Hash> hashes = input.readList(rlp -> Hash.wrap(rlp.readBytes32().copy()));
 
-    final CellMask cellMask = size == 4 ? new CellMask(input.readBytes()) : null;
+    // Before eth/72 a peer that announces a blob transaction serves its full payload on
+    // GetPooledTransactions, so it implicitly holds every cell.
+    final CellMask cellMask = hasCellMask ? CellMask.fromBytes(input.readBytes()) : CellMask.FULL;
 
     input.leaveList();
     if (!(types.size() == hashes.size() && hashes.size() == sizes.size())) {

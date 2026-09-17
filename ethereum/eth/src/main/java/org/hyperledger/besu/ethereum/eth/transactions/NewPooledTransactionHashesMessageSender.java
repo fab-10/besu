@@ -46,51 +46,50 @@ class NewPooledTransactionHashesMessageSender {
     final List<Transaction> txBatch = new ArrayList<>(MAX_TRANSACTIONS_HASHES);
     Transaction announcementToSend;
 
-    CellMask prevCellMask = null;
+    // An eth/72 announcement carries one cell mask for every blob tx in it, so a batch may only
+    // hold blob txs that agree on it. Transactions arrive grouped by mask, see
+    // TransactionBroadcaster#orderTransactions, so a change of mask closes the current batch.
+    // Non-blob txs carry no mask and can ride in any batch.
+    CellMask batchCellMask = null;
 
     while ((announcementToSend = transactionTracker.claimAnnouncementToSendToPeer(peer)) != null) {
-      final boolean hasPeerSeenTransactionOrAnnouncement =
-          transactionTracker.hasPeerSeenTransactionOrAnnouncement(
-              peer, announcementToSend.getHash());
-
-      if (hasPeerSeenTransactionOrAnnouncement) {
+      if (transactionTracker.hasPeerSeenTransactionOrAnnouncement(
+          peer, announcementToSend.getHash())) {
         continue;
       }
 
-      // txs are ordered by cell mask, so when we detect a change in cell mask, we send the current
-      // batch and add the current tx to the next batch
-      final boolean sameCellMask;
-      if (announcementToSend.getType().supportsBlob()) {
-        final CellMask currCellMask =
-            announcementToSend.getBlobsWithCommitments().orElseThrow().getCellMask();
-        if (prevCellMask == null) {
-          prevCellMask = currCellMask;
+      final CellMask txCellMask = cellMaskOf(announcementToSend);
+      final boolean cellMaskChanged =
+          txCellMask != null && batchCellMask != null && !batchCellMask.equals(txCellMask);
+
+      if (cellMaskChanged || txBatch.size() == MAX_TRANSACTIONS_HASHES) {
+        // send the current batch, and stop if the peer is no longer connected
+        if (!send(peer, txBatch, capability)) {
+          return;
         }
-        sameCellMask = prevCellMask.equals(currCellMask);
-      } else {
-        sameCellMask = true;
-      }
-
-      if (sameCellMask) {
-        txBatch.add(announcementToSend);
-      }
-
-      if (!sameCellMask || txBatch.size() == MAX_TRANSACTIONS_HASHES) {
-        // send current batch and exit loop if peer no more connected
-        final boolean connectionLost = !send(peer, txBatch, capability);
         txBatch.clear();
-        if (connectionLost) break;
       }
 
-      if (!sameCellMask) {
-        txBatch.add(announcementToSend);
-      }
+      txBatch.add(announcementToSend);
+      batchCellMask = txCellMask;
     }
 
     // send the last partial batch
     if (!txBatch.isEmpty()) {
       send(peer, txBatch, capability);
     }
+  }
+
+  /**
+   * The cell mask a transaction would be announced with, or null when it carries none.
+   *
+   * @param transaction the transaction about to be announced
+   * @return the mask, or null for non-blob transactions
+   */
+  private static CellMask cellMaskOf(final Transaction transaction) {
+    return transaction.getType().supportsBlob()
+        ? transaction.getBlobsWithCommitments().orElseThrow().getCellMask()
+        : null;
   }
 
   private boolean send(
