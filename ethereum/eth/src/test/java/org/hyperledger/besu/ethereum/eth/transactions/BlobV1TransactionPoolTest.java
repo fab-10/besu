@@ -161,7 +161,8 @@ public class BlobV1TransactionPoolTest extends AbstractTransactionPoolTestBase {
     assertThat(transactionWithBlobs.getBlobsWithCommitments().orElseThrow().getBlobType())
         .isEqualTo(BlobType.KZG_PROOF);
 
-    assertThat(transactionPool.addTransactionViaApi(transactionWithBlobs).isValid()).isTrue();
+    assertThat(transactionPool.addTransactionViaApi(transactionWithBlobs).result().isValid())
+        .isTrue();
 
     final ArgumentCaptor<Collection<Transaction>> broadcast = forClass(Collection.class);
     verify(transactionBroadcaster).onTransactionsAdded(broadcast.capture());

@@ -355,7 +355,7 @@ public abstract class AbstractTransactionPoolTestBase extends TrustedSetupClassL
   protected void addAndAssertTransactionViaApiValid(
       final Transaction tx, final boolean disableLocalPriority) {
     final ValidationResult<TransactionInvalidReason> result =
-        transactionPool.addTransactionViaApi(tx);
+        transactionPool.addTransactionViaApi(tx).result();
 
     assertThat(result.isValid()).isTrue();
     assertTransactionPending(tx);
@@ -371,7 +371,7 @@ public abstract class AbstractTransactionPoolTestBase extends TrustedSetupClassL
   protected void addAndAssertTransactionViaApiInvalid(
       final Transaction tx, final TransactionInvalidReason invalidReason) {
     final ValidationResult<TransactionInvalidReason> result =
-        transactionPool.addTransactionViaApi(tx);
+        transactionPool.addTransactionViaApi(tx).result();
 
     assertThat(result.isValid()).isFalse();
     assertThat(result.getInvalidReason()).isEqualTo(invalidReason);

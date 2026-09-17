@@ -38,6 +38,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.PeerTransactionTracker;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool.AdditionOutcome;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
@@ -132,7 +133,10 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     // result in it paying 2 wei, that is below the minimum accepted by the node, so it is skipped
     final Transaction tx = createEIP1559Transaction(1, Wei.of(7L), Wei.ONE, 100_000);
     final var addResults = transactionPool.addRemoteTransactions(List.of(tx));
-    assertThat(addResults).extractingByKey(tx.getHash()).isEqualTo(ValidationResult.valid());
+    assertThat(addResults)
+        .extractingByKey(tx.getHash())
+        .extracting(AdditionOutcome::result)
+        .isEqualTo(ValidationResult.valid());
 
     final TransactionSelectionResults results = selector.buildTransactionListForBlock();
 
@@ -190,7 +194,7 @@ public class LondonFeeMarketBlockTransactionSelectorTest
     // a local sender it is accepted anyway
     final Transaction tx = createEIP1559Transaction(1, Wei.of(7L), Wei.ONE, 100_000);
     final var addResult = transactionPool.addTransactionViaApi(tx);
-    assertThat(addResult.isValid()).isTrue();
+    assertThat(addResult.result().isValid()).isTrue();
 
     ensureTransactionIsValid(tx);
 
