@@ -38,6 +38,7 @@ import java.util.Random;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -71,7 +72,7 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
     final CellMask requestMask = getCellMask();
     final TxMetadata txMetadata = new TxMetadata(isLocal, hasPriority, score);
     final IncompleteBlob incompleteBlob =
-        new IncompleteBlob(transaction, txMetadata, requestMask, CellsWithMask.EMPTY);
+        new IncompleteBlob(transaction, txMetadata, requestMask, CellsWithMask.empty());
 
     synchronized (this) {
       if (hasEnoughAnnouncements(transaction.getHash(), requestMask)) {
@@ -172,9 +173,10 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
         .scheduleServiceTask(
             () -> {
               final Transaction blobTx = incompleteBlob.tx;
+              // One accumulator per blob, each owned by this transaction: they are merged into
+              // below, so they must not be shared with any other transaction.
               final List<CellsWithMask> mergedReceivedCells =
-                  new ArrayList<>(blobTx.getBlobCount());
-              Collections.fill(mergedReceivedCells, CellsWithMask.EMPTY);
+                  Stream.generate(CellsWithMask::empty).limit(blobTx.getBlobCount()).toList();
 
               do {
                 final Map<EthPeer, CellMask> selectedPeers =
