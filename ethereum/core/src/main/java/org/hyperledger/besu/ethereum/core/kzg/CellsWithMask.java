@@ -24,7 +24,20 @@ import java.util.PrimitiveIterator;
 import java.util.stream.IntStream;
 
 public class CellsWithMask {
-  public static final CellsWithMask EMPTY = new CellsWithMask(List.of(), CellMask.EMPTY.copy());
+
+  /**
+   * A new, empty instance.
+   *
+   * <p>Deliberately a factory rather than a constant: {@link CellsWithMask} is mutable through
+   * {@link #merge(CellsWithMask)}, so a single shared empty instance would be corrupted process
+   * wide by the first merge into it, and every holder of it would silently see another
+   * transaction's cells.
+   *
+   * @return a new empty instance, owned by the caller
+   */
+  public static CellsWithMask empty() {
+    return new CellsWithMask(List.of(), CellMask.EMPTY.copy());
+  }
 
   private final List<Cell> cells;
   private final CellMask cellMask;
