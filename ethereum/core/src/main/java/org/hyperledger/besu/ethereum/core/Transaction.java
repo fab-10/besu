@@ -122,6 +122,7 @@ public class Transaction
   private volatile Hash hash;
   // Caches the size in bytes of the encoded transaction.
   private volatile int sizeForAnnouncement = -1;
+  private volatile int sizeForEth72Announcement = -1;
   private volatile int sizeForBlockInclusion = -1;
   private final TransactionType transactionType;
 
@@ -627,6 +628,35 @@ public class Transaction
       // for transactions not containing blobs the encoding is the same, so we can set this as well:
       sizeForAnnouncement = sizeForBlockInclusion;
     }
+  }
+
+  /**
+   * Returns the size in bytes announced to eth/72 peers.
+   *
+   * <p>This is not the same as {@link #getSizeForAnnouncement()}. An eth/72 {@code
+   * PooledTransactions} response elides blob payloads, encoding {@code blobs} as the empty list, so
+   * the announced size has to describe what {@code GetPooledTransactions} will actually return.
+   * Announcing the full pooled size to an eth/72 peer overstates a blob transaction by roughly 128
+   * KiB per blob.
+   *
+   * @return the size in bytes of the encoded transaction with blob payloads elided
+   */
+  public int getSizeForEth72Announcement() {
+    if (sizeForEth72Announcement == -1) {
+      memoizeSizeForEth72Announcement();
+    }
+    return sizeForEth72Announcement;
+  }
+
+  private void memoizeSizeForEth72Announcement() {
+    if (!transactionType.supportsBlob() || getBlobsWithCommitments().isEmpty()) {
+      // Nothing to elide, so the two encodings coincide.
+      sizeForEth72Announcement = getSizeForAnnouncement();
+      return;
+    }
+    sizeForEth72Announcement =
+        TransactionEncoder.encodeOpaqueBytes(this, EncodingContext.POOLED_TRANSACTION_ETH_72)
+            .size();
   }
 
   private void memoizeSizeForAnnouncement() {
