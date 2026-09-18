@@ -25,6 +25,7 @@ import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.Hash;
+import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.datatypes.VersionedHash;
 import org.hyperledger.besu.ethereum.chain.Blockchain;
 import org.hyperledger.besu.ethereum.core.Block;
@@ -694,6 +695,29 @@ public class EthServerTest {
   }
 
   @Test
+  public void shouldOmitNonBlobTransactionsFromCellsResponse() {
+    // A peer asking for cells of a non-blob transaction gets that hash left out, not a
+    // disconnect: go-ethereum skips anything it cannot serve, and devp2p's disconnect rule for
+    // these messages is about a responder sending bad data, not a requester naming a bad hash.
+    final List<Transaction> blobTxs = setupBlobTransactions(1, 1);
+    final List<Transaction> plainTxs = setupTransactions(1);
+
+    final List<Transaction> requested = new ArrayList<>(plainTxs);
+    requested.addAll(blobTxs);
+
+    final MessageData response =
+        EthServer.constructGetCellsResponse(
+            transactionPool,
+            ethPeer,
+            GetCellsMessage.create(requested, CellMask.FULL),
+            16,
+            EthProtocolConfiguration.DEFAULT_MAX_MESSAGE_SIZE);
+
+    final CellsMessage cells = CellsMessage.readFrom(response);
+    assertThat(cells.txHashes()).containsExactly(blobTxs.getFirst().getHash());
+  }
+
+  @Test
   public void shouldReturnEmptyCellsResponseWhenNothingFitsTheMessageSize() {
     final List<Transaction> txs = setupBlobTransactions(1, 6);
 
@@ -735,6 +759,7 @@ public class EthServerTest {
       final Transaction tx = mock(Transaction.class);
       final Hash hash = Hash.wrap(Bytes32.wrap(Bytes.repeat((byte) (t + 1), 32)));
       when(tx.getHash()).thenReturn(hash);
+      when(tx.getType()).thenReturn(TransactionType.BLOB);
       when(tx.getBlobsWithCommitments())
           .thenReturn(Optional.of(new BlobsWithCommitments(BlobType.KZG_CELL_PROOFS, bundles)));
       when(transactionPool.getTransactionByHash(hash)).thenReturn(Optional.of(tx));

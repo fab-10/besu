@@ -14,7 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.eth.manager;
 
-import static org.hyperledger.besu.ethereum.p2p.rlpx.wire.messages.DisconnectMessage.DisconnectReason.BREACH_OF_PROTOCOL_INVALID_NON_BLOB_TX_TYPE;
 import static org.hyperledger.besu.ethereum.p2p.rlpx.wire.messages.DisconnectMessage.DisconnectReason.INVALID_FIRST_BLOCK_RECEIPT_INDEX;
 
 import org.hyperledger.besu.datatypes.Hash;
@@ -565,15 +564,11 @@ class EthServer {
 
       final Transaction tx = maybeTx.get();
 
-      final Optional<BlobsWithCommitments> maybeBwc = tx.getBlobsWithCommitments();
-      if (maybeBwc.isEmpty()) {
-        throw new ProtocolViolationException(
-            ("Invalid request from peer %s, requested cells for non blob tx %s"
-                .formatted(peer, tx.toTraceLog())),
-            BREACH_OF_PROTOCOL_INVALID_NON_BLOB_TX_TYPE);
+      if (!tx.getType().supportsBlob()) {
+        continue;
       }
 
-      final BlobsWithCommitments bwc = maybeBwc.get();
+      final BlobsWithCommitments bwc = tx.getBlobsWithCommitments().orElseThrow();
 
       // All blobs of a transaction share one mask, enforced by BlobsWithCommitments, so a single
       // check covers every bundle read below.
