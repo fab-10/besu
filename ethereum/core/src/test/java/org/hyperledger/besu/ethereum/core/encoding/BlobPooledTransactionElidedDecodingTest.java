@@ -88,6 +88,24 @@ class BlobPooledTransactionElidedDecodingTest extends TrustedSetupClassLoaderExt
   }
 
   @Test
+  void elidesBlobsAsTheEmptyListNotTheEmptyString() {
+    // EIP-8070 is explicit: the blobs field "MUST be encoded as the RLP empty list (0xc0)" and
+    // "MUST NOT be encoded as the RLP empty byte string". The two are one byte apart and a decoder
+    // reading the wrong one fails on every elided transaction, so pin the byte.
+    final Bytes encoded =
+        TransactionEncoder.encodeOpaqueBytes(
+            blobTransaction(), EncodingContext.POOLED_TRANSACTION_ETH_72);
+
+    assertThat(encoded.toArrayUnsafe()).contains((byte) 0xc0);
+
+    // and the decoder agrees it is an empty list rather than a zero length string
+    final Transaction decoded =
+        TransactionDecoder.decodeOpaqueBytes(encoded, EncodingContext.POOLED_TRANSACTION_ETH_72);
+    assertThat(decoded.getBlobsWithCommitments().orElseThrow().getBlobProofBundles())
+        .allSatisfy(bundle -> assertThat(bundle.getBlob()).isEmpty());
+  }
+
+  @Test
   void elidedTransactionStartsWithNoCellsAndOneCellSetPerBlob() {
     final Transaction decoded = roundTripElided(blobTransaction());
 

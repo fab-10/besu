@@ -24,7 +24,6 @@ import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.rlp.RLPOutput;
 
 import java.security.InvalidParameterException;
-import java.util.List;
 
 import org.slf4j.Logger;
 
