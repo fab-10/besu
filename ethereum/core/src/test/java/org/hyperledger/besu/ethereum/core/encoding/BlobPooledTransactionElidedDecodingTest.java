@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.core.encoding;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import org.hyperledger.besu.crypto.KeyPair;
 import org.hyperledger.besu.crypto.SignatureAlgorithmFactory;
@@ -29,6 +30,7 @@ import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.util.TrustedSetupClassLoaderExtension;
 
+import java.security.InvalidParameterException;
 import java.util.List;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -85,6 +87,39 @@ class BlobPooledTransactionElidedDecodingTest extends TrustedSetupClassLoaderExt
     assertThat(bwc.getBlobProofBundles()).hasSize(BLOB_COUNT);
     assertThat(bwc.getKzgCommitments())
         .isEqualTo(tx.getBlobsWithCommitments().get().getKzgCommitments());
+  }
+
+  @Test
+  void aTransactionHeldOnlyAsCellsIsEncodableOnlyWhereBlobsAreNotWritten() {
+    final Transaction withBlobs = blobTransaction();
+    // Round-tripping through the eth/72 form is how a node ends up holding cells and no blobs.
+    final Transaction asCells = roundTripElided(withBlobs);
+
+    assertThat(withBlobs.getBlobsWithCommitments().orElseThrow().hasBlobData()).isTrue();
+    assertThat(asCells.getBlobsWithCommitments().orElseThrow().hasBlobData()).isFalse();
+
+    // A block body carries no sidecar, and eth/72 elides the payloads, so both encode either way.
+    for (final EncodingContext context :
+        List.of(EncodingContext.BLOCK_BODY, EncodingContext.POOLED_TRANSACTION_ETH_72)) {
+      assertThat(context.canEncode(withBlobs)).isTrue();
+      assertThat(context.canEncode(asCells)).isTrue();
+    }
+
+    // Only the pre-eth/72 pooled form writes the payloads, so only it can fail.
+    assertThat(EncodingContext.POOLED_TRANSACTION.canEncode(withBlobs)).isTrue();
+    assertThat(EncodingContext.POOLED_TRANSACTION.canEncode(asCells)).isFalse();
+  }
+
+  @Test
+  void encodingACellsOnlyTransactionForAPreEth72PeerFailsLegibly() {
+    // The backstop for anything that reaches the encoder without asking canEncode first: the blob
+    // list is a list of nulls, so without this the failure is a NullPointerException in Blob.
+    final Transaction asCells = roundTripElided(blobTransaction());
+
+    assertThatExceptionOfType(InvalidParameterException.class)
+        .isThrownBy(
+            () ->
+                TransactionEncoder.encodeOpaqueBytes(asCells, EncodingContext.POOLED_TRANSACTION));
   }
 
   @Test

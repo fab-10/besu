@@ -16,12 +16,12 @@ package org.hyperledger.besu.ethereum.core.kzg;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.ethereum.core.BlobTestFixture;
 import org.hyperledger.besu.ethereum.util.TrustedSetupClassLoaderExtension;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.IntStream;
 
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
@@ -53,7 +53,8 @@ class PartialCellVerificationTest extends TrustedSetupClassLoaderExtension {
       final CellMask mask,
       final int tamperedBlob,
       final Cell replacement) {
-    final List<BlobProofBundle> narrowed = new ArrayList<>();
+    final List<CellsWithMask> narrowed = new ArrayList<>(mask.cardinality());
+
     for (int blob = 0; blob < full.getBlobProofBundles().size(); blob++) {
       final BlobProofBundle bundle = full.getBlobProofBundles().get(blob);
       final CellsWithMask allCells = bundle.getCellsWithMask().orElseThrow();
@@ -65,15 +66,10 @@ class PartialCellVerificationTest extends TrustedSetupClassLoaderExtension {
         assertThat(replacement).isNotEqualTo(held.getFirst());
         held.set(0, replacement);
       }
-      narrowed.add(
-          new BlobProofBundle(
-              BlobType.KZG_CELL_PROOFS,
-              new CellsWithMask(held, mask),
-              bundle.getKzgCommitment(),
-              bundle.getKzgProof(),
-              bundle.getVersionedHash()));
+      narrowed.add(new CellsWithMask(held, mask));
     }
-    return new BlobsWithCommitments(BlobType.KZG_CELL_PROOFS, narrowed);
+    return BlobsWithCommitments.createFromBlobCells(
+        full.getKzgCommitments(), narrowed, full.getKzgProofs(), full.getVersionedHashes());
   }
 
   /** An index whose cell differs from the cell at index 0, for the blob at {@code blobIndex}. */
@@ -134,17 +130,15 @@ class PartialCellVerificationTest extends TrustedSetupClassLoaderExtension {
   void acceptsATransactionThatHoldsNoCellsYet() {
     // A freshly decoded eth/72 transaction has its blobs elided and no cells at all. There is
     // nothing to verify; its commitments were already bound by the versioned hash check.
-    final List<BlobProofBundle> empty = new ArrayList<>();
-    for (final BlobProofBundle bundle : fullBlobs().getBlobProofBundles()) {
-      empty.add(
-          new BlobProofBundle(
-              BlobType.KZG_CELL_PROOFS,
-              CellsWithMask.empty(),
-              bundle.getKzgCommitment(),
-              bundle.getKzgProof(),
-              bundle.getVersionedHash()));
-    }
-    final BlobsWithCommitments noCells = new BlobsWithCommitments(BlobType.KZG_CELL_PROOFS, empty);
+    final BlobsWithCommitments bwc = fullBlobs();
+    final List<CellsWithMask> empty =
+        IntStream.range(0, bwc.getBlobProofBundles().size())
+            .mapToObj(_ -> CellsWithMask.empty())
+            .toList();
+
+    final BlobsWithCommitments noCells =
+        BlobsWithCommitments.createFromBlobCells(
+            bwc.getKzgCommitments(), empty, bwc.getKzgProofs(), bwc.getVersionedHashes());
 
     assertThat(noCells.getCellMask().isEmpty()).isTrue();
     assertThat(CKZG4844Helper.verify4844Kzg(noCells)).isTrue();
