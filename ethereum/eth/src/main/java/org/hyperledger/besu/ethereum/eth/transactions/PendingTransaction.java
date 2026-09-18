@@ -454,7 +454,9 @@ public abstract class PendingTransaction
     int KZG_PROOF_CONTAINER_SHALLOW_SIZE = 24;
     int KZG_PROOF_SIZE = 112;
     int BLOBS_WITH_COMMITMENTS_SIZE = 48;
-    int BLOB_PROOF_BUNDLE_SIZE_V0 = 131536;
+    // +40 vs pre eth/72: BlobProofBundle gained the Optional<CellsWithMask> field and wrapped
+    // its blob in an Optional. Kept honest by PendingTransactionEstimatedMemorySizeTest.
+    int BLOB_PROOF_BUNDLE_SIZE_V0 = 131576;
     int BLOB_PROOF_BUNDLE_SIZE_V1 = 393576;
     int PENDING_TRANSACTION_SHALLOW_SIZE = 40;
 
