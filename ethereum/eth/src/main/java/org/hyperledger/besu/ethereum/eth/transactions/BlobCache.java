@@ -65,12 +65,12 @@ public class BlobCache {
           txBuilder.copiedFrom(transaction);
           List<BlobProofBundle> blobProofBundles =
               maybeHashes.get().stream().map(cache::getIfPresent).toList();
-          final BlobsWithCommitments bwc = new BlobsWithCommitments(blobProofBundles);
           if (blobProofBundles.stream()
               .map(BlobProofBundle::getVersionedHash)
               .toList()
               .containsAll(maybeHashes.get())) {
-            txBuilder.blobsWithCommitments(bwc);
+            txBuilder.blobsWithCommitments(
+                BlobsWithCommitments.createFromBundles(blobProofBundles));
             return Optional.of(txBuilder.build());
           } else {
             LOG.debug("did not find all versioned hashes to restore from cache");

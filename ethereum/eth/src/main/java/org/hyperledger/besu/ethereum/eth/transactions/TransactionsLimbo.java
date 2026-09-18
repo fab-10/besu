@@ -18,7 +18,6 @@ import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecuto
 
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.Transaction;
-import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
@@ -244,33 +243,16 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
   private Transaction completeBlobs(
       final Transaction incomplete, final List<CellsWithMask> receivedCells) {
     final BlobsWithCommitments incompleteBwc = incomplete.getBlobsWithCommitments().orElseThrow();
-    final List<BlobProofBundle> incompleteBundles = incompleteBwc.getBlobProofBundles();
-
-    final List<BlobProofBundle> completeBundles =
-        createCompleteBundles(receivedCells, incompleteBundles);
 
     return Transaction.builder()
         .copiedFrom(incomplete)
         .blobsWithCommitments(
-            new BlobsWithCommitments(incompleteBwc.getBlobType(), completeBundles))
+            BlobsWithCommitments.createFromBlobCells(
+                incompleteBwc.getKzgCommitments(),
+                receivedCells,
+                incompleteBwc.getKzgProofs(),
+                incompleteBwc.getVersionedHashes()))
         .build();
-  }
-
-  private static List<BlobProofBundle> createCompleteBundles(
-      final List<CellsWithMask> receivedCells, final List<BlobProofBundle> incompleteBundles) {
-    final List<BlobProofBundle> completeBundles = new ArrayList<>(incompleteBundles.size());
-    for (int i = 0; i < incompleteBundles.size(); i++) {
-      final BlobProofBundle incompleteBundle = incompleteBundles.get(i);
-      final BlobProofBundle completeBundle =
-          new BlobProofBundle(
-              incompleteBundle.getBlobType(),
-              receivedCells.get(i),
-              incompleteBundle.getKzgCommitment(),
-              incompleteBundle.getKzgProof(),
-              incompleteBundle.getVersionedHash());
-      completeBundles.add(completeBundle);
-    }
-    return completeBundles;
   }
 
   private record PeerAndCellMask(EthPeer peer, CellMask cellMask) {}

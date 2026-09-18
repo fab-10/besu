@@ -482,6 +482,17 @@ class EthServer {
         continue;
       }
 
+      if (!encodingContext.canEncode(maybeTx.get())) {
+        // Typically a blob tx this node holds only as cells, which the pre-eth/72 wire form
+        // cannot express. Omit it rather than fail: the peer can source it elsewhere.
+        LOG.atTrace()
+            .setMessage("Skipping tx {} not encodable for {}")
+            .addArgument(hash)
+            .addArgument(encodingContext)
+            .log();
+        continue;
+      }
+
       final BytesValueRLPOutput txRlp = new BytesValueRLPOutput();
       TransactionEncoder.encodeRLP(maybeTx.get(), txRlp, encodingContext);
       final int encodedSize = txRlp.encodedSize();
