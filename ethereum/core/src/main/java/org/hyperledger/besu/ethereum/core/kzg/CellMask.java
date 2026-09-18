@@ -16,7 +16,7 @@ package org.hyperledger.besu.ethereum.core.kzg;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
-import static ethereum.ckzg4844.CKZG4844JNI.CELLS_PER_EXT_BLOB;
+import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELLS_PER_EXT_BLOB;
 
 import java.util.Arrays;
 import java.util.BitSet;

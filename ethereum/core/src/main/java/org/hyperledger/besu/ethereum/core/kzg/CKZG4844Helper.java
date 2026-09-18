@@ -37,6 +37,11 @@ public class CKZG4844Helper {
   public static final int CELL_PROOFS_PER_BLOB = 128;
 
   /**
+   * Number of cells an extended blob is split into, and therefore the range of a cell index.
+   */
+  public static final int CELLS_PER_EXT_BLOB = CKZG4844JNI.CELLS_PER_EXT_BLOB;
+
+  /**
    * Converts the given BlobsWithCommitments to version 1.
    *
    * @param blobsWithCommitments the BlobsWithCommitments to convert.

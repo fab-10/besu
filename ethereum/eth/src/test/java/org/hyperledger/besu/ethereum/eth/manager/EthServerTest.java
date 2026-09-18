@@ -716,8 +716,8 @@ public class EthServerTest {
     for (int t = 0; t < count; t++) {
       final List<BlobProofBundle> bundles = new ArrayList<>(blobsPerTx);
       for (int b = 0; b < blobsPerTx; b++) {
-        final List<Cell> cells = new ArrayList<>(CKZG4844Helper.CELL_PROOFS_PER_BLOB);
-        for (int c = 0; c < CKZG4844Helper.CELL_PROOFS_PER_BLOB; c++) {
+        final List<Cell> cells = new ArrayList<>(CKZG4844Helper.CELLS_PER_EXT_BLOB);
+        for (int c = 0; c < CKZG4844Helper.CELLS_PER_EXT_BLOB; c++) {
           cells.add(new Cell(Bytes.repeat((byte) c, Cell.SIZE)));
         }
         bundles.add(
