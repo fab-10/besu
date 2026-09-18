@@ -97,6 +97,8 @@ public class GetPooledTransactionsFromPeerTask implements PeerTask<List<Transact
           "Response transaction count does not match request hash count");
     }
     if (!announcementsByHash.isEmpty()) {
+      // An eth/72 peer announces the size of the blob-elided form, which is what it just sent us.
+      final boolean eth72 = agreedCapabilities.stream().anyMatch(EthProtocol::isEth72Compatible);
       for (final Transaction tx : responseTransactions) {
         final TransactionAnnouncement ann = announcementsByHash.get(tx.getHash());
         if (ann == null) {
@@ -112,14 +114,16 @@ public class GetPooledTransactionsFromPeerTask implements PeerTask<List<Transact
                   + tx.getType(),
               messageData.getData());
         }
-        if (ann.size() != tx.getSizeForAnnouncement()) {
+        final int receivedSize =
+            eth72 ? tx.getSizeForEth72Announcement() : tx.getSizeForAnnouncement();
+        if (ann.size() != receivedSize) {
           throw new MalformedRlpFromPeerException(
               "Transaction size mismatch for hash "
                   + tx.getHash()
                   + ": announced "
                   + ann.size()
                   + " but received "
-                  + tx.getSizeForAnnouncement(),
+                  + receivedSize,
               messageData.getData());
         }
       }

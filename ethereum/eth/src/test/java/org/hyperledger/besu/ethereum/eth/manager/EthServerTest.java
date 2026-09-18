@@ -16,6 +16,8 @@ package org.hyperledger.besu.ethereum.eth.manager;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELLS_PER_EXT_BLOB;
+import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELL_PROOFS_PER_BLOB;
 import static org.hyperledger.besu.ethereum.eth.core.Utils.serializeReceiptsList;
 import static org.hyperledger.besu.ethereum.eth.core.transactions.DevP2PUtils.createPooledTransactionsMessage;
 import static org.mockito.Mockito.mock;
@@ -23,7 +25,6 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.datatypes.VersionedHash;
@@ -32,14 +33,13 @@ import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockBody;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
+import org.hyperledger.besu.ethereum.core.CellsOnlyBlobTransactionFixture;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.core.encoding.BlockAccessListEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncodingConfiguration;
-import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
-import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
 import org.hyperledger.besu.ethereum.core.kzg.Cell;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
@@ -695,6 +695,41 @@ public class EthServerTest {
   }
 
   @Test
+  public void shouldOmitCellsOnlyTransactionsWhenServingAPreEth72Peer() {
+    // A transaction held only as cells cannot be expressed in the pre-eth/72 pooled form, which
+    // carries the blob payloads. Omit it rather than fail encoding.
+    final Transaction cellsOnlyTx = setupCellsOnlyBlobTransaction();
+    final List<Transaction> plainTxs = setupTransactions(1);
+    final List<Transaction> requested = new ArrayList<>(plainTxs);
+    requested.add(cellsOnlyTx);
+
+    final MessageData eth71 =
+        EthServer.constructGetPooledTransactionsResponse(
+            transactionPool,
+            ethPeer,
+            GetPooledTransactionsMessage.create(Transaction.toHashList(requested)),
+            16,
+            EthProtocolConfiguration.DEFAULT_MAX_MESSAGE_SIZE,
+            EthProtocol.ETH71);
+
+    assertThat(PooledTransactionsMessage.readFrom(eth71).transactions())
+        .containsExactlyElementsOf(plainTxs);
+
+    // eth/72 elides the payloads, so the same transaction is servable there.
+    final MessageData eth72 =
+        EthServer.constructGetPooledTransactionsResponse(
+            transactionPool,
+            ethPeer,
+            GetPooledTransactionsMessage.create(Transaction.toHashList(requested)),
+            16,
+            EthProtocolConfiguration.DEFAULT_MAX_MESSAGE_SIZE,
+            EthProtocol.ETH72);
+
+    assertThat(Transaction.toHashList(PooledTransactionsMessage.readFrom(eth72).transactions()))
+        .containsExactlyElementsOf(Transaction.toHashList(requested));
+  }
+
+  @Test
   public void shouldOmitNonBlobTransactionsFromCellsResponse() {
     // A peer asking for cells of a non-blob transaction gets that hash left out, not a
     // disconnect: go-ethereum skips anything it cannot serve, and devp2p's disconnect rule for
@@ -738,34 +773,46 @@ public class EthServerTest {
   private List<Transaction> setupBlobTransactions(final int count, final int blobsPerTx) {
     final List<Transaction> txs = new ArrayList<>(count);
     for (int t = 0; t < count; t++) {
-      final List<BlobProofBundle> bundles = new ArrayList<>(blobsPerTx);
+      final List<KZGCommitment> commitments = new ArrayList<>(blobsPerTx);
+      final List<CellsWithMask> cellsWithMasks = new ArrayList<>(blobsPerTx);
+      final List<KZGProof> proofs = new ArrayList<>(blobsPerTx * CELL_PROOFS_PER_BLOB);
+      final List<VersionedHash> versionedHashes = new ArrayList<>(blobsPerTx);
       for (int b = 0; b < blobsPerTx; b++) {
-        final List<Cell> cells = new ArrayList<>(CKZG4844Helper.CELLS_PER_EXT_BLOB);
-        for (int c = 0; c < CKZG4844Helper.CELLS_PER_EXT_BLOB; c++) {
+        final List<Cell> cells = new ArrayList<>(CELLS_PER_EXT_BLOB);
+        for (int c = 0; c < CELLS_PER_EXT_BLOB; c++) {
           cells.add(new Cell(Bytes.repeat((byte) c, Cell.SIZE)));
         }
-        bundles.add(
-            new BlobProofBundle(
-                BlobType.KZG_CELL_PROOFS,
-                new CellsWithMask(cells, CellMask.FULL),
-                new KZGCommitment(Bytes48.wrap(Bytes.repeat((byte) 1, 48))),
-                Collections.nCopies(
-                    CKZG4844Helper.CELL_PROOFS_PER_BLOB,
-                    new KZGProof(Bytes48.wrap(Bytes.repeat((byte) 2, 48)))),
-                new VersionedHash(
-                    Bytes32.wrap(
-                        Bytes.concatenate(Bytes.of((byte) 1), Bytes.repeat((byte) (t + 3), 31))))));
+        commitments.add(new KZGCommitment(Bytes48.wrap(Bytes.repeat((byte) 1, 48))));
+        cellsWithMasks.add(new CellsWithMask(cells, CellMask.FULL));
+        // Proofs are never elided on the wire, so every blob carries a full set of them.
+        proofs.addAll(
+            Collections.nCopies(
+                CELL_PROOFS_PER_BLOB, new KZGProof(Bytes48.wrap(Bytes.repeat((byte) 2, 48)))));
+        versionedHashes.add(
+            new VersionedHash(
+                Bytes32.wrap(
+                    Bytes.concatenate(Bytes.of((byte) 1), Bytes.repeat((byte) (t + 3), 31)))));
       }
       final Transaction tx = mock(Transaction.class);
       final Hash hash = Hash.wrap(Bytes32.wrap(Bytes.repeat((byte) (t + 1), 32)));
       when(tx.getHash()).thenReturn(hash);
       when(tx.getType()).thenReturn(TransactionType.BLOB);
       when(tx.getBlobsWithCommitments())
-          .thenReturn(Optional.of(new BlobsWithCommitments(BlobType.KZG_CELL_PROOFS, bundles)));
+          .thenReturn(
+              Optional.of(
+                  BlobsWithCommitments.createFromBlobCells(
+                      commitments, cellsWithMasks, proofs, versionedHashes)));
       when(transactionPool.getTransactionByHash(hash)).thenReturn(Optional.of(tx));
       txs.add(tx);
     }
     return txs;
+  }
+
+  /** A real, encodable blob transaction this node holds only as cells, as after eth/72 receipt. */
+  private Transaction setupCellsOnlyBlobTransaction() {
+    final Transaction tx = new CellsOnlyBlobTransactionFixture().create(1, CellMask.FULL);
+    when(transactionPool.getTransactionByHash(tx.getHash())).thenReturn(Optional.of(tx));
+    return tx;
   }
 
   private List<Transaction> setupTransactions(final int count) {

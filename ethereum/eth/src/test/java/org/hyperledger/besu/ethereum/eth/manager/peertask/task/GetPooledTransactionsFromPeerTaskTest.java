@@ -18,14 +18,20 @@ import static org.hyperledger.besu.ethereum.eth.core.transactions.DevP2PUtils.cr
 
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.BlockDataGenerator;
+import org.hyperledger.besu.ethereum.core.CellsOnlyBlobTransactionFixture;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
+import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.InvalidPeerTaskResponseException;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.MalformedRlpFromPeerException;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskValidationResponse;
 import org.hyperledger.besu.ethereum.eth.messages.PooledTransactionsMessage;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionAnnouncement;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
+import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 
 import java.util.List;
 import java.util.Set;
@@ -80,6 +86,35 @@ public class GetPooledTransactionsFromPeerTaskTest {
 
     Assertions.assertEquals(
         "Response transaction count does not match request hash count", exception.getMessage());
+  }
+
+  @Test
+  public void testProcessResponseAcceptsAnEth72AnnouncedBlobTransaction()
+      throws InvalidPeerTaskResponseException, MalformedRlpFromPeerException {
+    // An eth/72 peer announces, and returns, the blob-elided form. Sizing the received
+    // transaction by the pre-eth/72 pooled form instead would both mismatch and, for a
+    // transaction we now hold only as cells, have no encoding at all.
+    final Transaction transaction = new CellsOnlyBlobTransactionFixture().create(1, CellMask.FULL);
+    final TransactionAnnouncement announcement =
+        new TransactionAnnouncement(
+            transaction.getHash(),
+            transaction.getType(),
+            (long) transaction.getSizeForEth72Announcement(),
+            CellMask.FULL);
+    final GetPooledTransactionsFromPeerTask task =
+        GetPooledTransactionsFromPeerTask.fromAnnouncements(List.of(announcement));
+
+    final BytesValueRLPOutput out = new BytesValueRLPOutput();
+    out.writeList(
+        List.of(transaction),
+        (tx, rlp) ->
+            TransactionEncoder.encodeRLP(tx, rlp, EncodingContext.POOLED_TRANSACTION_ETH_72));
+
+    final List<Transaction> result =
+        task.processResponse(
+            PooledTransactionsMessage.createUnsafe(out.encoded()), Set.of(EthProtocol.ETH72));
+
+    Assertions.assertEquals(List.of(transaction.getHash()), Transaction.toHashList(result));
   }
 
   @Test

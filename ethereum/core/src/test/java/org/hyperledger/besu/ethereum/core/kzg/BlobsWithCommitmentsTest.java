@@ -24,6 +24,7 @@ import static org.mockito.Mockito.when;
 import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.VersionedHash;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 
@@ -44,8 +45,8 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
                 IllegalArgumentException.class,
                 () ->
-                    BlobsWithCommitments.createFromBlobs(
-                        KZG_PROOF, List.of(), List.of(), List.of(), List.of()))
+                    BlobsWithCommitments.createFromBlobsType0(
+                        List.of(), List.of(), List.of(), List.of()))
             .getMessage();
     final String expectedMessage =
         "There needs to be a minimum of one blob in a blob transaction with commitments";
@@ -60,8 +61,8 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                BlobsWithCommitments.createFromBlobs(
-                    KZG_PROOF, wrongCommitments, blobs, kzgProofs, versionedHashes));
+                BlobsWithCommitments.createFromBlobsType0(
+                    wrongCommitments, blobs, kzgProofs, versionedHashes));
 
     assertEquals("Invalid number of kzgCommitments, expected 2, got 1", exception.getMessage());
   }
@@ -74,8 +75,8 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                BlobsWithCommitments.createFromBlobs(
-                    KZG_PROOF, kzgCommitments, blobs, kzgProofs, wrongVersionedHashes));
+                BlobsWithCommitments.createFromBlobsType0(
+                    kzgCommitments, blobs, kzgProofs, wrongVersionedHashes));
     assertEquals("Invalid number of versionedHashes, expected 2, got 1", exception.getMessage());
   }
 
@@ -86,9 +87,10 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                BlobsWithCommitments.createFromBlobs(
-                    KZG_PROOF, kzgCommitments, blobs, wrongKzgProofs, versionedHashes));
-    String error = String.format("Invalid number of proofs (%s), expected 2, got 1", KZG_PROOF);
+                BlobsWithCommitments.createFromBlobsType0(
+                    kzgCommitments, blobs, wrongKzgProofs, versionedHashes));
+    String error =
+        String.format("Invalid number of proofs (type %s), expected 2, got 1", KZG_PROOF);
     assertEquals(error, exception.getMessage());
   }
 
@@ -99,8 +101,8 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                BlobsWithCommitments.createFromBlobs(
-                    KZG_PROOF, wrongCommitments, blobs, kzgProofs, versionedHashes));
+                BlobsWithCommitments.createFromBlobsType1(
+                    wrongCommitments, blobs, cellProofGroups(2), versionedHashes));
     assertEquals("Invalid number of kzgCommitments, expected 2, got 1", exception.getMessage());
   }
 
@@ -111,28 +113,40 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                BlobsWithCommitments.createFromBlobs(
-                    BlobType.KZG_CELL_PROOFS,
-                    kzgCommitments,
-                    blobs,
-                    kzgProofs,
-                    wrongVersionedHashes));
-    String error = String.format("Invalid number of versionedHashes, expected 2, got 1");
-    assertEquals(error, exception.getMessage());
+                BlobsWithCommitments.createFromBlobsType1(
+                    kzgCommitments, blobs, cellProofGroups(2), wrongVersionedHashes));
+    assertEquals("Invalid number of versionedHashes, expected 2, got 1", exception.getMessage());
   }
 
   @Test
-  public void shouldThrowExceptionWhenProofsSizeIsInvalid_V1() {
-    List<KZGProof> wrongKzgProofs =
-        List.of(mock(KZGProof.class), mock(KZGProof.class)); // Only two proofs instead of 256
-    BlobType blobType = BlobType.KZG_CELL_PROOFS;
+  public void shouldThrowExceptionWhenProofGroupCountIsInvalid_V1() {
+    // One group of proofs for two blobs: the wire carries one group per blob.
     IllegalArgumentException exception =
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                BlobsWithCommitments.createFromBlobs(
-                    blobType, kzgCommitments, blobs, wrongKzgProofs, versionedHashes));
-    String error = String.format("Invalid number of proofs (%s), expected 256, got 2", blobType);
+                BlobsWithCommitments.createFromBlobsType1(
+                    kzgCommitments, blobs, cellProofGroups(1), versionedHashes));
+    assertEquals(
+        "Invalid number of proof groups (type KZG_CELL_PROOFS), expected 2, got 1",
+        exception.getMessage());
+  }
+
+  @Test
+  public void shouldThrowExceptionWhenProofsSizeIsInvalid_V1() {
+    // A group per blob, but each holding two proofs instead of a proof per cell.
+    List<List<KZGProof>> shortGroups =
+        Collections.nCopies(2, List.of(mock(KZGProof.class), mock(KZGProof.class)));
+    IllegalArgumentException exception =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                BlobsWithCommitments.createFromBlobsType1(
+                    kzgCommitments, blobs, shortGroups, versionedHashes));
+    String error =
+        String.format(
+            "Invalid number of proofs (type %s), expected %d per blob, got 2",
+            BlobType.KZG_CELL_PROOFS, CKZG4844Helper.CELL_PROOFS_PER_BLOB);
     assertEquals(error, exception.getMessage());
   }
 
@@ -143,23 +157,26 @@ public class BlobsWithCommitmentsTest {
             mockBlobProofBundle(BlobType.KZG_PROOF), mockBlobProofBundle(BlobType.KZG_CELL_PROOFS));
     IllegalArgumentException exception =
         assertThrows(
-            IllegalArgumentException.class, () -> new BlobsWithCommitments(invalidBundles));
-    assertEquals("BlobProofBundles must have the same BlobType", exception.getMessage());
+            IllegalArgumentException.class,
+            () -> BlobsWithCommitments.createFromBundles(invalidBundles));
+    assertEquals("all bundles must be of the same type", exception.getMessage());
   }
 
   @Test
   public void shouldThrowExceptionWhenBlobProofBundlesListIsEmpty() {
     List<BlobProofBundle> emptyBundles = List.of();
     IllegalArgumentException exception =
-        assertThrows(IllegalArgumentException.class, () -> new BlobsWithCommitments(emptyBundles));
-    assertEquals("BlobProofBundles list cannot be empty", exception.getMessage());
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> BlobsWithCommitments.createFromBundles(emptyBundles));
+    assertEquals("at least one bundle should be present", exception.getMessage());
   }
 
   @Test
   public void shouldAcceptBlobProofBundlesSharingOneCellMask() {
     final CellMask mask = CellMask.fromBytes(Bytes.fromHexString("0x05" + "00".repeat(15)));
     final BlobsWithCommitments bwc =
-        new BlobsWithCommitments(
+        BlobsWithCommitments.createFromBundles(
             List.of(
                 mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, mask),
                 mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, mask)));
@@ -180,11 +197,11 @@ public class BlobsWithCommitmentsTest {
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                new BlobsWithCommitments(
+                BlobsWithCommitments.createFromBundles(
                     List.of(
                         mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, indexZero),
                         mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, indexTwo))));
-    assertEquals("BlobProofBundles must have the same cell mask", exception.getMessage());
+    assertEquals("Cells must have the same cell mask", exception.getMessage());
   }
 
   @Test
@@ -194,22 +211,22 @@ public class BlobsWithCommitmentsTest {
     final CellMask mask = CellMask.fromBytes(Bytes.fromHexString("0x01" + "00".repeat(15)));
 
     assertEquals(
-        "BlobProofBundles must have the same cell mask",
+        "all bundles must either carry cells or none of them",
         assertThrows(
                 IllegalArgumentException.class,
                 () ->
-                    new BlobsWithCommitments(
+                    BlobsWithCommitments.createFromBundles(
                         List.of(
                             mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, mask),
                             mockBlobProofBundle(BlobType.KZG_CELL_PROOFS))))
             .getMessage());
 
     assertEquals(
-        "BlobProofBundles must have the same cell mask",
+        "all bundles must either carry cells or none of them",
         assertThrows(
                 IllegalArgumentException.class,
                 () ->
-                    new BlobsWithCommitments(
+                    BlobsWithCommitments.createFromBundles(
                         List.of(
                             mockBlobProofBundle(BlobType.KZG_CELL_PROOFS),
                             mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, mask))))
@@ -217,14 +234,61 @@ public class BlobsWithCommitmentsTest {
   }
 
   @Test
-  public void shouldThrowExceptionWhenBundleBlobTypeDiffersFromDeclaredOne() {
-    IllegalArgumentException exception =
+  public void shouldThrowExceptionWhenOnlySomeBlobProofBundlesCarryTheirBlob() {
+    // Blob presence reflects how the transaction reached this node, which is the same for all of
+    // its blobs, in either order. Both bundles share a mask, so only the payloads differ.
+    assertEquals(
+        "all bundles must either carry their blob payload or none of them",
         assertThrows(
-            IllegalArgumentException.class,
-            () ->
-                new BlobsWithCommitments(
-                    BlobType.KZG_PROOF, List.of(mockBlobProofBundle(BlobType.KZG_CELL_PROOFS))));
-    assertEquals("BlobProofBundles must have the same BlobType", exception.getMessage());
+                IllegalArgumentException.class,
+                () ->
+                    BlobsWithCommitments.createFromBundles(
+                        List.of(
+                            mockBlobProofBundleWithBlob(),
+                            mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, CellMask.FULL))))
+            .getMessage());
+
+    assertEquals(
+        "all bundles must either carry their blob payload or none of them",
+        assertThrows(
+                IllegalArgumentException.class,
+                () ->
+                    BlobsWithCommitments.createFromBundles(
+                        List.of(
+                            mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, CellMask.FULL),
+                            mockBlobProofBundleWithBlob())))
+            .getMessage());
+  }
+
+  @Test
+  public void hasBlobDataAnswersForEveryBundle() {
+    // With the invariant enforced, the first bundle answers for all of them.
+    assertThat(
+            BlobsWithCommitments.createFromBundles(
+                    List.of(mockBlobProofBundleWithBlob(), mockBlobProofBundleWithBlob()))
+                .hasBlobData())
+        .isTrue();
+
+    assertThat(
+            BlobsWithCommitments.createFromBundles(
+                    List.of(
+                        mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, CellMask.FULL),
+                        mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, CellMask.FULL)))
+                .hasBlobData())
+        .isFalse();
+  }
+
+  /** A bundle holding its blob payload, and the full cell mask a computed bundle would have. */
+  private BlobProofBundle mockBlobProofBundleWithBlob() {
+    final BlobProofBundle bundle = mockBlobProofBundle(BlobType.KZG_CELL_PROOFS, CellMask.FULL);
+    when(bundle.getBlob()).thenReturn(Optional.of(mock(Blob.class)));
+    return bundle;
+  }
+
+  /** One full group of cell proofs per blob, as the wire carries them. */
+  private List<List<KZGProof>> cellProofGroups(final int blobCount) {
+    return Collections.nCopies(
+        blobCount, Collections.nCopies(CKZG4844Helper.CELL_PROOFS_PER_BLOB, mock(KZGProof.class)));
   }
 
   private BlobProofBundle mockBlobProofBundle(final BlobType blobType) {

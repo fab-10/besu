@@ -29,6 +29,9 @@ import org.slf4j.Logger;
 
 public class BlobPooledTransactionEncoder {
   private static final Logger LOG = getLogger(BlobPooledTransactionEncoder.class);
+  static final String NO_BLOB_DATA_ERROR =
+      "Transaction whose blobs are not held cannot be encoded for Pooled Transaction";
+
   static final String NO_BLOBS_ERROR =
       "Transaction with no blobsWithCommitments cannot be encoded for Pooled Transaction";
 
@@ -36,8 +39,15 @@ public class BlobPooledTransactionEncoder {
       final Transaction transaction, final boolean elideBlobs, final RLPOutput out) {
     LOG.trace("Encoding transaction with blobs {}, blobs elision {}", transaction, elideBlobs);
     var blobsWithCommitments = transaction.getBlobsWithCommitments();
-    if (blobsWithCommitments.isEmpty() || blobsWithCommitments.get().getBlobs().isEmpty()) {
+    if (blobsWithCommitments.isEmpty()) {
       throw new InvalidParameterException(NO_BLOBS_ERROR);
+    }
+    // Without elision the payloads are written out, so they must actually be held. getBlobs()
+    // yields a list of nulls for a transaction held as cells, which would otherwise surface far
+    // from here as a NullPointerException inside Blob::writeTo. Callers decide whether a
+    // transaction is encodable with EncodingContext#canEncode; this is the backstop.
+    if (!elideBlobs && !blobsWithCommitments.get().hasBlobData()) {
+      throw new InvalidParameterException(NO_BLOB_DATA_ERROR);
     }
     out.startList();
     BlobTransactionEncoder.encode(transaction, out);

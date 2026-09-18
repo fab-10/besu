@@ -17,6 +17,7 @@ package org.hyperledger.besu.ethereum.eth.transactions;
 import static org.hyperledger.besu.ethereum.core.Transaction.toHashList;
 
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
@@ -43,6 +44,8 @@ class NewPooledTransactionHashesMessageSender {
 
   public void sendTransactionAnnouncementsToPeer(final EthPeer peer) {
     final Capability capability = peer.getConnection().capability(EthProtocol.NAME);
+    final EncodingContext encodingContext =
+        EncodingContext.pooledTransactionByCapability(capability);
     final List<Transaction> txBatch = new ArrayList<>(MAX_TRANSACTIONS_HASHES);
     Transaction announcementToSend;
 
@@ -55,6 +58,13 @@ class NewPooledTransactionHashesMessageSender {
     while ((announcementToSend = transactionTracker.claimAnnouncementToSendToPeer(peer)) != null) {
       if (transactionTracker.hasPeerSeenTransactionOrAnnouncement(
           peer, announcementToSend.getHash())) {
+        continue;
+      }
+
+      // Announcing to a peer whose protocol version we could not then serve claims an
+      // availability we do not have, and computing the announced size would itself fail on a
+      // transaction held only as cells.
+      if (!encodingContext.canEncode(announcementToSend)) {
         continue;
       }
 

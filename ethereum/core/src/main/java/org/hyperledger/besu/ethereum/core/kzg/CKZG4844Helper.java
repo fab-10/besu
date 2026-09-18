@@ -14,11 +14,12 @@
  */
 package org.hyperledger.besu.ethereum.core.kzg;
 
+import static com.google.common.base.Preconditions.checkArgument;
+
 import org.hyperledger.besu.datatypes.BlobType;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.stream.Collectors;
 
 import ethereum.ckzg4844.CKZG4844JNI;
 import ethereum.ckzg4844.CellsAndProofs;
@@ -58,12 +59,7 @@ public class CKZG4844Helper {
           "Invalid blobs with commitments for conversion to version 1");
     }
 
-    List<BlobProofBundle> version1Bundles =
-        blobsWithCommitments.getBlobProofBundles().stream()
-            .map(CKZG4844Helper::unsafeConvertToVersion1)
-            .collect(Collectors.toList());
-
-    return new BlobsWithCommitments(version1Bundles);
+    return unsafeConvertToVersion1(blobsWithCommitments);
   }
 
   /**
@@ -83,27 +79,14 @@ public class CKZG4844Helper {
     return proofs;
   }
 
-  /**
-   * Converts the given BlobProofBundle to version 1 without validating proof.
-   *
-   * @param bundle the BlobProofBundle to convert.
-   * @return a new BlobProofBundle instance with version 1 and updated proofs.
-   */
-  public static BlobProofBundle unsafeConvertToVersion1(final BlobProofBundle bundle) {
-    if (bundle.getBlobType() == BlobType.KZG_CELL_PROOFS) {
-      return bundle;
-    }
-    final Blob blob =
-        bundle
-            .getBlob()
-            .orElseThrow(() -> new IllegalArgumentException("Blob of type 0 must have full data"));
-    List<KZGProof> kzgCellProofs = computeBlobKzgProofs(blob);
-    return new BlobProofBundle(
-        BlobType.KZG_CELL_PROOFS,
-        blob,
-        bundle.getKzgCommitment(),
-        kzgCellProofs,
-        bundle.getVersionedHash());
+  private static BlobsWithCommitments unsafeConvertToVersion1(final BlobsWithCommitments bwc) {
+    checkArgument(bwc.hasBlobData(), "Blob of type 0 must have full data");
+
+    List<List<KZGProof>> version1Proofs =
+        bwc.getBlobs().stream().map(CKZG4844Helper::computeBlobKzgProofs).toList();
+
+    return BlobsWithCommitments.createFromBlobsType1(
+        bwc.getKzgCommitments(), bwc.getBlobs(), version1Proofs, bwc.getVersionedHashes());
   }
 
   /**

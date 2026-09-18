@@ -14,6 +14,8 @@
  */
 package org.hyperledger.besu.ethereum.core.encoding;
 
+import static org.hyperledger.besu.datatypes.BlobType.KZG_CELL_PROOFS;
+
 import org.hyperledger.besu.crypto.Hash;
 import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.VersionedHash;
@@ -70,14 +72,21 @@ public class BlobPooledTransactionDecoder {
     // each blob starts with its own empty cell set for the blobpool to fill in via GetCells.
     // One cell set per blob, i.e. one per commitment: proofs.size() is 128x that for cell proofs.
     if (blobs.isEmpty()) {
+      if (KZG_CELL_PROOFS.getVersionId() != versionId) {
+        throw new RLPException(
+            "Unsupported blob type, expected %d but got %d"
+                .formatted(KZG_CELL_PROOFS.getVersionId(), versionId));
+      }
       final List<CellsWithMask> cells =
           Stream.generate(CellsWithMask::empty).limit(commitments.size()).toList();
-      builder.kzgBlobCells(BlobType.of(versionId), commitments, cells, proofs);
+      builder.kzgBlobCells(commitments, cells, proofs).sizeForEth72Announcement(input.size());
     } else {
-      builder.kzgBlobs(BlobType.of(versionId), commitments, blobs, proofs);
+      builder
+          .kzgBlobs(BlobType.of(versionId), commitments, blobs, proofs)
+          .sizeForAnnouncement(input.size());
     }
 
-    final Transaction transaction = builder.sizeForAnnouncement(input.size()).build();
+    final Transaction transaction = builder.build();
 
     // Validate that each commitment hashes to the versioned hash declared in the tx body.
     // A mismatch means the peer sent a sidecar that does not correspond to the transaction.
