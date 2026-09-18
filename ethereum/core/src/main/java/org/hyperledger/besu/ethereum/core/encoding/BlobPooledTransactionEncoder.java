@@ -46,11 +46,8 @@ public class BlobPooledTransactionEncoder {
       out.writeIntScalar(blobsWithCommitments.get().getBlobType().getVersionId());
     }
     if (elideBlobs) {
-      out.writeList(
-          List.of(),
-          (_, _) -> {
-            throw new IllegalStateException("Internal error: must not be called for an empty list");
-          });
+      out.startList();
+      out.endList();
     } else {
       out.writeList(blobsWithCommitments.get().getBlobs(), Blob::writeTo);
     }

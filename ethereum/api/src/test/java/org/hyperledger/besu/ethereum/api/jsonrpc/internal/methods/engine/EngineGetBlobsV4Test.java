@@ -177,7 +177,7 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
     @SuppressWarnings("unchecked")
     List<BlobCellsAndProofsV1> result = (List<BlobCellsAndProofsV1>) response.getResult();
     assertThat(result).hasSize(1);
-    assertThat(result.getFirst().getBlobCells()).hasSize(CKZG4844Helper.CELL_PROOFS_PER_BLOB);
+    assertThat(result.getFirst().getBlobCells()).hasSize(CKZG4844Helper.CELLS_PER_EXT_BLOB);
     assertThat(result.getFirst().getProofs()).hasSize(CKZG4844Helper.CELL_PROOFS_PER_BLOB);
 
     verify(requestedCounter).inc(1);
@@ -206,7 +206,7 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
     assertThat(result.getFirst().getProofs()).hasSize(2);
 
     Bytes blobCells = bundle.getBlobCellsBytes().orElseThrow();
-    int cellSize = blobCells.size() / CKZG4844Helper.CELL_PROOFS_PER_BLOB;
+    int cellSize = blobCells.size() / CKZG4844Helper.CELLS_PER_EXT_BLOB;
     Bytes expectedCell0 = blobCells.slice(0, cellSize);
     Bytes expectedCell127 = blobCells.slice(127 * cellSize, cellSize);
     assertThat(result.getFirst().getBlobCells())
