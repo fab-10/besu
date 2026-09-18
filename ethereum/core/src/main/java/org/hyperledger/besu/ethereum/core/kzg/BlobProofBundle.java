@@ -111,8 +111,8 @@ public final class BlobProofBundle {
   private CellsWithMask computeCells(final Blob blob, final BlobType blobType) {
     if (blobType == BlobType.KZG_CELL_PROOFS) {
       final Bytes cellsBytes = CKZG4844Helper.computeCells(blob);
-      final List<Cell> cells = new ArrayList<>(CKZG4844Helper.CELL_PROOFS_PER_BLOB);
-      for (int i = 0; i < CKZG4844Helper.CELL_PROOFS_PER_BLOB; i++) {
+      final List<Cell> cells = new ArrayList<>(CKZG4844Helper.CELLS_PER_EXT_BLOB);
+      for (int i = 0; i < CKZG4844Helper.CELLS_PER_EXT_BLOB; i++) {
         cells.add(new Cell(cellsBytes.slice(i * Cell.SIZE, Cell.SIZE)));
       }
       return new CellsWithMask(cells, CellMask.FULL);
@@ -144,7 +144,7 @@ public final class BlobProofBundle {
    * The cells this bundle holds, concatenated in ascending cell index order.
    *
    * <p>Only the cells the mask reports are included, so a partially sampled bundle yields fewer
-   * than {@link CKZG4844Helper#CELL_PROOFS_PER_BLOB}. Cells are looked up by index rather than read
+   * than {@link CKZG4844Helper#CELLS_PER_EXT_BLOB}. Cells are looked up by index rather than read
    * in list order, so the result is ordered correctly no matter how the cells were accumulated.
    *
    * @return the held cells, or empty when this bundle carries no cells at all

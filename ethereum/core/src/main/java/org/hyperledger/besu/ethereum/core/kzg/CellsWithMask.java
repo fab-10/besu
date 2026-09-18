@@ -15,7 +15,7 @@
 package org.hyperledger.besu.ethereum.core.kzg;
 
 import static com.google.common.base.Preconditions.checkArgument;
-import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELL_PROOFS_PER_BLOB;
+import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELLS_PER_EXT_BLOB;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -51,7 +51,8 @@ public class CellsWithMask {
 
   public CellsWithMask(final List<Cell> cells, final CellMask cellMask) {
     checkArgument(cells.size() == cellMask.cardinality(), "Cell list does not match mask");
-    final int[] indexMap = new int[CELL_PROOFS_PER_BLOB];
+    // maps a cell index to its position in the cells list, or -1 when not held
+    final int[] indexMap = new int[CELLS_PER_EXT_BLOB];
     Arrays.fill(indexMap, -1);
 
     int listIdx = 0;

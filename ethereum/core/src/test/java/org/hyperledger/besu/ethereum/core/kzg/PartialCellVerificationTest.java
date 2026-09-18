@@ -80,7 +80,7 @@ class PartialCellVerificationTest extends TrustedSetupClassLoaderExtension {
   private static int indexOfADifferentCell(final BlobsWithCommitments full, final int blobIndex) {
     final CellsWithMask cells =
         full.getBlobProofBundles().get(blobIndex).getCellsWithMask().orElseThrow();
-    for (int index = 1; index < CKZG4844Helper.CELL_PROOFS_PER_BLOB; index++) {
+    for (int index = 1; index < CKZG4844Helper.CELLS_PER_EXT_BLOB; index++) {
       if (!cells.getCell(index).equals(cells.getCell(0))) {
         return index;
       }
