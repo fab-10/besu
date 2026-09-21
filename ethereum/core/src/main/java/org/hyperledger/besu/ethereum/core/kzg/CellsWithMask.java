@@ -99,4 +99,9 @@ public class CellsWithMask {
 
     cellMask.merge(other.cellMask);
   }
+
+  @Override
+  public String toString() {
+    return "cell count=" + cells.size() + ", cellMask=" + cellMask;
+  }
 }
