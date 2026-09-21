@@ -21,6 +21,7 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
+import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult;
@@ -73,6 +74,8 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
     final IncompleteBlob incompleteBlob =
         new IncompleteBlob(transaction, txMetadata, requestMask, CellsWithMask.empty());
 
+    LOG.trace("Adding incomplete blob {}", incompleteBlob);
+
     synchronized (this) {
       if (hasEnoughAnnouncements(transaction.getHash(), requestMask)) {
         // get cells directly
@@ -94,15 +97,35 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
 
   private void receivedBlobAnnouncement(
       final EthPeer peer, final TransactionAnnouncement blobAnnouncement) {
-    final Hash txHash = blobAnnouncement.hash();
+    if (peer.getAgreedCapabilities().stream().anyMatch(EthProtocol::isEth72Compatible)) {
+      final Hash txHash = blobAnnouncement.hash();
 
-    synchronized (this) {
-      List<PeerAndCellMask> wpcms = peersByHash.computeIfAbsent(txHash, _ -> new ArrayList<>());
-      wpcms.add(new PeerAndCellMask(peer, blobAnnouncement.cellMask()));
-      final IncompleteBlob incompleteBlob = incompleteBlobByHash.remove(txHash);
-      if (incompleteBlob != null && hasEnoughAnnouncements(wpcms, incompleteBlob.requestMask)) {
-        processGetCells(incompleteBlob);
+      synchronized (this) {
+        List<PeerAndCellMask> wpcms = peersByHash.computeIfAbsent(txHash, _ -> new ArrayList<>());
+        wpcms.add(new PeerAndCellMask(peer, blobAnnouncement.cellMask()));
+        final IncompleteBlob incompleteBlob = incompleteBlobByHash.remove(txHash);
+        if (incompleteBlob != null) {
+          if (hasEnoughAnnouncements(wpcms, incompleteBlob.requestMask)) {
+            processGetCells(incompleteBlob);
+          } else {
+            LOG.trace(
+                "New blob announcements {} for tx {} with incomplete blob {} has not enough announcements {}",
+                wpcms.size(),
+                txHash,
+                incompleteBlob,
+                wpcms);
+          }
+        } else {
+          LOG.trace(
+              "New blob announcements {} for tx {} w/o incomplete blob; announcements {}",
+              wpcms.size(),
+              txHash,
+              wpcms);
+        }
       }
+    } else {
+      // ToDo: EIP-8070
+      LOG.debug("Not supported yet: peer {}", peer);
     }
   }
 
@@ -187,6 +210,11 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
                 final List<CompletableFuture<List<CellsWithMask>>> futures =
                     new ArrayList<>(selectedPeers.size());
                 for (final Map.Entry<EthPeer, CellMask> entry : selectedPeers.entrySet()) {
+                  LOG.trace(
+                      "Get cells for tx {} from peer {} with request mask {}",
+                      blobTx.getHash(),
+                      entry.getKey(),
+                      entry.getValue());
                   futures.add(
                       ethContext
                           .getScheduler()
@@ -260,5 +288,19 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
   private record TxMetadata(boolean isLocal, boolean hasPriority, byte score) {}
 
   private record IncompleteBlob(
-      Transaction tx, TxMetadata txMetadata, CellMask requestMask, CellsWithMask retrievedCells) {}
+      Transaction tx, TxMetadata txMetadata, CellMask requestMask, CellsWithMask retrievedCells) {
+
+    @Override
+    public String toString() {
+      return "tx="
+          + tx.toTraceLog()
+          + ", txMetadata="
+          + txMetadata
+          + ", requestMask="
+          + requestMask
+          + ", retrievedCells="
+          + retrievedCells
+          + '}';
+    }
+  }
 }

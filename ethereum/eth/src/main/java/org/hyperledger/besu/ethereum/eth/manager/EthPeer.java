@@ -159,7 +159,8 @@ public class EthPeer implements Comparable<EthPeer> {
                 new RequestManager(this, EthProtocol.NAME)),
             Map.entry(
                 EthProtocolMessages.GET_BLOCK_ACCESS_LISTS,
-                new RequestManager(this, EthProtocol.NAME))));
+                new RequestManager(this, EthProtocol.NAME)),
+            Map.entry(EthProtocolMessages.GET_CELLS, new RequestManager(this, EthProtocol.NAME))));
   }
 
   private void initSnapRequestManagers() {

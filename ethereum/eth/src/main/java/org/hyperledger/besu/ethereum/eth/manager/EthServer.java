@@ -447,6 +447,8 @@ class EthServer {
     final GetPooledTransactionsMessage getPooledTransactions =
         GetPooledTransactionsMessage.readFrom(message);
     final Iterable<Hash> hashes = getPooledTransactions.pooledTransactions();
+    final EncodingContext encodingContext =
+        EncodingContext.pooledTransactionByCapability(capability);
 
     final boolean traceEnabled = LOG.isTraceEnabled();
     final Iterable<Hash> hashesToProcess;
@@ -454,17 +456,15 @@ class EthServer {
       final List<Hash> requested = new ArrayList<>();
       hashes.forEach(requested::add);
       LOG.atTrace()
-          .setMessage("Requested pooled transactions: peer={}, requested hashes={}")
+          .setMessage("Requested transactions: peer={}, requested hashes={}, encoding context={}")
           .addArgument(peer)
           .addArgument(requested)
+          .addArgument(encodingContext)
           .log();
       hashesToProcess = requested;
     } else {
       hashesToProcess = hashes;
     }
-
-    final EncodingContext encodingContext =
-        EncodingContext.pooledTransactionByCapability(capability);
 
     int responseSizeEstimate = RLP.MAX_PREFIX_SIZE;
     final BytesValueRLPOutput rlp = new BytesValueRLPOutput();
@@ -509,16 +509,14 @@ class EthServer {
     }
     rlp.endList();
 
-    if (traceEnabled) {
-      LOG.atTrace()
-          .setMessage(
-              "Sending pooled transactions: peer={}, returned hashes={}, notFoundCount={}, encodingContext={}")
-          .addArgument(peer)
-          .addArgument(returnedHashes)
-          .addArgument(requestedCount - returnedCount)
-          .addArgument(encodingContext)
-          .log();
-    }
+    LOG.atTrace()
+        .setMessage(
+            "Sending pooled transactions: peer={}, returned hashes={}, notFoundCount={}, encodingContext={}")
+        .addArgument(peer)
+        .addArgument(returnedHashes)
+        .addArgument(requestedCount - returnedCount)
+        .addArgument(encodingContext)
+        .log();
 
     return PooledTransactionsMessage.createUnsafe(rlp.encoded());
   }
@@ -560,7 +558,7 @@ class EthServer {
     for (final Hash hash : hashesToProcess) {
       if (requestedCount >= requestLimit) {
         LOG.atTrace()
-            .setMessage("Requested txs limit reached: peer={}, requested hashes={}")
+            .setMessage("Requested txs (for cells) limit reached: peer={}, requested hashes={}")
             .addArgument(peer)
             .addArgument(hashesToProcess)
             .log();

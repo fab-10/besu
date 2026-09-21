@@ -58,6 +58,12 @@ public class GetCellsFromPeerTask implements PeerTask<List<CellsWithMask>> {
 
   @Override
   public MessageData getRequestMessage(final Set<Capability> agreedCapabilities) {
+    LOG.atTrace()
+        .setMessage("Requesting cells for tx {} with mask {}")
+        .addArgument(requestedTx::toTraceLog)
+        .addArgument(requestedCellMask)
+        .log();
+
     return GetCellsMessage.create(List.of(requestedTx), requestedCellMask);
   }
 
@@ -100,10 +106,12 @@ public class GetCellsFromPeerTask implements PeerTask<List<CellsWithMask>> {
 
     // The responder MAY truncate its response, so receiving fewer cells than requested is valid.
     if (!resCellMask.containsAll(requestedCellMask)) {
-      LOG.debug(
-          "Received partial cells, requested mask {}, received mask {}",
-          requestedCellMask,
-          resCellMask);
+      LOG.atTrace()
+          .setMessage("Received partial cells for tx {}, requested mask {}, received mask {}")
+          .addArgument(requestedTx::toTraceLog)
+          .addArgument(requestedCellMask)
+          .addArgument(resCellMask)
+          .log();
     }
 
     if (resCellsList.size() != 1) {
@@ -132,6 +140,13 @@ public class GetCellsFromPeerTask implements PeerTask<List<CellsWithMask>> {
               txCells.subList(blobIndex * cellsPerBlob, (blobIndex + 1) * cellsPerBlob),
               resCellMask));
     }
+
+    LOG.atTrace()
+        .setMessage("Retrieved cells for tx {} with mask {}")
+        .addArgument(requestedTx::toTraceLog)
+        .addArgument(resCellMask)
+        .log();
+
     return cellsPerBlobList;
   }
 
