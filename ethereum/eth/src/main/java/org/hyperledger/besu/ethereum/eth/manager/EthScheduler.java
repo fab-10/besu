@@ -140,6 +140,10 @@ public class EthScheduler {
     txWorkerExecutor.execute(command);
   }
 
+  public <T> CompletableFuture<T> scheduleTxWorkerTask(final Supplier<T> task) {
+    return CompletableFuture.supplyAsync(task, txWorkerExecutor);
+  }
+
   public void executeServiceTask(final Runnable command) {
     servicesExecutor.execute(command);
   }
@@ -167,10 +171,6 @@ public class EthScheduler {
           }
         });
     return promise;
-  }
-
-  public <T> CompletableFuture<T> scheduleServiceTaskDirect(final Supplier<T> task) {
-    return CompletableFuture.supplyAsync(task, servicesExecutor);
   }
 
   @SuppressWarnings("CollectionUndefinedEquality") // CompletableFuture uses identity equality
