@@ -150,7 +150,11 @@ public class TransactionPool implements BlockAddedObserver {
         ethContext.getScheduler().createOrderedProcessor(this::processBlockAddedEvent);
     this.cacheForBlobsOfTransactionsAddedToABlock = blobCache;
     this.transactionLimbo =
-        new TransactionsLimbo(ethContext, blobCustodyColumns::get, this::resubmitTransaction);
+        new TransactionsLimbo(
+            ethContext,
+            blobCustodyColumns::get,
+            this::resubmitTransaction,
+            hash -> getTransactionByHash(hash).isPresent());
     peerTransactionTracker.subscribeToAnnouncements(transactionLimbo);
     initializeBlobMetrics();
     subscribePendingTransactions(this::mapBlobsOnTransactionAdded);
@@ -298,7 +302,7 @@ public class TransactionPool implements BlockAddedObserver {
         validateTransaction(transaction, isLocal, hasPriority);
 
     if (validationResult.result.isValid()) {
-      if (incompleteBlob(transaction)) {
+      if (transactionLimbo.isIncompleteBlob(transaction)) {
         transactionLimbo.addIncompleteBlob(transaction, isLocal, hasPriority, score);
         return new AdditionOutcome(validationResult.result, transaction, true);
       }
@@ -341,13 +345,6 @@ public class TransactionPool implements BlockAddedObserver {
     }
 
     return new AdditionOutcome(validationResult.result, transaction);
-  }
-
-  private boolean incompleteBlob(final Transaction transaction) {
-    if (transaction.getType().supportsBlob()) {
-      return transaction.getBlobsWithCommitments().orElseThrow().getCellMask().isEmpty();
-    }
-    return false;
   }
 
   private Optional<Wei> getMaxGasPrice(final Transaction transaction) {
