@@ -805,9 +805,9 @@ public class Transaction
    *
    * @return true if blob cells are missing
    */
-  public boolean hasIncompleteBlobCells() {
+  public boolean hasBlobData() {
     return transactionType.supportsBlob()
-        && blobsWithCommitments.map(bwc -> !bwc.allCellsPresent()).orElse(false);
+        && blobsWithCommitments.map(BlobsWithCommitments::hasBlobData).orElse(false);
   }
 
   @Override
