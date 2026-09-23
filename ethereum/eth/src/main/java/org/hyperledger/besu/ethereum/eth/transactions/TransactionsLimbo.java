@@ -14,12 +14,18 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions;
 
+import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
+import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELL_PROOFS_PER_BLOB;
 import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.SUCCESS;
 
 import org.hyperledger.besu.datatypes.Hash;
+import org.hyperledger.besu.ethereum.chain.BlockAddedEvent;
+import org.hyperledger.besu.ethereum.chain.BlockAddedObserver;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
+import org.hyperledger.besu.ethereum.core.kzg.Cell;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
@@ -29,6 +35,7 @@ import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetCellsFromPeerTask;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool.TransactionResubmitter;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -46,22 +53,60 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
-import java.util.stream.Stream;
+import java.util.stream.IntStream;
 
+import com.github.benmanes.caffeine.cache.Cache;
+import com.github.benmanes.caffeine.cache.Caffeine;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public class TransactionsLimbo implements TransactionsAnnouncedListener {
+public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAddedObserver {
 
   private static final Logger LOG = LoggerFactory.getLogger(TransactionsLimbo.class);
+
+  /**
+   * How much of what the limbo holds is kept, in KiB, before the least useful entries are dropped.
+   *
+   * <p>Weight rather than a count of entries: an entry holds nothing until a sampling round ends
+   * short, and up to every cell of every blob of its transaction afterwards, so the two differ by
+   * three orders of magnitude and a count would describe a ceiling anywhere between a few MiB and
+   * more than a GiB.
+   */
+  private static final int MAX_INCOMPLETE_BLOBS_KIB = 32 * 1024;
+
+  /** How many transactions may be tracked as announced but not yet received. */
+  private static final int MAX_ANNOUNCED_BLOBS = 1_000;
+
+  /**
+   * How long a transaction is sampled for before it is given up on. The entry is rewritten by every
+   * round that retrieves something, so this bounds the time without progress, not the total.
+   */
+  private static final Duration INCOMPLETE_BLOB_TTL = Duration.ofMinutes(5);
+
+  /**
+   * How long announcements are kept for a transaction that never arrives. Refreshed by every
+   * announcement, so this bounds the silence, not the age.
+   */
+  private static final Duration ANNOUNCEMENT_TTL = Duration.ofMinutes(5);
+
+  /** A cell is {@link Cell#SIZE} bytes, and the weigher counts in KiB. */
+  private static final int KIB_PER_CELL = Cell.SIZE / 1024;
+
+  /**
+   * A blob costs this much in KiB whatever has been retrieved for it: {@link
+   * CKZG4844Helper#CELL_PROOFS_PER_BLOB} proofs of 48 bytes each, plus its commitment and versioned
+   * hash. The transaction body around them is noise by comparison.
+   */
+  private static final int KIB_PER_BLOB_SIDECAR = (CELL_PROOFS_PER_BLOB * 48 + 48 + 32) / 1024 + 1;
+
   private final Random random = new Random();
-  private final AtomicLong sequence = new AtomicLong(0);
   private final EthContext ethContext;
   private final Supplier<CellMask> custodyColumnsSupplier;
   private final TransactionResubmitter transactionResubmitter;
   private final Predicate<Hash> isTransactionAlreadyPooled;
-  private final Map<Hash, Queue<PeerAndCellMask>> peersByHash = new ConcurrentHashMap<>();
-  private final Map<Hash, IncompleteBlob> incompleteBlobByHash = new ConcurrentHashMap<>();
+  private final Cache<Hash, Queue<PeerAndCellMask>> peersByHash;
+  private final Cache<Hash, IncompleteBlob> incompleteBlobByHash;
   private final Map<Hash, List<InProgressGetCellsTask>> inProgressGetCellsTaskByHash =
       new ConcurrentHashMap<>();
 
@@ -74,6 +119,21 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
     this.custodyColumnsSupplier = customColumnsSupplier;
     this.transactionResubmitter = transactionResubmitter;
     this.isTransactionAlreadyPooled = isTransactionAlreadyPooled;
+    // Announcements are small and uniform, so a count is a fair bound for them; expiry is what
+    // forgets the ones never followed by the transaction itself.
+    this.peersByHash =
+        Caffeine.newBuilder()
+            .maximumSize(MAX_ANNOUNCED_BLOBS)
+            .expireAfterAccess(ANNOUNCEMENT_TTL)
+            .build();
+    this.incompleteBlobByHash =
+        Caffeine.newBuilder()
+            .weigher(
+                (Hash _, IncompleteBlob blob) ->
+                    weighInKiB(blob.tx.getBlobCount(), heldCellsOf(blob)))
+            .maximumWeight(MAX_INCOMPLETE_BLOBS_KIB)
+            .expireAfterWrite(INCOMPLETE_BLOB_TTL)
+            .build();
   }
 
   boolean isIncompleteBlob(final Transaction transaction) {
@@ -82,8 +142,8 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
       if (bwc.hasBlobData()) {
         // case of blob retrieved in full by PooledTransaction version < eth/72
         // no need to fetch cells for it
-        removeTrackingFor(transaction.getHash());
         LOG.trace("Complete blob {} received from peer pre eth/72", transaction.getHash());
+        removeTrackingFor(transaction.getHash());
         return false;
       }
       return bwc.getCellMask().isEmpty();
@@ -97,27 +157,24 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
       final boolean hasPriority,
       final byte score) {
 
-    if (incompleteBlobByHash.containsKey(transaction.getHash())) {
-      LOG.trace("Ignoring already known incomplete blob {}", transaction.getHash());
+    final Hash txHash = transaction.getHash();
+
+    if (incompleteBlobByHash.getIfPresent(txHash) != null) {
+      LOG.trace("Ignoring already known incomplete blob {}", txHash);
       return;
     }
 
     final CellMask requestMask = getCellMask();
     final TxMetadata txMetadata = new TxMetadata(isLocal, hasPriority, score);
     final IncompleteBlob incompleteBlob =
-        new IncompleteBlob(
-            sequence.getAndIncrement(),
-            transaction,
-            txMetadata,
-            requestMask,
-            CellsWithMask.empty());
+        new IncompleteBlob(transaction, txMetadata, requestMask, emptyList());
 
     synchronized (this) {
-      incompleteBlobByHash.put(transaction.getHash(), incompleteBlob);
-      if (hasEnoughAnnouncements(transaction.getHash(), requestMask)) {
+      incompleteBlobByHash.put(txHash, incompleteBlob);
+      if (hasEnoughAnnouncements(txHash, requestMask)) {
         // get cells directly
         LOG.trace("Processing added incomplete blob directly {}", incompleteBlob);
-        processGetCells(incompleteBlob);
+        processGetCells(txHash);
       } else {
         // wait for more announcements
         LOG.trace("Added incomplete blob {} waiting for more announcements", incompleteBlob);
@@ -126,14 +183,21 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
   }
 
   private synchronized void removeTrackingFor(final Hash hash) {
-    peersByHash.remove(hash);
-    incompleteBlobByHash.remove(hash);
+    peersByHash.invalidate(hash);
+    incompleteBlobByHash.invalidate(hash);
     LOG.trace(
         "Removed tracking for hash {}, peersByHash size {}, incompleteBlobByHash size {}, inProgressGetCellsTaskByHash {}",
         hash,
-        peersByHash,
-        incompleteBlobByHash,
+        peersByHash.estimatedSize(),
+        incompleteBlobByHash.estimatedSize(),
         inProgressGetCellsTaskByHash);
+  }
+
+  @Override
+  public void onBlockAdded(final BlockAddedEvent event) {
+    event.getAddedTransactions().stream()
+        .map(Transaction::getHash)
+        .forEach(this::removeTrackingFor);
   }
 
   @Override
@@ -162,13 +226,12 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
       LOG.trace("Ignoring announcement for already pooled tx {} from peer {}", txHash, peer);
     } else {
       synchronized (this) {
-        Queue<PeerAndCellMask> wpcms =
-            peersByHash.computeIfAbsent(txHash, _ -> new ConcurrentLinkedQueue<>());
+        Queue<PeerAndCellMask> wpcms = peersByHash.get(txHash, _ -> new ConcurrentLinkedQueue<>());
         wpcms.add(new PeerAndCellMask(peer, blobAnnouncement.cellMask()));
-        final IncompleteBlob incompleteBlob = incompleteBlobByHash.remove(txHash);
+        final IncompleteBlob incompleteBlob = incompleteBlobByHash.getIfPresent(txHash);
         if (incompleteBlob != null) {
           if (hasEnoughAnnouncements(wpcms, incompleteBlob.requestMask)) {
-            processGetCells(incompleteBlob);
+            processGetCells(txHash);
           } else {
             LOG.trace(
                 "New blob announcements {} for tx {} with incomplete blob {} has not enough announcements {}",
@@ -197,7 +260,7 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
   }
 
   private boolean hasEnoughAnnouncements(final Hash txHash, final CellMask requestedCellMask) {
-    final Queue<PeerAndCellMask> pcms = peersByHash.get(txHash);
+    final Queue<PeerAndCellMask> pcms = peersByHash.getIfPresent(txHash);
     return pcms != null && hasEnoughAnnouncements(pcms, requestedCellMask);
   }
 
@@ -208,21 +271,20 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
     }
 
     final Iterator<PeerAndCellMask> it = pcms.iterator();
-    // verify if requested cells are covered by the union of all the peers' cell masks
-    CellMask unionMask = it.next().cellMask.copy();
-    while (it.hasNext()) {
-      if (unionMask.containsAll(requestedCellMask)) {
-        return true;
+    final CellMask unionMask = it.next().cellMask.copy();
+    while (!unionMask.containsAll(requestedCellMask)) {
+      if (!it.hasNext()) {
+        return false;
       }
       unionMask.merge(it.next().cellMask);
     }
 
-    return false;
+    return true;
   }
 
   @SuppressWarnings("MixedMutabilityReturnType")
   private Map<EthPeer, CellMask> getAnnouncingPeersFor(final Hash txHash, final CellMask cellMask) {
-    final Queue<PeerAndCellMask> pcms = peersByHash.get(txHash);
+    final Queue<PeerAndCellMask> pcms = peersByHash.getIfPresent(txHash);
 
     if (pcms == null) {
       return emptyMap();
@@ -249,17 +311,7 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
     return emptyMap();
   }
 
-  private void processGetCells(final IncompleteBlob incompleteBlob) {
-    final Hash txHash = incompleteBlob.tx.getHash();
-    final List<InProgressGetCellsTask> inProgressTasks = inProgressGetCellsTaskByHash.get(txHash);
-    if (inProgressTasks != null) {
-      LOG.trace(
-          "Skipping this get cells task since an existing one is already in progress task for blob {}, existing task {}",
-          incompleteBlob,
-          inProgressTasks);
-      return;
-    }
-
+  private void processGetCells(final Hash txHash) {
     ethContext
         .getScheduler()
         .scheduleServiceTask(
@@ -274,37 +326,50 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
                         return new ArrayList<>();
                       });
 
+              // need to re-check since this is executed async
+              if (alreadyInProgress.get()) {
+                LOG.trace(
+                    "Skipping this get cells task since an existing one is already in progress task for blob {}, existing task {}",
+                    txHash,
+                    getCellsTasks);
+                return;
+              }
+
               try {
-                // need to re-check since this is executed async
-                if (alreadyInProgress.get()) {
-                  LOG.trace(
-                      "Skipping this get cells task since an existing one is already in progress task for blob {}, existing task {}",
-                      incompleteBlob,
-                      getCellsTasks);
+                // Not the blob captured when this task was scheduled: another round may have run
+                // in between, narrowing the request and retrieving cells, or completing the
+                // transaction altogether. Reading it here is what keeps progress moving forward.
+                final IncompleteBlob trackedBlob = incompleteBlobByHash.getIfPresent(txHash);
+                if (trackedBlob == null) {
+                  LOG.trace("Blob {} is no longer tracked, nothing to sample", txHash);
                   return;
                 }
 
-                final Transaction blobTx = incompleteBlob.tx;
+                final Transaction blobTx = trackedBlob.tx;
+                // What this round still has to fetch. It narrows as cells arrive, and if the round
+                // ends short it becomes the request mask of the IncompleteBlob put back in the
+                // cache, so a later announcement retries only the gap.
+                final CellMask missingMask = trackedBlob.requestMask.copy();
                 // One accumulator per blob, each owned by this transaction: they are merged into
                 // below, so they must not be shared with any other transaction.
-                final List<CellsWithMask> mergedReceivedCells =
-                    Stream.generate(CellsWithMask::empty).limit(blobTx.getBlobCount()).toList();
+                final List<CellsWithMask> mergedReceivedCells = accumulatorsFor(trackedBlob);
 
                 do {
 
                   final Map<EthPeer, CellMask> selectedPeers =
-                      getAnnouncingPeersFor(blobTx.getHash(), incompleteBlob.requestMask);
+                      getAnnouncingPeersFor(blobTx.getHash(), missingMask);
                   if (selectedPeers.isEmpty()) {
-                    LOG.trace("No more peers available for blob {}", incompleteBlob);
+                    LOG.trace("No more peers available for blob {}", trackedBlob);
                     break;
                   }
 
                   for (final Map.Entry<EthPeer, CellMask> entry : selectedPeers.entrySet()) {
                     LOG.trace(
                         "Get cells for tx {} from peer {} with request mask {}",
-                        incompleteBlob,
+                        trackedBlob,
                         entry.getKey(),
                         entry.getValue());
+
                     getCellsTasks.add(
                         new InProgressGetCellsTask(
                             entry.getKey(),
@@ -335,42 +400,87 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
                     } catch (InterruptedException | ExecutionException | TimeoutException e) {
                       LOG.debug(
                           "Failed to retrieve cells for blob {} for task {}",
-                          incompleteBlob,
+                          trackedBlob,
                           inProgressTask,
                           e);
                     }
                   }
 
-                } while (!mergedReceivedCells
-                    .getFirst()
-                    .getCellMask()
-                    .equals(incompleteBlob.requestMask));
+                  // every cell now held stops being missing, including any this round was not
+                  // asking for, so the loop ends as soon as nothing is left to fetch
+                  missingMask.andNot(mergedReceivedCells.getFirst().getCellMask());
 
-                if (mergedReceivedCells
-                    .getFirst()
-                    .getCellMask()
-                    .equals(incompleteBlob.requestMask)) {
-                  // complete the blob tx and resubmit to pool
-                  final Transaction completedTx = completeBlobs(blobTx, mergedReceivedCells);
-                  final TxMetadata txMetadata = incompleteBlob.txMetadata;
+                } while (!missingMask.isEmpty());
+
+                if (missingMask.isEmpty()) {
+                  // blob tx has all the requested cells, resubmit it to the pool
+                  final Transaction cellsAddedTx = addCellsToBlobs(blobTx, mergedReceivedCells);
+                  final TxMetadata txMetadata = trackedBlob.txMetadata;
                   transactionResubmitter.submit(
-                      completedTx, txMetadata.isLocal, txMetadata.hasPriority, txMetadata.score);
+                      cellsAddedTx, txMetadata.isLocal, txMetadata.hasPriority, txMetadata.score);
                   removeTrackingFor(blobTx.getHash());
-                  LOG.debug("Received all requested cells for tx {}", incompleteBlob);
+                  LOG.debug("Received all requested cells for tx {}", trackedBlob);
                 } else {
-                  LOG.debug("Unable to retrieve cells for tx {}", incompleteBlob);
+                  // keep what did arrive, so a later announcement only has to cover the gap
+                  final IncompleteBlob updatedIncompleteBlob =
+                      trackedBlob.withPartialCells(missingMask, mergedReceivedCells);
+                  incompleteBlobByHash.put(blobTx.getHash(), updatedIncompleteBlob);
+                  LOG.debug(
+                      "Retrieved only part of the cells for tx {}, waiting for more announcements",
+                      updatedIncompleteBlob);
                 }
               } finally {
                 inProgressGetCellsTaskByHash.remove(txHash);
               }
             })
         .whenComplete(
-            (cellsWithMasks, throwable) ->
-                LOG.trace(
-                    "Get cells for blob {}, completed with result {} and throwable",
-                    incompleteBlob,
-                    cellsWithMasks,
-                    throwable));
+            (cellsWithMasks, throwable) -> {
+              LOG.trace(
+                  "Get cells for blob {}, completed with result {} and throwable",
+                  txHash,
+                  cellsWithMasks,
+                  throwable);
+            });
+  }
+
+  /**
+   * What an entry costs, in KiB, which is what {@link #MAX_INCOMPLETE_BLOBS_KIB} bounds.
+   *
+   * @param blobCount how many blobs the transaction carries
+   * @param heldCells how many cells have been retrieved, counted across all of its blobs
+   * @return its size in KiB, never zero, so that every entry remains evictable
+   */
+  static int weighInKiB(final int blobCount, final int heldCells) {
+    return blobCount * KIB_PER_BLOB_SIDECAR + heldCells * KIB_PER_CELL;
+  }
+
+  private static int heldCellsOf(final IncompleteBlob incompleteBlob) {
+    return incompleteBlob.retrievedCells.stream().mapToInt(cells -> cells.getCells().size()).sum();
+  }
+
+  /**
+   * Fresh accumulators, one per blob, preloaded with the cells earlier rounds already retrieved so
+   * that this round only has to fetch the rest.
+   *
+   * <p>They are new instances merged from the stored ones rather than the stored ones themselves:
+   * {@link CellsWithMask} is mutable, and a round that timed out can still be running when the next
+   * one starts, so the copy held in the cache must not be written to from here.
+   *
+   * @param incompleteBlob the blob being sampled
+   * @return one accumulator per blob of the transaction
+   */
+  private List<CellsWithMask> accumulatorsFor(final IncompleteBlob incompleteBlob) {
+    final List<CellsWithMask> retrievedCells = incompleteBlob.retrievedCells;
+    return IntStream.range(0, incompleteBlob.tx.getBlobCount())
+        .mapToObj(
+            blobIndex -> {
+              final CellsWithMask accumulator = CellsWithMask.empty();
+              if (blobIndex < retrievedCells.size()) {
+                accumulator.merge(retrievedCells.get(blobIndex));
+              }
+              return accumulator;
+            })
+        .toList();
   }
 
   private List<CellsWithMask> retrieveCellsFromPeer(
@@ -398,12 +508,12 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
     return List.of();
   }
 
-  private Transaction completeBlobs(
-      final Transaction incomplete, final List<CellsWithMask> receivedCells) {
-    final BlobsWithCommitments incompleteBwc = incomplete.getBlobsWithCommitments().orElseThrow();
+  private Transaction addCellsToBlobs(
+      final Transaction blobTx, final List<CellsWithMask> receivedCells) {
+    final BlobsWithCommitments incompleteBwc = blobTx.getBlobsWithCommitments().orElseThrow();
 
     return Transaction.builder()
-        .copiedFrom(incomplete)
+        .copiedFrom(blobTx)
         .blobsWithCommitments(
             BlobsWithCommitments.createFromBlobCells(
                 incompleteBwc.getKzgCommitments(),
@@ -420,17 +530,43 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
   private record InProgressGetCellsTask(
       EthPeer peer, CellMask cellMask, CompletableFuture<List<CellsWithMask>> future) {}
 
+  /**
+   * A blob transaction waiting for its cells.
+   *
+   * @param id order of arrival, for tracing
+   * @param tx the transaction, whose sidecar holds no cells of its own
+   * @param txMetadata what the pool needs to re-add it once it is complete
+   * @param requestMask the cells still to fetch, not the ones originally wanted: it narrows as
+   *     rounds retrieve cells, so a later announcement only retries the gap
+   * @param retrievedCells what earlier rounds did retrieve, one entry per blob, empty until the
+   *     first round ends short
+   */
   private record IncompleteBlob(
-      long sequence,
+      long id,
       Transaction tx,
       TxMetadata txMetadata,
       CellMask requestMask,
-      CellsWithMask retrievedCells) {
+      List<CellsWithMask> retrievedCells) {
+
+    private static final AtomicLong SEQUENCE = new AtomicLong(0);
+
+    public IncompleteBlob(
+        final Transaction tx,
+        final TxMetadata txMetadata,
+        final CellMask requestMask,
+        final List<CellsWithMask> retrievedCells) {
+      this(SEQUENCE.getAndIncrement(), tx, txMetadata, requestMask, retrievedCells);
+    }
+
+    private IncompleteBlob withPartialCells(
+        final CellMask missingMask, final List<CellsWithMask> retrievedCells) {
+      return new IncompleteBlob(id, tx, txMetadata, missingMask, retrievedCells);
+    }
 
     @Override
-    public String toString() {
+    public @NonNull String toString() {
       return "["
-          + sequence
+          + id
           + "] tx="
           + tx.toTraceLog()
           + ", txMetadata="
