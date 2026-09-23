@@ -169,7 +169,7 @@ public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransacti
   protected boolean promotionFilter(final PendingTransaction pendingTransaction) {
     // a blob tx still being sampled cannot go into a block we build, so keep it out of the
     // prioritized layer; it stays in the pool and is still served to peers
-    if (!pendingTransaction.getTransaction().hasBlobData()) {
+    if (pendingTransaction.getTransaction().isBlobDataMissing()) {
       return false;
     }
 
