@@ -395,6 +395,8 @@ public class TransactionPool implements BlockAddedObserver {
           || event.getEventType().equals(EventType.CHAIN_REORG)) {
 
         blockAddedEventOrderedProcessor.submit(event);
+
+        ethContext.getScheduler().scheduleServiceTask(() -> transactionLimbo.onBlockAdded(event));
       }
     }
   }
