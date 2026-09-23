@@ -131,9 +131,9 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
     LOG.trace(
         "Removed tracking for hash {}, peersByHash size {}, incompleteBlobByHash size {}, inProgressGetCellsTaskByHash {}",
         hash,
-        peersByHash.size(),
-        incompleteBlobByHash.size(),
-        inProgressGetCellsTaskByHash.size());
+        peersByHash,
+        incompleteBlobByHash,
+        inProgressGetCellsTaskByHash);
   }
 
   @Override
@@ -234,7 +234,10 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener {
     while (!pcms.isEmpty() && !remainingMask.isEmpty()) {
       final PeerAndCellMask currPcm = pcms.poll();
       final CellMask peerRequestMask = currPcm.cellMask().copy();
-      peerRequestMask.intersect(cellMask);
+      peerRequestMask.intersect(remainingMask);
+      if (peerRequestMask.isEmpty()) {
+        continue;
+      }
       selectedPeers.put(currPcm.peer(), peerRequestMask);
       remainingMask.andNot(peerRequestMask);
     }

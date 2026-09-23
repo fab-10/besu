@@ -136,8 +136,8 @@ public class EthScheduler {
     return syncFuture;
   }
 
-  public void scheduleTxWorkerTask(final Runnable command) {
-    txWorkerExecutor.execute(command);
+  public CompletableFuture<Void> scheduleTxWorkerTask(final Runnable command) {
+    return CompletableFuture.runAsync(command, txWorkerExecutor);
   }
 
   public <T> CompletableFuture<T> scheduleTxWorkerTask(final Supplier<T> task) {

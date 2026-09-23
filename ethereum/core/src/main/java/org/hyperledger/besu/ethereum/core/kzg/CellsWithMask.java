@@ -21,7 +21,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.PrimitiveIterator;
-import java.util.stream.IntStream;
 
 public class CellsWithMask {
 
@@ -82,21 +81,41 @@ public class CellsWithMask {
     return new CellsWithMask(detachedCells, cellMask);
   }
 
+  /**
+   * Adds the cells of {@code other} to the ones already held, in place.
+   *
+   * <p>The two sets may overlap, and routinely do: cell availability is sampled independently per
+   * peer, so nothing makes two responses disjoint, and the same response may be merged more than
+   * once. Where both sets hold an index, the cell already held is kept — a cell index identifies
+   * the cell, so the two are the same.
+   *
+   * @param other the cells to add; neither modified nor retained
+   */
   public void merge(final CellsWithMask other) {
+    final CellMask mergedMask = cellMask.copy();
+    mergedMask.merge(other.cellMask);
 
-    int mergedCellIdx = 0;
-    int otherCellIdx = 0;
-    final PrimitiveIterator.OfInt itMergedMasks =
-        IntStream.concat(cellMask.streamIndexes(), other.cellMask.streamIndexes()).iterator();
-    while (itMergedMasks.hasNext()) {
-      final int index = itMergedMasks.next();
-      if (indexMap[index] == -1) {
-        // cell is from the other object
-        cells.add(mergedCellIdx, other.getCell(otherCellIdx++));
-      }
-      indexMap[index] = mergedCellIdx++;
+    final List<Cell> mergedCells = new ArrayList<>(mergedMask.cardinality());
+    final int[] mergedIndexMap = new int[CELLS_PER_EXT_BLOB];
+    Arrays.fill(mergedIndexMap, -1);
+
+    // Walking the union, rather than the two masks one after the other, is what keeps positions
+    // and cell count in step: an index held by both would otherwise be counted twice, pushing the
+    // later entries of indexMap past the end of the cell list. It also leaves the cells in
+    // ascending index order, which is the order getBlobCellsBytes() reads them in.
+    final PrimitiveIterator.OfInt itMergedMask = mergedMask.streamIndexes().iterator();
+    int listIdx = 0;
+    while (itMergedMask.hasNext()) {
+      final int index = itMergedMask.next();
+      // Cells of other are addressed by cell index, not by their position in its cell list: the
+      // two only coincide when its mask starts at zero and has no gaps.
+      mergedCells.add(indexMap[index] == -1 ? other.getCell(index) : cells.get(indexMap[index]));
+      mergedIndexMap[index] = listIdx++;
     }
 
+    cells.clear();
+    cells.addAll(mergedCells);
+    System.arraycopy(mergedIndexMap, 0, indexMap, 0, CELLS_PER_EXT_BLOB);
     cellMask.merge(other.cellMask);
   }
 

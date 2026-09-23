@@ -776,7 +776,7 @@ public abstract class AbstractPendingTransactionsTestBase {
     return PendingTransaction.newPendingTransaction(transaction, false, false, MAX_SCORE, addedAt);
   }
 
-  private PendingTransaction createRemotePendingTransaction(final Transaction transaction) {
+  protected PendingTransaction createRemotePendingTransaction(final Transaction transaction) {
     return PendingTransaction.newPendingTransaction(transaction, false, false, MAX_SCORE);
   }
 

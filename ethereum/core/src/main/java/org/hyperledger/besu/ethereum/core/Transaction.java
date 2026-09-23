@@ -791,23 +791,28 @@ public class Transaction
   }
 
   /**
-   * Whether this is a blob transaction whose cells are only partially available, as happens while
-   * an eth/72 node is still sampling it.
+   * Whether this is a blob transaction whose blob payloads this node does not hold, as is the case
+   * from the moment an eth/72 peer sends it until sampling has gathered enough cells to rebuild
+   * them.
    *
    * <p>Such a transaction is a valid pool member and is served to peers, but it cannot go into a
-   * block this node builds, because block validation requires every cell. Both pending transaction
-   * implementations must therefore keep it away from block selection, so they share this predicate
-   * rather than restating it.
+   * block this node builds, because building one requires the blobs themselves. Both pending
+   * transaction implementations must therefore keep it away from block selection, so they share
+   * this predicate rather than restating it.
+   *
+   * <p>Phrased as the negative, rather than as "has blob data", because every non-blob transaction
+   * would answer the positive form with a misleading false: the question simply does not apply to
+   * them, and they must never be excluded from block selection.
    *
    * <p>A blob transaction carrying no sidecar at all reports false: it is not something sampling
    * can complete, and this is called from block building, where throwing would be worse than
    * letting ordinary validation reject it.
    *
-   * @return true if blob cells are missing
+   * @return true if this is a blob transaction whose blobs are not held
    */
-  public boolean hasBlobData() {
+  public boolean isBlobDataMissing() {
     return transactionType.supportsBlob()
-        && blobsWithCommitments.map(BlobsWithCommitments::hasBlobData).orElse(false);
+        && blobsWithCommitments.map(bwc -> !bwc.hasBlobData()).orElse(false);
   }
 
   @Override
