@@ -35,6 +35,7 @@ import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetCellsFromPeerTask;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool.TransactionResubmitter;
+import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -210,11 +211,14 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
         .forEach(txAnnouncement -> receivedSparseBlobAnnouncement(peer, txAnnouncement));
   }
 
-  private static boolean supportsEth72(final EthPeer peer) {
+  private boolean supportsEth72(final EthPeer peer) {
     if (peer.getAgreedCapabilities().stream().anyMatch(EthProtocol::isEth72Compatible)) {
       return true;
     }
-    LOG.debug("Ignoring announcement from peer with capability not supporting eth/72: {}", peer);
+    LOG.atTrace()
+        .setMessage("Ignoring announcement from peer with capability not supporting eth/72: {}")
+        .addArgument(() -> logPeer(peer))
+        .log();
     return false;
   }
 
@@ -224,7 +228,11 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
 
     if (isTransactionAlreadyPooled.test(txHash)) {
       removeTrackingFor(txHash);
-      LOG.trace("Ignoring announcement for already pooled tx {} from peer {}", txHash, peer);
+      LOG.atTrace()
+          .setMessage("Ignoring announcement for already pooled tx {} from peer {}")
+          .addArgument(txHash)
+          .addArgument(() -> logPeer(peer))
+          .log();
     } else {
       synchronized (this) {
         Queue<PeerAndCellMask> wpcms = peersByHash.get(txHash, _ -> new ConcurrentLinkedQueue<>());
@@ -365,11 +373,12 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
                   }
 
                   for (final Map.Entry<EthPeer, CellMask> entry : selectedPeers.entrySet()) {
-                    LOG.trace(
-                        "Get cells for tx {} from peer {} with request mask {}",
-                        trackedBlob,
-                        entry.getKey(),
-                        entry.getValue());
+                    LOG.atTrace()
+                        .setMessage("Get cells for tx {} from peer {} with request mask {}")
+                        .addArgument(trackedBlob)
+                        .addArgument(() -> logPeer(entry.getKey()))
+                        .addArgument(entry::getValue)
+                        .log();
 
                     getCellsTasks.add(
                         new InProgressGetCellsTask(
@@ -383,12 +392,14 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
                                             entry.getKey(), blobTx, entry.getValue()))
                                 .whenComplete(
                                     (cellsWithMasks, throwable) ->
-                                        LOG.trace(
-                                            "Task for {} {}, completed with result {} and throwable",
-                                            entry.getKey(),
-                                            entry.getValue(),
-                                            cellsWithMasks,
-                                            throwable))));
+                                        LOG.atTrace()
+                                            .setMessage(
+                                                "Task for {} {}, completed with result {} and throwable")
+                                            .addArgument(() -> logPeer(entry.getKey()))
+                                            .addArgument(entry::getValue)
+                                            .addArgument(cellsWithMasks)
+                                            .setCause(throwable)
+                                            .log())));
                   }
 
                   for (final InProgressGetCellsTask inProgressTask : getCellsTasks) {
@@ -436,13 +447,12 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
               }
             })
         .whenComplete(
-            (cellsWithMasks, throwable) -> {
-              LOG.trace(
-                  "Get cells for blob {}, completed with result {} and throwable",
-                  txHash,
-                  cellsWithMasks,
-                  throwable);
-            });
+            (cellsWithMasks, throwable) ->
+                LOG.trace(
+                    "Get cells for blob {}, completed with result {} and throwable",
+                    txHash,
+                    cellsWithMasks,
+                    throwable));
   }
 
   /**
@@ -489,7 +499,11 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
       final EthPeer peer, final Transaction blobTx, final CellMask mask) {
     if (isTransactionAlreadyPooled.test(blobTx.getHash())) {
       removeTrackingFor(blobTx.getHash());
-      LOG.trace("Skip get cells for already pooled tx {} from peer {}", blobTx.getHash(), peer);
+      LOG.atTrace()
+          .setMessage("Skip get cells for already pooled tx {} from peer {}")
+          .addArgument(blobTx::getHash)
+          .addArgument(() -> logPeer(peer))
+          .log();
       return List.of();
     }
 
@@ -503,12 +517,13 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
       return response.result().get();
     }
 
-    LOG.debug(
-        "Failed to get cells from peer {} for tx {} mask {}, reason {}",
-        peer,
-        blobTx,
-        mask,
-        response.responseCode());
+    LOG.atDebug()
+        .setMessage("Failed to get cells from peer {} for tx {} mask {}, reason {}")
+        .addArgument(() -> logPeer(peer))
+        .addArgument(blobTx::getHash)
+        .addArgument(mask)
+        .addArgument(response::responseCode)
+        .log();
     return List.of();
   }
 
@@ -559,7 +574,22 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
         .build();
   }
 
-  private record PeerAndCellMask(EthPeer peer, CellMask cellMask) {}
+  private static String logPeer(final EthPeer peer) {
+    return peer.getLoggableId()
+        + " "
+        + peer.getConnection().getPeerInfo().getClientId()
+        + " "
+        + peer.getAgreedCapabilities().stream()
+            .map(Capability::toString)
+            .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
+  }
+
+  private record PeerAndCellMask(EthPeer peer, CellMask cellMask) {
+    @Override
+    public @NonNull String toString() {
+      return logPeer(peer) + " " + cellMask;
+    }
+  }
 
   private record TxMetadata(boolean isLocal, boolean hasPriority, byte score) {}
 
@@ -604,7 +634,7 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
       return "["
           + id
           + "] tx="
-          + tx.toTraceLog()
+          + tx.getHash()
           + ", txMetadata="
           + txMetadata
           + ", requestMask="
