@@ -137,4 +137,45 @@ class CellMaskTest {
     System.arraycopy(set, 0, bytes, 0, set.length);
     return CellMask.fromBytes(Bytes.wrap(bytes));
   }
+
+  @Test
+  void randomSubsetKeepsOnlyAsManyIndexesAsAsked() {
+    final CellMask half = CellMask.FULL.randomSubset(64, new java.util.Random(1));
+
+    assertThat(half.cardinality()).isEqualTo(64);
+    assertThat(CellMask.FULL.containsAll(half)).isTrue();
+  }
+
+  @Test
+  void randomSubsetLeavesASmallMaskAlone() {
+    final CellMask custody = maskOf(3, 17, 40);
+
+    assertThat(custody.randomSubset(64, new java.util.Random(1))).isEqualTo(custody);
+    assertThat(CellMask.EMPTY.randomSubset(64, new java.util.Random(1))).isEqualTo(CellMask.EMPTY);
+    // exactly the size asked for is not more than it
+    assertThat(maskOf(1, 2).randomSubset(2, new java.util.Random(1))).isEqualTo(maskOf(1, 2));
+  }
+
+  @Test
+  void randomSubsetDoesNotFavourTheLowIndexes() {
+    // A blob recovers from any half of its cells, so a node needs no particular half; if every
+    // node took the lowest one the upper half would go unrequested across the network.
+    final java.util.Random random = new java.util.Random(1);
+    final java.util.BitSet everChosen = new java.util.BitSet(CKZG4844Helper.CELLS_PER_EXT_BLOB);
+    for (int attempt = 0; attempt < 20; attempt++) {
+      CellMask.FULL.randomSubset(64, random).streamIndexes().forEach(everChosen::set);
+    }
+
+    assertThat(everChosen.cardinality()).isEqualTo(CKZG4844Helper.CELLS_PER_EXT_BLOB);
+  }
+
+  @Test
+  void randomSubsetDoesNotShareStateWithTheMaskItCameFrom() {
+    final CellMask custody = maskOf(3, 17, 40);
+    final CellMask subset = custody.randomSubset(64, new java.util.Random(1));
+
+    subset.merge(maskOf(99));
+
+    assertThat(custody).isEqualTo(maskOf(3, 17, 40));
+  }
 }

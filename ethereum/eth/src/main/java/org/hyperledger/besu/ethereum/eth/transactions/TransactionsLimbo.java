@@ -77,6 +77,9 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
    */
   private static final int MAX_INCOMPLETE_BLOBS_KIB = 32 * 1024;
 
+  /** How often this node takes on the provider role for a transaction, holding all of its cells. */
+  private static final int PROVIDER_PERCENTAGE = 15;
+
   /** How many transactions may be tracked as announced but not yet received. */
   private static final int MAX_ANNOUNCED_BLOBS = 1_000;
 
@@ -102,7 +105,7 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
    */
   private static final int KIB_PER_BLOB_SIDECAR = (CELL_PROOFS_PER_BLOB * 48 + 48 + 32) / 1024 + 1;
 
-  private final Random random = new Random();
+  private final Random random;
   private final EthContext ethContext;
   private final Supplier<CellMask> custodyColumnsSupplier;
   private final TransactionResubmitter transactionResubmitter;
@@ -117,6 +120,22 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
       final Supplier<CellMask> customColumnsSupplier,
       final TransactionResubmitter transactionResubmitter,
       final Predicate<Hash> isTransactionAlreadyPooled) {
+    this(
+        ethContext,
+        customColumnsSupplier,
+        transactionResubmitter,
+        isTransactionAlreadyPooled,
+        new Random());
+  }
+
+  /** Visible for testing, so that the sampling policy can be made to decide predictably. */
+  TransactionsLimbo(
+      final EthContext ethContext,
+      final Supplier<CellMask> customColumnsSupplier,
+      final TransactionResubmitter transactionResubmitter,
+      final Predicate<Hash> isTransactionAlreadyPooled,
+      final Random random) {
+    this.random = random;
     this.ethContext = ethContext;
     this.custodyColumnsSupplier = customColumnsSupplier;
     this.transactionResubmitter = transactionResubmitter;
@@ -260,12 +279,26 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
     }
   }
 
+  /**
+   * The cells to gather for a transaction just received.
+   *
+   * <p>Never more than {@link CKZG4844Helper#CELLS_TO_RECOVER_BLOB} of them, however many are
+   * wanted: any half of a blob's cells recovers the other half, so fetching more than half is
+   * paying twice for the same data. The cells that were not asked for arrive by recovery once the
+   * round completes, so a provider still ends up holding and serving every one of them, and a
+   * custody obligation wider than half is still met in full.
+   *
+   * @return the cells to request, at most half of them
+   */
   private CellMask getCellMask() {
-    if (random.nextInt(100) < 15) {
-      // fetch all cells
-      return CellMask.FULL;
+    final CellMask wantedCells;
+    if (random.nextInt(100) < PROVIDER_PERCENTAGE) {
+      // act as a provider for this transaction, holding every cell for other nodes to fetch
+      wantedCells = CellMask.FULL;
+    } else {
+      wantedCells = custodyColumnsSupplier.get();
     }
-    return custodyColumnsSupplier.get();
+    return wantedCells.randomSubset(CELLS_TO_RECOVER_BLOB, random);
   }
 
   private boolean hasEnoughAnnouncements(final Hash txHash, final CellMask requestedCellMask) {
