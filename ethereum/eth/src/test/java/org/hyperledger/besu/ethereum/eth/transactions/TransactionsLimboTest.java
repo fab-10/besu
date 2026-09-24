@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.eth.transactions;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELLS_TO_RECOVER_BLOB;
 import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.INVALID_RESPONSE;
 import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.SUCCESS;
 import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.TIMEOUT;
@@ -52,6 +53,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -123,11 +125,13 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
     limbo =
         new TransactionsLimbo(
             ethContext,
-            // the sampling policy asks for every cell, so the request mask is the same whichever
-            // branch of TransactionsLimbo#getCellMask is taken
+            // every cell is wanted, so the request is the same whichever branch of
+            // TransactionsLimbo#getCellMask is taken - and it is then capped to half of them
             CellMask.FULL::copy,
             resubmitter,
-            _ -> false);
+            _ -> false,
+            // seeded, so which half is asked for is at least the same from run to run
+            new Random(1));
 
     // Genuine KZG material, because a completed sampling round recovers the blobs from the cells
     // it gathered and that only works on real ones.
@@ -153,30 +157,52 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
   }
 
   @Test
-  void retriesOnlyTheCellsStillMissing() {
-    final EthPeer lowerHalf = announcingPeer(range(0, 64), range(0, 64));
-    final EthPeer upperHalfThatAnswersNothing = announcingPeer(range(64, 128), null);
-    announce(lowerHalf, upperHalfThatAnswersNothing);
+  void asksForHalfTheCellsEvenWhenItWantsThemAll() {
+    // Custody is every cell here, so without the cap the request would be all 128 of them.
+    announce(
+        announcingPeer(CellMask.FULL, CellMask.FULL), announcingPeer(CellMask.FULL, CellMask.FULL));
 
     limbo.addIncompleteBlob(blobTx, false, false, SCORE);
 
-    // Half the cells arrived, so the transaction is not poolable yet and is kept for later.
-    // The peers of a round are held in a HashMap, so which is asked first is not defined.
-    assertThat(requests)
-        .containsExactlyInAnyOrder(
-            Map.entry(lowerHalf, range(0, 64)),
-            Map.entry(upperHalfThatAnswersNothing, range(64, 128)));
+    assertThat(requests).hasSize(1);
+    final CellMask requested = requests.getFirst().getValue();
+    assertThat(requested.cardinality()).isEqualTo(CELLS_TO_RECOVER_BLOB);
+    assertThat(requested.isFull()).isFalse();
+
+    // Half the cells off the wire, and the node still ends up holding every one of them, because
+    // the rest are recovered rather than fetched.
+    final BlobsWithCommitments resubmitted = resubmittedSidecar();
+    assertThat(resubmitted.getCellMask()).isEqualTo(CellMask.FULL);
+    assertThat(resubmitted.hasBlobData()).isTrue();
+  }
+
+  @Test
+  void retriesOnlyTheCellsStillMissing() {
+    final EthPeer answers = announcingPeer(range(0, 64), range(0, 64));
+    final EthPeer staysSilent = announcingPeer(range(64, 128), null);
+    announce(answers, staysSilent);
+
+    limbo.addIncompleteBlob(blobTx, false, false, SCORE);
+
+    // The request was divided between the two, neither asked for what the other was covering.
+    assertThat(requests).hasSize(2);
+    final CellMask askedOfAnswerer = requestedOf(answers);
+    final CellMask askedOfSilent = requestedOf(staysSilent);
+    assertThat(intersectionOf(askedOfAnswerer, askedOfSilent).isEmpty()).isTrue();
+
+    // Only half of it arrived, so the transaction is kept for later rather than handed back.
     verify(resubmitter, never()).submit(any(), anyBoolean(), anyBoolean(), anyByte());
 
     requests.clear();
-    final EthPeer laterPeer = announcingPeer(CellMask.FULL, CellMask.FULL);
-    final EthPeer anotherLaterPeer = announcingPeer(CellMask.FULL, CellMask.FULL);
-    announce(laterPeer, anotherLaterPeer);
+    announce(
+        announcingPeer(CellMask.FULL, CellMask.FULL), announcingPeer(CellMask.FULL, CellMask.FULL));
 
-    // Only the half that is still missing is asked for, even though the peer announced all of it.
-    assertThat(requests).containsExactly(Map.entry(laterPeer, range(64, 128)));
+    // Exactly what the silent peer never delivered is asked for again, and nothing else, even
+    // though the peer answering now announced every cell.
+    assertThat(requests).hasSize(1);
+    assertThat(requests.getFirst().getValue()).isEqualTo(askedOfSilent);
 
-    // And the cells of the first round were kept, so the transaction is now complete.
+    // The cells of the first round were kept, so between them the transaction is complete.
     assertThat(resubmittedCellMask()).isEqualTo(CellMask.FULL);
   }
 
@@ -188,15 +214,15 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
 
     limbo.addIncompleteBlob(blobTx, false, false, SCORE);
 
+    final CellMask everythingAskedFor = unionOfRequests();
     verify(resubmitter, never()).submit(any(), anyBoolean(), anyBoolean(), anyByte());
 
     requests.clear();
-    final EthPeer generous = announcingPeer(CellMask.FULL, CellMask.FULL);
-    final EthPeer alsoGenerous = announcingPeer(CellMask.FULL, CellMask.FULL);
-    announce(generous, alsoGenerous);
+    announce(
+        announcingPeer(CellMask.FULL, CellMask.FULL), announcingPeer(CellMask.FULL, CellMask.FULL));
 
     // Nothing was retrieved, so nothing was struck off the request: the retry asks for all of it.
-    assertThat(requests).containsExactly(Map.entry(generous, CellMask.FULL));
+    assertThat(unionOfRequests()).isEqualTo(everythingAskedFor);
     assertThat(resubmittedCellMask()).isEqualTo(CellMask.FULL);
   }
 
@@ -282,11 +308,42 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
     verify(resubmitter, never()).submit(any(), anyBoolean(), anyBoolean(), anyByte());
   }
 
-  /** The cell mask of the transaction handed back to the pool. */
-  private CellMask resubmittedCellMask() {
+  private CellMask requestedOf(final EthPeer peer) {
+    return requests.stream()
+        .filter(request -> request.getKey().equals(peer))
+        .map(Map.Entry::getValue)
+        .reduce(this::unionOf)
+        .orElseThrow(() -> new AssertionError("Nothing was requested of " + peer));
+  }
+
+  private CellMask unionOfRequests() {
+    return requests.stream()
+        .map(Map.Entry::getValue)
+        .reduce(this::unionOf)
+        .orElse(CellMask.EMPTY.copy());
+  }
+
+  private CellMask unionOf(final CellMask one, final CellMask other) {
+    final CellMask union = one.copy();
+    union.merge(other);
+    return union;
+  }
+
+  private CellMask intersectionOf(final CellMask one, final CellMask other) {
+    final CellMask intersection = one.copy();
+    intersection.intersect(other);
+    return intersection;
+  }
+
+  /** The sidecar of the transaction handed back to the pool. */
+  private BlobsWithCommitments resubmittedSidecar() {
     final ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
     verify(resubmitter).submit(captor.capture(), anyBoolean(), anyBoolean(), anyByte());
-    return captor.getValue().getBlobsWithCommitments().orElseThrow().getCellMask();
+    return captor.getValue().getBlobsWithCommitments().orElseThrow();
+  }
+
+  private CellMask resubmittedCellMask() {
+    return resubmittedSidecar().getCellMask();
   }
 
   private PeerTaskExecutorResult<List<CellsWithMask>> serveCells(

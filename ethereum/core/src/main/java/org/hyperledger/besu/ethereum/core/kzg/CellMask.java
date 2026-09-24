@@ -18,9 +18,13 @@ import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
 import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELLS_PER_EXT_BLOB;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.BitSet;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
+import java.util.Random;
 import java.util.stream.IntStream;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -55,6 +59,31 @@ public final class CellMask {
 
   public static CellMask fromBytes(final Bytes bytes) {
     return new CellMask(bytes);
+  }
+
+  /**
+   * A random subset of the held indexes, or this mask itself when it holds no more than {@code
+   * size}.
+   *
+   * <p>Random rather than the lowest indexes: a blob is recoverable from any half of its cells, so
+   * a node needs no particular half, but if every node asked for the same one the other would go
+   * unrequested across the network and the cells in it would stop being replicated.
+   *
+   * @param size how many indexes to keep
+   * @param random source of the choice
+   * @return a new mask holding at most {@code size} of this mask's indexes
+   */
+  public CellMask randomSubset(final int size, final Random random) {
+    if (cardinality() <= size) {
+      return copy();
+    }
+
+    final List<Integer> heldIndexes = new ArrayList<>(mask.stream().boxed().toList());
+    Collections.shuffle(heldIndexes, random);
+
+    final BitSet subset = new BitSet(CELLS_PER_EXT_BLOB);
+    heldIndexes.subList(0, size).forEach(subset::set);
+    return new CellMask(subset);
   }
 
   public boolean isEmpty() {
