@@ -101,4 +101,40 @@ class CellMaskTest {
     assertThat(CellMask.EMPTY.isEmpty()).isTrue();
     assertThat(CellMask.EMPTY.isFull()).isFalse();
   }
+
+  @Test
+  void toStringCollapsesConsecutiveIndexesIntoRanges() {
+    // A mask is mentioned in almost every line the blobpool logs, and the indexes that matter are
+    // usually contiguous, so listing them one by one costs hundreds of characters a line.
+    assertThat(maskOf(1, 2, 3, 5)).hasToString("{1-3,5}");
+    assertThat(CellMask.FULL).hasToString("{0-127}");
+    assertThat(CellMask.EMPTY).hasToString("{}");
+  }
+
+  @Test
+  void toStringKeepsIsolatedIndexesApart() {
+    assertThat(maskOf(0)).hasToString("{0}");
+    assertThat(maskOf(0, 2, 4)).hasToString("{0,2,4}");
+    // A run of two is collapsed as well, being no longer written out than listed.
+    assertThat(maskOf(0, 1)).hasToString("{0-1}");
+  }
+
+  @Test
+  void toStringRangesReachTheLastIndex() {
+    // nextClearBit runs past the end of the mask, so a range ending at 127 must not run away
+    // with it.
+    assertThat(maskOf(126, 127)).hasToString("{126-127}");
+    assertThat(maskOf(0, 127)).hasToString("{0,127}");
+  }
+
+  private static CellMask maskOf(final int... indexes) {
+    final java.util.BitSet bits = new java.util.BitSet(CKZG4844Helper.CELLS_PER_EXT_BLOB);
+    for (final int index : indexes) {
+      bits.set(index);
+    }
+    final byte[] bytes = new byte[CellMask.BYTE_LENGTH];
+    final byte[] set = bits.toByteArray();
+    System.arraycopy(set, 0, bytes, 0, set.length);
+    return CellMask.fromBytes(Bytes.wrap(bytes));
+  }
 }
