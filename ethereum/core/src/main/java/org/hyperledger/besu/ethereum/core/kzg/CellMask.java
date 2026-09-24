@@ -124,9 +124,32 @@ public final class CellMask {
     mask.and(other.mask);
   }
 
+  /**
+   * The held indexes, consecutive ones collapsed into ranges: {@code {1-3,5}} rather than {@code
+   * {1, 2, 3, 5}}.
+   *
+   * <p>A mask is 128 bits wide and the ones that matter are usually contiguous — a full mask, a
+   * custody run, the half of a blob a peer serves — so listing them one by one turns every line
+   * that mentions one into several hundred characters of log.
+   *
+   * @return the held indexes as ranges
+   */
   @Override
   public String toString() {
-    return mask.toString();
+    final StringBuilder indexes = new StringBuilder("{");
+    for (int start = mask.nextSetBit(0); start >= 0; ) {
+      // never -1: a BitSet always has a clear bit past the last set one
+      final int endExclusive = mask.nextClearBit(start);
+      if (indexes.length() > 1) {
+        indexes.append(',');
+      }
+      indexes.append(start);
+      if (endExclusive - start > 1) {
+        indexes.append('-').append(endExclusive - 1);
+      }
+      start = mask.nextSetBit(endExclusive);
+    }
+    return indexes.append('}').toString();
   }
 
   @Override
