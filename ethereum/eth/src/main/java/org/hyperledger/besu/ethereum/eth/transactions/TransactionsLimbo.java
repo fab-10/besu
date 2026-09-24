@@ -422,17 +422,7 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
                                 .scheduleTxWorkerTask(
                                     () ->
                                         retrieveCellsFromPeer(
-                                            entry.getKey(), blobTx, entry.getValue()))
-                                .whenComplete(
-                                    (cellsWithMasks, throwable) ->
-                                        LOG.atTrace()
-                                            .setMessage(
-                                                "Task for {} {}, completed with result {} and throwable")
-                                            .addArgument(() -> logPeer(entry.getKey()))
-                                            .addArgument(entry::getValue)
-                                            .addArgument(cellsWithMasks)
-                                            .setCause(throwable)
-                                            .log())));
+                                            entry.getKey(), blobTx, entry.getValue()))));
                   }
 
                   for (final InProgressGetCellsTask inProgressTask : getCellsTasks) {
@@ -480,12 +470,11 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
               }
             })
         .whenComplete(
-            (cellsWithMasks, throwable) ->
-                LOG.trace(
-                    "Get cells for blob {}, completed with result {} and throwable",
-                    txHash,
-                    cellsWithMasks,
-                    throwable));
+            (_, throwable) -> {
+              if (throwable != null) {
+                LOG.trace("Get cells for blob {} thrown", txHash, throwable);
+              }
+            });
   }
 
   /**
@@ -601,10 +590,16 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
       return sampledTx;
     }
 
-    return Transaction.builder()
-        .copiedFrom(sampledTx)
-        .blobsWithCommitments(CKZG4844Helper.recoverBlobs(sampledBwc))
-        .build();
+    final long started = System.nanoTime();
+    final BlobsWithCommitments recoveredBwc = CKZG4844Helper.recoverBlobs(sampledBwc);
+    LOG.atTrace()
+        .setMessage("Recovered {} blobs of tx {} from sampled cells took {}")
+        .addArgument(() -> sampledBwc.getVersionedHashes().size())
+        .addArgument(sampledTx::getHash)
+        .addArgument(() -> Duration.ofNanos(System.nanoTime() - started))
+        .log();
+
+    return Transaction.builder().copiedFrom(sampledTx).blobsWithCommitments(recoveredBwc).build();
   }
 
   private static String logPeer(final EthPeer peer) {
