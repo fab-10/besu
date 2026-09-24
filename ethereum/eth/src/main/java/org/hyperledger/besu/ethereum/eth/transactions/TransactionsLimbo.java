@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.eth.transactions;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
+import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELLS_TO_RECOVER_BLOB;
 import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELL_PROOFS_PER_BLOB;
 import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.SUCCESS;
 
@@ -414,7 +415,8 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
 
                 if (missingMask.isEmpty()) {
                   // blob tx has all the requested cells, resubmit it to the pool
-                  final Transaction cellsAddedTx = addCellsToBlobs(blobTx, mergedReceivedCells);
+                  final Transaction cellsAddedTx =
+                      recoverBlobsIfEnoughCells(addCellsToBlobs(blobTx, mergedReceivedCells));
                   final TxMetadata txMetadata = trackedBlob.txMetadata;
                   transactionResubmitter.submit(
                       cellsAddedTx, txMetadata.isLocal, txMetadata.hasPriority, txMetadata.score);
@@ -495,6 +497,8 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
     final PeerTaskExecutorResult<List<CellsWithMask>> response =
         ethContext.getPeerTaskExecutor().executeAgainstPeer(task, peer);
 
+    // GetCellsFromPeerTask verifies that the cells open their commitments, so a peer answering
+    // with cells of its own invention has already been disconnected by the time we get here.
     if (response.responseCode().equals(SUCCESS) && response.result().isPresent()) {
       return response.result().get();
     }
@@ -520,6 +524,38 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
                 receivedCells,
                 incompleteBwc.getKzgProofs(),
                 incompleteBwc.getVersionedHashes()))
+        .build();
+  }
+
+  /**
+   * Rebuilds the blobs themselves when enough cells were sampled to do so.
+   *
+   * <p>Cells alone make a transaction poolable and servable, but not buildable: a block carries the
+   * blobs, so until they exist this node has to keep the transaction out of the blocks it builds.
+   * Recovery is what ends that, and it also yields the cells that were never sampled, so the node
+   * goes on to serve every one of them.
+   *
+   * <p>A custody mask narrower than half the cells cannot be recovered from, which is inherent to
+   * sampling rather than a gap: a node that wants to build with a blob transaction has to fetch at
+   * least {@link CKZG4844Helper#CELLS_TO_RECOVER_BLOB} of its cells.
+   *
+   * @param sampledTx a transaction holding the cells a round retrieved
+   * @return the same transaction with its blobs recovered, or unchanged if too few cells are held
+   */
+  private Transaction recoverBlobsIfEnoughCells(final Transaction sampledTx) {
+    final BlobsWithCommitments sampledBwc = sampledTx.getBlobsWithCommitments().orElseThrow();
+    final int heldCells = sampledBwc.getCellMask().cardinality();
+    if (heldCells < CELLS_TO_RECOVER_BLOB) {
+      LOG.trace(
+          "Holding {} cells of tx {}, too few to recover its blobs",
+          heldCells,
+          sampledTx.getHash());
+      return sampledTx;
+    }
+
+    return Transaction.builder()
+        .copiedFrom(sampledTx)
+        .blobsWithCommitments(CKZG4844Helper.recoverBlobs(sampledBwc))
         .build();
   }
 

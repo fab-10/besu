@@ -16,6 +16,8 @@ package org.hyperledger.besu.ethereum.eth.manager.peertask.task;
 
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.ethereum.core.Transaction;
+import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
 import org.hyperledger.besu.ethereum.core.kzg.Cell;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
@@ -155,9 +157,43 @@ public class GetCellsFromPeerTask implements PeerTask<List<CellsWithMask>> {
     return _ -> true;
   }
 
+  /**
+   * Whether every cell answered with opens the commitment of the blob it belongs to.
+   *
+   * <p>The checks in {@link #processResponse} establish the shape of an answer — the transaction it
+   * names, its mask being a subset of the one requested, the cell count agreeing with that mask.
+   * What is left is whether the cells are the cells they claim to be, and this is the last point at
+   * which the peer that sent them is still identifiable: once the answers of several peers have
+   * been merged, a single bad cell condemns the whole transaction with nothing to say who supplied
+   * it. It also keeps cells that open nothing out of the recovery that rebuilds the blobs, which
+   * would otherwise produce a blob that is merely wrong.
+   */
   @Override
   public PeerTaskValidationResponse validateResult(final List<CellsWithMask> result) {
-    return PeerTaskValidationResponse.RESULTS_VALID_AND_GOOD;
+    if (result.isEmpty()) {
+      // answered nothing, which is allowed and leaves nothing to verify
+      return PeerTaskValidationResponse.RESULTS_VALID_AND_GOOD;
+    }
+
+    final BlobsWithCommitments blobs = requestedTx.getBlobsWithCommitments().orElseThrow();
+    final boolean valid;
+    try {
+      valid =
+          CKZG4844Helper.verify4844Kzg(
+              BlobsWithCommitments.createFromBlobCells(
+                  blobs.getKzgCommitments(),
+                  result,
+                  blobs.getKzgProofs(),
+                  blobs.getVersionedHashes()));
+    } catch (final RuntimeException e) {
+      // anything that does not fit the sidecar at all, which is no better than rubbish
+      LOG.debug("Cells answered for tx {} do not fit its sidecar", requestedTx.getHash(), e);
+      return PeerTaskValidationResponse.INVALID_CELLS_RETURNED;
+    }
+
+    return valid
+        ? PeerTaskValidationResponse.RESULTS_VALID_AND_GOOD
+        : PeerTaskValidationResponse.INVALID_CELLS_RETURNED;
   }
 
   @Override

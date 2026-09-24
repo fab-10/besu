@@ -15,6 +15,7 @@
 package org.hyperledger.besu.ethereum.eth.transactions;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.INVALID_RESPONSE;
 import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.SUCCESS;
 import static org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResponseCode.TIMEOUT;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,9 +27,11 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.ethereum.chain.BlockAddedEvent;
+import org.hyperledger.besu.ethereum.core.BlobTestFixture;
 import org.hyperledger.besu.ethereum.core.CellsOnlyBlobTransactionFixture;
 import org.hyperledger.besu.ethereum.core.Transaction;
-import org.hyperledger.besu.ethereum.core.kzg.Cell;
+import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
@@ -39,11 +42,13 @@ import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutorResult
 import org.hyperledger.besu.ethereum.eth.manager.peertask.task.GetCellsFromPeerTask;
 import org.hyperledger.besu.ethereum.eth.messages.GetCellsMessage;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
+import org.hyperledger.besu.ethereum.util.TrustedSetupClassLoaderExtension;
 import org.hyperledger.besu.testutil.DeterministicEthScheduler;
 
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,7 +65,7 @@ import org.mockito.ArgumentCaptor;
  * Sampling of a blob transaction received over eth/72, which arrives carrying no cells and has to
  * collect them from the peers that announced it.
  */
-class TransactionsLimboTest {
+class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
 
   private static final byte SCORE = 127;
 
@@ -69,8 +74,23 @@ class TransactionsLimboTest {
   private final TransactionPool.TransactionResubmitter resubmitter =
       mock(TransactionPool.TransactionResubmitter.class);
 
+  /** One fixture for the whole test: each call to it yields a different blob. */
+  private final BlobTestFixture blobTestFixture = new BlobTestFixture();
+
+  /** The complete sidecar the peers are answering out of. */
+  private BlobsWithCommitments fullSidecar;
+
+  /** Cells of a different blob, which a lying peer answers with. */
+  private CellsWithMask otherBlobCells;
+
+  /** Its cells, which is what a peer serves a slice of. */
+  private CellsWithMask realCells;
+
   /** The mask each peer is willing to serve, or absent when it answers nothing. */
   private final Map<EthPeer, Optional<CellMask>> servedByPeer = new HashMap<>();
+
+  /** Peers that answer with cells belonging to a different blob. */
+  private final Set<EthPeer> liars = new HashSet<>();
 
   /** The mask each peer announced. */
   private final Map<EthPeer, CellMask> announcedByPeer = new HashMap<>();
@@ -109,8 +129,20 @@ class TransactionsLimboTest {
             resubmitter,
             _ -> false);
 
+    // Genuine KZG material, because a completed sampling round recovers the blobs from the cells
+    // it gathered and that only works on real ones.
+    fullSidecar = CKZG4844Helper.convertToVersion1(blobTestFixture.createBlobsWithCommitments(1));
+    realCells = fullSidecar.getBlobProofBundles().getFirst().getCellsWithMask().orElseThrow();
+
     // As decoded from an eth/72 PooledTransactions response: commitments and proofs, no cells.
-    blobTx = new CellsOnlyBlobTransactionFixture().create(1, CellMask.EMPTY);
+    blobTx =
+        new CellsOnlyBlobTransactionFixture()
+            .create(
+                BlobsWithCommitments.createFromBlobCells(
+                    fullSidecar.getKzgCommitments(),
+                    List.of(CellsWithMask.empty()),
+                    fullSidecar.getKzgProofs(),
+                    fullSidecar.getVersionedHashes()));
   }
 
   @AfterEach
@@ -190,6 +222,40 @@ class TransactionsLimboTest {
   }
 
   @Test
+  void rebuildsTheBlobsOnceEnoughCellsHaveBeenSampled() {
+    // Cells alone leave a transaction poolable but not buildable. Sampling enough of them and
+    // recovering is what lets this node put it in a block.
+    // Half the cells each, so neither peer alone could have completed it.
+    announce(
+        announcingPeer(range(0, 64), range(0, 64)), announcingPeer(range(64, 128), range(64, 128)));
+    limbo.addIncompleteBlob(blobTx, false, false, SCORE);
+
+    final ArgumentCaptor<Transaction> captor = ArgumentCaptor.forClass(Transaction.class);
+    verify(resubmitter).submit(captor.capture(), anyBoolean(), anyBoolean(), anyByte());
+    final BlobsWithCommitments resubmitted =
+        captor.getValue().getBlobsWithCommitments().orElseThrow();
+
+    assertThat(resubmitted.hasBlobData()).isTrue();
+    assertThat(resubmitted.getBlobs()).isEqualTo(fullSidecar.getBlobs());
+    assertThat(CKZG4844Helper.verify4844Kzg(resubmitted)).isTrue();
+  }
+
+  @Test
+  void ignoresAnAnswerTheTaskRejected() {
+    // GetCellsFromPeerTask verifies that cells open their commitments and the executor disconnects
+    // the peer, leaving an INVALID_RESPONSE here. Those cells must not be gathered: recovering
+    // from them would produce a blob that is merely wrong.
+    final EthPeer liar = announcingPeer(range(0, 64), range(0, 64));
+    liars.add(liar);
+    announce(liar, announcingPeer(range(64, 128), range(64, 128)));
+
+    limbo.addIncompleteBlob(blobTx, false, false, SCORE);
+
+    // Half the cells are still missing, so the transaction is not handed back to the pool.
+    verify(resubmitter, never()).submit(any(), anyBoolean(), anyBoolean(), anyByte());
+  }
+
+  @Test
   void weighsAnEntryByWhatItActuallyHolds() {
     // The cache is bounded by weight because an entry's size varies by three orders of magnitude:
     // nothing until a round ends short, up to every cell of every blob afterwards. The unit is
@@ -237,6 +303,12 @@ class TransactionsLimboTest {
             served -> {
               final CellMask answered = served.copy();
               answered.intersect(requested);
+              if (liars.contains(peer)) {
+                return new PeerTaskExecutorResult<>(
+                    Optional.of(List.of(cellsOfAnotherBlob(answered))),
+                    INVALID_RESPONSE,
+                    List.of(peer));
+              }
               return new PeerTaskExecutorResult<>(
                   Optional.of(List.of(cellsFor(answered))), SUCCESS, List.of(peer));
             })
@@ -271,12 +343,24 @@ class TransactionsLimboTest {
     }
   }
 
-  private static CellsWithMask cellsFor(final CellMask mask) {
-    return new CellsWithMask(
-        mask.streamIndexes()
-            .mapToObj(index -> new Cell(Bytes.repeat((byte) index, Cell.SIZE)))
-            .toList(),
-        mask);
+  private CellsWithMask cellsFor(final CellMask mask) {
+    return new CellsWithMask(mask.streamIndexes().mapToObj(realCells::getCell).toList(), mask);
+  }
+
+  /** Genuine cells of another blob, so each one is well formed but opens nothing. */
+  private CellsWithMask cellsOfAnotherBlob(final CellMask mask) {
+    if (otherBlobCells == null) {
+      // From the same fixture, so that it is a genuinely different blob: a fresh one would start
+      // its raw material over and hand back the very blob the peers are meant to be serving.
+      otherBlobCells =
+          CKZG4844Helper.convertToVersion1(blobTestFixture.createBlobsWithCommitments(1))
+              .getBlobProofBundles()
+              .getFirst()
+              .getCellsWithMask()
+              .orElseThrow();
+      assertThat(otherBlobCells.getCells()).isNotEqualTo(realCells.getCells());
+    }
+    return new CellsWithMask(mask.streamIndexes().mapToObj(otherBlobCells::getCell).toList(), mask);
   }
 
   private static CellMask range(final int fromInclusive, final int toExclusive) {

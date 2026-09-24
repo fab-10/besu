@@ -86,10 +86,20 @@ public class CellsOnlyBlobTransactionFixture {
       versionedHashes.add(versionedHashOf(commitment));
     }
 
-    final BlobsWithCommitments blobs =
+    return create(
         BlobsWithCommitments.createFromBlobCells(
-            commitments, cellsWithMasks, proofs, versionedHashes);
+            commitments, cellsWithMasks, proofs, versionedHashes));
+  }
 
+  /**
+   * A transaction carrying the given sidecar, for callers that need genuine KZG material rather
+   * than this fixture's synthetic cells.
+   *
+   * @param blobs the sidecar, which must hold cells rather than blobs
+   * @return the transaction, signed
+   */
+  public Transaction create(final BlobsWithCommitments blobs) {
+    final byte seed = byteValue++;
     return Transaction.builder()
         .type(TransactionType.BLOB)
         .chainId(BigInteger.ONE)
