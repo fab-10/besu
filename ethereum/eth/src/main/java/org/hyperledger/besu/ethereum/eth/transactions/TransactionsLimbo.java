@@ -41,13 +41,13 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Queue;
 import java.util.Random;
+import java.util.SequencedMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -110,7 +110,7 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
   private final Supplier<CellMask> custodyColumnsSupplier;
   private final TransactionResubmitter transactionResubmitter;
   private final Predicate<Hash> isTransactionAlreadyPooled;
-  private final Cache<Hash, Queue<PeerAndCellMask>> peersByHash;
+  private final Cache<Hash, SequencedMap<EthPeer, CellMask>> peersAndMasksByHash;
   private final Cache<Hash, IncompleteBlob> incompleteBlobByHash;
   private final Map<Hash, List<InProgressGetCellsTask>> inProgressGetCellsTaskByHash =
       new ConcurrentHashMap<>();
@@ -142,7 +142,7 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
     this.isTransactionAlreadyPooled = isTransactionAlreadyPooled;
     // Announcements are small and uniform, so a count is a fair bound for them; expiry is what
     // forgets the ones never followed by the transaction itself.
-    this.peersByHash =
+    this.peersAndMasksByHash =
         Caffeine.newBuilder()
             .maximumSize(MAX_ANNOUNCED_BLOBS)
             .expireAfterAccess(ANNOUNCEMENT_TTL)
@@ -204,14 +204,16 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
   }
 
   private synchronized void removeTrackingFor(final Hash hash) {
-    peersByHash.invalidate(hash);
+    peersAndMasksByHash.invalidate(hash);
     incompleteBlobByHash.invalidate(hash);
-    LOG.trace(
-        "Removed tracking for hash {}, peersByHash size {}, incompleteBlobByHash size {}, inProgressGetCellsTaskByHash {}",
-        hash,
-        peersByHash.estimatedSize(),
-        incompleteBlobByHash.estimatedSize(),
-        inProgressGetCellsTaskByHash);
+    LOG.atTrace()
+        .setMessage(
+            "Removed tracking for hash {}, peersByHash size {}, incompleteBlobByHash size {}, inProgressGetCellsTaskByHash {}")
+        .addArgument(hash)
+        .addArgument(peersAndMasksByHash::estimatedSize)
+        .addArgument(incompleteBlobByHash::estimatedSize)
+        .addArgument(inProgressGetCellsTaskByHash)
+        .log();
   }
 
   @Override
@@ -254,26 +256,67 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
           .log();
     } else {
       synchronized (this) {
-        Queue<PeerAndCellMask> wpcms = peersByHash.get(txHash, _ -> new ConcurrentLinkedQueue<>());
-        wpcms.add(new PeerAndCellMask(peer, blobAnnouncement.cellMask()));
+        SequencedMap<EthPeer, CellMask> peersMasks =
+            peersAndMasksByHash.get(txHash, _ -> new LinkedHashMap<>());
+
+        // search for new announcement from existing peer
+        final CellMask existingPeerMask = peersMasks.get(peer);
+        if (existingPeerMask != null) {
+          if (existingPeerMask.equals(blobAnnouncement.cellMask())) {
+            // penalize peer sending duplicate announcements and exit
+            LOG.atTrace()
+                .setMessage(
+                    "Peer {} sent a duplicate announcement, existing mask {} announcement {}")
+                .addArgument(() -> logPeer(peer))
+                .addArgument(existingPeerMask)
+                .addArgument(blobAnnouncement::cellMask)
+                .log();
+            peer.recordUselessResponse("Duplicate announcement");
+            return;
+          }
+          // merge the incoming mask into the existing one
+          LOG.atTrace()
+              .setMessage(
+                  "Peer {} sent an update announcement, merging it in existing mask {} announcement {}")
+              .addArgument(() -> logPeer(peer))
+              .addArgument(existingPeerMask)
+              .addArgument(blobAnnouncement::cellMask)
+              .log();
+          existingPeerMask.merge(blobAnnouncement.cellMask());
+        } else {
+          // A copy, because one CellMask instance is shared by every announcement decoded from a
+          // message: merging into the announcement's own mask would widen what this peer is
+          // recorded as holding for each of the other transactions it announced alongside.
+          peersMasks.put(peer, blobAnnouncement.cellMask().copy());
+        }
         final IncompleteBlob incompleteBlob = incompleteBlobByHash.getIfPresent(txHash);
         if (incompleteBlob != null) {
-          if (hasEnoughAnnouncements(wpcms, incompleteBlob.requestMask)) {
+          if (hasEnoughAnnouncements(peersMasks, incompleteBlob.requestMask)) {
+            LOG.atTrace()
+                .setMessage(
+                    "New blob announcement for incomplete blob {} now has enough announcements {}={}, retrieving cells")
+                .addArgument(incompleteBlob)
+                .addArgument(peersMasks::size)
+                .addArgument(() -> logPeersAndMasks(peersMasks))
+                .log();
             processGetCells(txHash);
           } else {
-            LOG.trace(
-                "New blob announcements {} for tx {} with incomplete blob {} has not enough announcements {}",
-                wpcms.size(),
-                txHash,
-                incompleteBlob,
-                wpcms);
+            LOG.atTrace()
+                .setMessage(
+                    "New blob announcement for incomplete blob {} still has not enough announcements {}={}")
+                .addArgument(incompleteBlob)
+                .addArgument(peersMasks::size)
+                .addArgument(() -> logPeersAndMasks(peersMasks))
+                .log();
           }
         } else {
-          LOG.trace(
-              "New blob announcements {} for tx {} w/o incomplete blob; announcements {}",
-              wpcms.size(),
-              txHash,
-              wpcms);
+          LOG.atTrace()
+              .setMessage(
+                  "New blob announcement for tx {} w/o incomplete blob; announcements {}={}")
+              .addArgument(txHash)
+              .addArgument(peersMasks::size)
+              .addArgument(() -> logPeersAndMasks(peersMasks))
+              .log();
         }
       }
     }
@@ -302,47 +345,49 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
   }
 
   private boolean hasEnoughAnnouncements(final Hash txHash, final CellMask requestedCellMask) {
-    final Queue<PeerAndCellMask> pcms = peersByHash.getIfPresent(txHash);
-    return pcms != null && hasEnoughAnnouncements(pcms, requestedCellMask);
+    final SequencedMap<EthPeer, CellMask> peersAndMasks = peersAndMasksByHash.getIfPresent(txHash);
+    return peersAndMasks != null && hasEnoughAnnouncements(peersAndMasks, requestedCellMask);
   }
 
   private boolean hasEnoughAnnouncements(
-      final Queue<PeerAndCellMask> pcms, final CellMask requestedCellMask) {
-    if (pcms.size() < 2) {
+      final SequencedMap<EthPeer, CellMask> peersAndMasks, final CellMask requestedCellMask) {
+    if (peersAndMasks.size() < 2) {
       return false;
     }
 
-    final Iterator<PeerAndCellMask> it = pcms.iterator();
-    final CellMask unionMask = it.next().cellMask.copy();
+    final Iterator<CellMask> itMasks = peersAndMasks.values().iterator();
+    final CellMask unionMask = itMasks.next().copy();
     while (!unionMask.containsAll(requestedCellMask)) {
-      if (!it.hasNext()) {
+      if (!itMasks.hasNext()) {
         return false;
       }
-      unionMask.merge(it.next().cellMask);
+      unionMask.merge(itMasks.next());
     }
 
     return true;
   }
 
   @SuppressWarnings("MixedMutabilityReturnType")
-  private Map<EthPeer, CellMask> getAnnouncingPeersFor(final Hash txHash, final CellMask cellMask) {
-    final Queue<PeerAndCellMask> pcms = peersByHash.getIfPresent(txHash);
+  private synchronized Map<EthPeer, CellMask> getAnnouncingPeersFor(
+      final Hash txHash, final CellMask cellMask) {
+    final SequencedMap<EthPeer, CellMask> peersAndMasks = peersAndMasksByHash.getIfPresent(txHash);
 
-    if (pcms == null) {
+    if (peersAndMasks == null) {
       return emptyMap();
     }
 
     final Map<EthPeer, CellMask> selectedPeers = new HashMap<>();
     final CellMask remainingMask = cellMask.copy();
 
-    while (!pcms.isEmpty() && !remainingMask.isEmpty()) {
-      final PeerAndCellMask currPcm = pcms.poll();
-      final CellMask peerRequestMask = currPcm.cellMask().copy();
+    while (!peersAndMasks.isEmpty() && !remainingMask.isEmpty()) {
+      // prefer most recent peers
+      final Map.Entry<EthPeer, CellMask> peerAndMask = peersAndMasks.pollLastEntry();
+      final CellMask peerRequestMask = peerAndMask.getValue().copy();
       peerRequestMask.intersect(remainingMask);
       if (peerRequestMask.isEmpty()) {
         continue;
       }
-      selectedPeers.put(currPcm.peer(), peerRequestMask);
+      selectedPeers.put(peerAndMask.getKey(), peerRequestMask);
       remainingMask.andNot(peerRequestMask);
     }
 
@@ -602,6 +647,13 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
     return Transaction.builder().copiedFrom(sampledTx).blobsWithCommitments(recoveredBwc).build();
   }
 
+  /** Peers and their masks, rendered compactly: {@link EthPeer#toString} runs to several lines. */
+  private static String logPeersAndMasks(final SequencedMap<EthPeer, CellMask> peersAndMasks) {
+    return peersAndMasks.entrySet().stream()
+        .map(entry -> logPeer(entry.getKey()) + " " + entry.getValue())
+        .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
+  }
+
   private static String logPeer(final EthPeer peer) {
     return peer.getLoggableId()
         + " "
@@ -610,13 +662,6 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
         + peer.getAgreedCapabilities().stream()
             .map(Capability::toString)
             .collect(java.util.stream.Collectors.joining(", ", "[", "]"));
-  }
-
-  private record PeerAndCellMask(EthPeer peer, CellMask cellMask) {
-    @Override
-    public @NonNull String toString() {
-      return logPeer(peer) + " " + cellMask;
-    }
   }
 
   private record TxMetadata(boolean isLocal, boolean hasPriority, byte score) {}
