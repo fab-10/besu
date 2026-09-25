@@ -157,6 +157,54 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
   }
 
   @Test
+  void penalisesAPeerRepeatingAnAnnouncementItAlreadyMade() {
+    final EthPeer repeats = announcingPeer(range(0, 64), range(0, 64));
+    announce(repeats);
+    announce(repeats);
+
+    verify(repeats).recordUselessResponse(any());
+
+    // And the repeat adds nothing: a second peer is still needed before anything is sampled.
+    assertThat(requests).isEmpty();
+  }
+
+  @Test
+  void takesAnUpdatedAnnouncementFromAPeerWithoutPenalisingIt() {
+    final EthPeer widens = announcingPeer(range(0, 32), range(0, 64));
+    announce(widens);
+    announcedByPeer.put(widens, range(32, 64));
+    announce(widens);
+
+    verify(widens, never()).recordUselessResponse(any());
+
+    // The two masks were taken together: one peer now covers the whole lower half, so adding a
+    // second announcing the upper half is enough to sample the whole request.
+    announce(announcingPeer(range(64, 128), range(64, 128)));
+    limbo.addIncompleteBlob(blobTx, false, false, SCORE);
+    assertThat(unionOfRequests().cardinality()).isEqualTo(CELLS_TO_RECOVER_BLOB);
+  }
+
+  @Test
+  void doesNotWidenWhatAPeerHoldsForItsOtherAnnouncements() {
+    // Every announcement decoded from one message shares a single CellMask instance, so merging an
+    // update must not reach the masks recorded for the transactions announced alongside.
+    final EthPeer peer = announcingPeer(range(0, 32), range(0, 32));
+    final CellMask sharedByTheWholeMessage = announcedByPeer.get(peer);
+    announce(peer);
+
+    limbo.onTransactionsAnnounced(
+        peer,
+        List.of(
+            new TransactionAnnouncement(
+                blobTx.getHash(),
+                blobTx.getType(),
+                (long) blobTx.getSizeForEth72Announcement(),
+                range(32, 64))));
+
+    assertThat(sharedByTheWholeMessage).isEqualTo(range(0, 32));
+  }
+
+  @Test
   void asksForHalfTheCellsEvenWhenItWantsThemAll() {
     // Custody is every cell here, so without the cap the request would be all 128 of them.
     announce(
