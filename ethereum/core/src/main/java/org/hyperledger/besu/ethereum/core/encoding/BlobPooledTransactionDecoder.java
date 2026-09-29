@@ -28,8 +28,8 @@ import org.hyperledger.besu.ethereum.rlp.RLP;
 import org.hyperledger.besu.ethereum.rlp.RLPException;
 import org.hyperledger.besu.ethereum.rlp.RLPInput;
 
+import java.util.Collections;
 import java.util.List;
-import java.util.stream.Stream;
 
 import org.apache.tuweni.bytes.Bytes;
 
@@ -78,7 +78,7 @@ public class BlobPooledTransactionDecoder {
                 .formatted(KZG_CELL_PROOFS.getVersionId(), versionId));
       }
       final List<CellsWithMask> cells =
-          Stream.generate(CellsWithMask::empty).limit(commitments.size()).toList();
+          Collections.nCopies(commitments.size(), CellsWithMask.EMPTY);
       builder.kzgBlobCells(commitments, cells, proofs).sizeForEth72Announcement(input.size());
     } else {
       builder

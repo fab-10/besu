@@ -127,7 +127,7 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
             ethContext,
             // every cell is wanted, so the request is the same whichever branch of
             // TransactionsLimbo#getCellMask is taken - and it is then capped to half of them
-            CellMask.FULL::copy,
+            () -> CellMask.FULL,
             resubmitter,
             _ -> false,
             // seeded, so which half is asked for is at least the same from run to run
@@ -144,7 +144,7 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
             .create(
                 BlobsWithCommitments.createFromBlobCells(
                     fullSidecar.getKzgCommitments(),
-                    List.of(CellsWithMask.empty()),
+                    List.of(CellsWithMask.EMPTY),
                     fullSidecar.getKzgProofs(),
                     fullSidecar.getVersionedHashes()));
   }
@@ -236,7 +236,7 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
     assertThat(requests).hasSize(2);
     final CellMask askedOfAnswerer = requestedOf(answers);
     final CellMask askedOfSilent = requestedOf(staysSilent);
-    assertThat(intersectionOf(askedOfAnswerer, askedOfSilent).isEmpty()).isTrue();
+    assertThat(askedOfAnswerer.intersection(askedOfSilent).isEmpty()).isTrue();
 
     // Only half of it arrived, so the transaction is kept for later rather than handed back.
     verify(resubmitter, never()).submit(any(), anyBoolean(), anyBoolean(), anyByte());
@@ -365,22 +365,11 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
   }
 
   private CellMask unionOfRequests() {
-    return requests.stream()
-        .map(Map.Entry::getValue)
-        .reduce(this::unionOf)
-        .orElse(CellMask.EMPTY.copy());
+    return requests.stream().map(Map.Entry::getValue).reduce(this::unionOf).orElse(CellMask.EMPTY);
   }
 
   private CellMask unionOf(final CellMask one, final CellMask other) {
-    final CellMask union = one.copy();
-    union.merge(other);
-    return union;
-  }
-
-  private CellMask intersectionOf(final CellMask one, final CellMask other) {
-    final CellMask intersection = one.copy();
-    intersection.intersect(other);
-    return intersection;
+    return one.union(other);
   }
 
   /** The sidecar of the transaction handed back to the pool. */
@@ -406,8 +395,7 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
         .get(peer)
         .map(
             served -> {
-              final CellMask answered = served.copy();
-              answered.intersect(requested);
+              final CellMask answered = served.intersection(requested);
               if (liars.contains(peer)) {
                 return new PeerTaskExecutorResult<>(
                     Optional.of(List.of(cellsOfAnotherBlob(answered))),

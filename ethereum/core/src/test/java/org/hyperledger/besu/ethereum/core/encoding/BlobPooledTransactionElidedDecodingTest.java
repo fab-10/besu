@@ -27,6 +27,8 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
 import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
+import org.hyperledger.besu.ethereum.core.kzg.Cell;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.util.TrustedSetupClassLoaderExtension;
 
@@ -154,11 +156,20 @@ class BlobPooledTransactionElidedDecodingTest extends TrustedSetupClassLoaderExt
       assertThat(cells.getCells()).isEmpty();
     }
 
-    // Each blob must own its cell set. Sharing one instance would make a merge into any blob
-    // visible on all of them, and across every transaction decoded this way.
-    for (int i = 1; i < bundles.size(); i++) {
-      assertThat(bundles.get(i).getCellsWithMask().orElseThrow())
-          .isNotSameAs(bundles.getFirst().getCellsWithMask().orElseThrow());
+    // The blobs may share one empty instance, since CellsWithMask is a value: what must hold is
+    // that gathering cells for one blob leaves the others as they were.
+    final CellsWithMask firstBlobCells =
+        bundles.getFirst().getCellsWithMask().orElseThrow().merge(oneCell());
+
+    assertThat(firstBlobCells.getCells()).hasSize(1);
+    for (final BlobProofBundle bundle : bundles) {
+      assertThat(bundle.getCellsWithMask().orElseThrow().getCells()).isEmpty();
     }
+  }
+
+  private static CellsWithMask oneCell() {
+    return new CellsWithMask(
+        List.of(new Cell(Bytes.repeat((byte) 1, Cell.SIZE))),
+        CellMask.fromBytes(Bytes.fromHexString("0x01" + "00".repeat(15))));
   }
 }

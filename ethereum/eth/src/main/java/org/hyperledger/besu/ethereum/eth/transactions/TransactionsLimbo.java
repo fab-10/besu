@@ -282,12 +282,9 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
               .addArgument(existingPeerMask)
               .addArgument(blobAnnouncement::cellMask)
               .log();
-          existingPeerMask.merge(blobAnnouncement.cellMask());
+          peersMasks.put(peer, existingPeerMask.union(blobAnnouncement.cellMask()));
         } else {
-          // A copy, because one CellMask instance is shared by every announcement decoded from a
-          // message: merging into the announcement's own mask would widen what this peer is
-          // recorded as holding for each of the other transactions it announced alongside.
-          peersMasks.put(peer, blobAnnouncement.cellMask().copy());
+          peersMasks.put(peer, blobAnnouncement.cellMask());
         }
         final IncompleteBlob incompleteBlob = incompleteBlobByHash.getIfPresent(txHash);
         if (incompleteBlob != null) {
@@ -356,12 +353,12 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
     }
 
     final Iterator<CellMask> itMasks = peersAndMasks.values().iterator();
-    final CellMask unionMask = itMasks.next().copy();
+    CellMask unionMask = itMasks.next();
     while (!unionMask.containsAll(requestedCellMask)) {
       if (!itMasks.hasNext()) {
         return false;
       }
-      unionMask.merge(itMasks.next());
+      unionMask = unionMask.union(itMasks.next());
     }
 
     return true;
@@ -377,18 +374,20 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
     }
 
     final Map<EthPeer, CellMask> selectedPeers = new HashMap<>();
-    final CellMask remainingMask = cellMask.copy();
+    CellMask remainingMask = cellMask;
 
     while (!peersAndMasks.isEmpty() && !remainingMask.isEmpty()) {
       // prefer most recent peers
       final Map.Entry<EthPeer, CellMask> peerAndMask = peersAndMasks.pollLastEntry();
-      final CellMask peerRequestMask = peerAndMask.getValue().copy();
-      peerRequestMask.intersect(remainingMask);
+      // Only what is still missing: intersecting with the whole request instead would ask a peer
+      // again for cells an earlier peer in this loop is already covering, which for a peer holding
+      // everything means fetching a second full copy of the blob.
+      final CellMask peerRequestMask = peerAndMask.getValue().intersection(remainingMask);
       if (peerRequestMask.isEmpty()) {
         continue;
       }
       selectedPeers.put(peerAndMask.getKey(), peerRequestMask);
-      remainingMask.andNot(peerRequestMask);
+      remainingMask = remainingMask.without(peerRequestMask);
     }
 
     if (remainingMask.isEmpty()) {
@@ -436,9 +435,8 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
                 // What this round still has to fetch. It narrows as cells arrive, and if the round
                 // ends short it becomes the request mask of the IncompleteBlob put back in the
                 // cache, so a later announcement retries only the gap.
-                final CellMask missingMask = trackedBlob.requestMask.copy();
-                // One accumulator per blob, each owned by this transaction: they are merged into
-                // below, so they must not be shared with any other transaction.
+                CellMask missingMask = trackedBlob.requestMask;
+                // One entry per blob, replaced as cells arrive
                 final List<CellsWithMask> mergedReceivedCells = accumulatorsFor(trackedBlob);
 
                 do {
@@ -475,7 +473,8 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
                       final List<CellsWithMask> receivedCells =
                           inProgressTask.future.get(10, TimeUnit.SECONDS);
                       for (int i = 0; i < receivedCells.size(); i++) {
-                        mergedReceivedCells.get(i).merge(receivedCells.get(i));
+                        mergedReceivedCells.set(
+                            i, mergedReceivedCells.get(i).merge(receivedCells.get(i)));
                       }
                     } catch (InterruptedException | ExecutionException | TimeoutException e) {
                       LOG.debug(
@@ -488,7 +487,7 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
 
                   // every cell now held stops being missing, including any this round was not
                   // asking for, so the loop ends as soon as nothing is left to fetch
-                  missingMask.andNot(mergedReceivedCells.getFirst().getCellMask());
+                  missingMask = missingMask.without(mergedReceivedCells.getFirst().getCellMask());
 
                 } while (!missingMask.isEmpty());
 
@@ -538,28 +537,22 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
   }
 
   /**
-   * Fresh accumulators, one per blob, preloaded with the cells earlier rounds already retrieved so
-   * that this round only has to fetch the rest.
-   *
-   * <p>They are new instances merged from the stored ones rather than the stored ones themselves:
-   * {@link CellsWithMask} is mutable, and a round that timed out can still be running when the next
-   * one starts, so the copy held in the cache must not be written to from here.
+   * What this round starts from, one entry per blob: the cells earlier rounds already retrieved, so
+   * that this one only has to fetch the rest.
    *
    * @param incompleteBlob the blob being sampled
-   * @return one accumulator per blob of the transaction
+   * @return one entry per blob of the transaction, mutable so a round can replace entries as cells
+   *     arrive
    */
   private List<CellsWithMask> accumulatorsFor(final IncompleteBlob incompleteBlob) {
     final List<CellsWithMask> retrievedCells = incompleteBlob.retrievedCells;
     return IntStream.range(0, incompleteBlob.tx.getBlobCount())
         .mapToObj(
-            blobIndex -> {
-              final CellsWithMask accumulator = CellsWithMask.empty();
-              if (blobIndex < retrievedCells.size()) {
-                accumulator.merge(retrievedCells.get(blobIndex));
-              }
-              return accumulator;
-            })
-        .toList();
+            blobIndex ->
+                blobIndex < retrievedCells.size()
+                    ? retrievedCells.get(blobIndex)
+                    : CellsWithMask.EMPTY)
+        .collect(java.util.stream.Collectors.toCollection(ArrayList::new));
   }
 
   private List<CellsWithMask> retrieveCellsFromPeer(

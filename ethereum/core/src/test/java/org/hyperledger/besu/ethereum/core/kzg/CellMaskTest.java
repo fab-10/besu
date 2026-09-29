@@ -170,12 +170,43 @@ class CellMaskTest {
   }
 
   @Test
-  void randomSubsetDoesNotShareStateWithTheMaskItCameFrom() {
+  void randomSubsetOfASmallMaskIsTheMaskItself() {
     final CellMask custody = maskOf(3, 17, 40);
-    final CellMask subset = custody.randomSubset(64, new java.util.Random(1));
-
-    subset.merge(maskOf(99));
-
+    assertThat(custody.randomSubset(64, new java.util.Random(1))).isEqualTo(custody);
+    assertThat(custody.randomSubset(64, new java.util.Random(1)).union(maskOf(99)))
+        .isEqualTo(maskOf(3, 17, 40, 99));
     assertThat(custody).isEqualTo(maskOf(3, 17, 40));
+  }
+
+  @Test
+  void theOperationsLeaveBothMasksAlone() {
+    // The reason this type is a value: masks are stored in maps, shared between announcements of
+    // one
+    // message, and read from other threads, and an in-place operation on any of those corrupts
+    // every
+    // other holder.
+    final CellMask lower = maskOf(0, 1);
+    final CellMask upper = maskOf(2, 3);
+
+    assertThat(lower.union(upper)).isEqualTo(maskOf(0, 1, 2, 3));
+    assertThat(lower.intersection(maskOf(1, 2))).isEqualTo(maskOf(1));
+    assertThat(lower.without(maskOf(1))).isEqualTo(maskOf(0));
+
+    assertThat(lower).isEqualTo(maskOf(0, 1));
+    assertThat(upper).isEqualTo(maskOf(2, 3));
+  }
+
+  @Test
+  void theSharedConstantsCannotBeChanged() {
+    CellMask.FULL.without(maskOf(0));
+    CellMask.EMPTY.union(CellMask.FULL);
+
+    assertThat(CellMask.FULL.isFull()).isTrue();
+    assertThat(CellMask.EMPTY.isEmpty()).isTrue();
+  }
+
+  @Test
+  void withoutRemovesTheIndexesOfTheOtherMask() {
+    assertThat(maskOf(1, 2, 3, 5).without(maskOf(2, 5, 9))).isEqualTo(maskOf(1, 3));
   }
 }

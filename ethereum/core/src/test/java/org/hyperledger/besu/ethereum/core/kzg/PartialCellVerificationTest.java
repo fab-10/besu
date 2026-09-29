@@ -133,7 +133,7 @@ class PartialCellVerificationTest extends TrustedSetupClassLoaderExtension {
     final BlobsWithCommitments bwc = fullBlobs();
     final List<CellsWithMask> empty =
         IntStream.range(0, bwc.getBlobProofBundles().size())
-            .mapToObj(_ -> CellsWithMask.empty())
+            .mapToObj(_ -> CellsWithMask.EMPTY)
             .toList();
 
     final BlobsWithCommitments noCells =

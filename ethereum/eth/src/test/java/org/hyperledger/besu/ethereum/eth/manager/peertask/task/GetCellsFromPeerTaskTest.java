@@ -58,7 +58,7 @@ class GetCellsFromPeerTaskTest extends TrustedSetupClassLoaderExtension {
             .create(
                 BlobsWithCommitments.createFromBlobCells(
                     fullSidecar.getKzgCommitments(),
-                    List.of(CellsWithMask.empty()),
+                    List.of(CellsWithMask.EMPTY),
                     fullSidecar.getKzgProofs(),
                     fullSidecar.getVersionedHashes()));
     task = new GetCellsFromPeerTask(requestedTx, REQUESTED);
