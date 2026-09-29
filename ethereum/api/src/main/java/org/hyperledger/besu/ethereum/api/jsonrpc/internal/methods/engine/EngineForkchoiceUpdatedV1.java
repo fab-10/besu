@@ -295,8 +295,8 @@ public sealed class EngineForkchoiceUpdatedV1<
     return new ForkchoiceUpdatedResultV1(
         new PayloadStatusV1(
             INVALID,
-                // null when no valid ancestor can be determined, Hash.ZERO would assert invalid
-                // ancestry all the way back to the pre-merge terminal block
+            // null when no valid ancestor can be determined, Hash.ZERO would assert invalid
+            // ancestry all the way back to the pre-merge terminal block
             mergeCoordinator
                 .getLatestValidHashOfBadBlock(forkChoice.getHeadBlockHash())
                 .orElse(null),

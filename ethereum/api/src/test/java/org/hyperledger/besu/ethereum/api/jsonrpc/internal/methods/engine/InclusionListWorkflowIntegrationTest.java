@@ -54,6 +54,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcRespon
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.ForkchoiceUpdatedResultV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.PayloadStatusV1;
+import org.hyperledger.besu.ethereum.chain.BadBlockManager;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
@@ -149,6 +150,7 @@ public class InclusionListWorkflowIntegrationTest {
   @Mock private EthPeers ethPeers;
   @Mock private EngineCallListener engineCallListener;
   @Mock private TransactionPool transactionPool;
+  @Mock private BadBlockManager badBlockManager;
 
   private StubMetricsSystem metricsSystem;
   private EngineGetInclusionListV1 getInclusionListMethod;
@@ -159,6 +161,8 @@ public class InclusionListWorkflowIntegrationTest {
   public void setUp() {
     metricsSystem = new StubMetricsSystem();
 
+    when(badBlockManager.isBadBlock(any())).thenReturn(false);
+    when(protocolContext.getBadBlockManager()).thenReturn(badBlockManager);
     when(protocolContext.safeConsensusContext(any())).thenReturn(Optional.of(mergeContext));
     when(mergeContext.isSyncing()).thenReturn(false);
     when(protocolContext.getBlockchain()).thenReturn(blockchain);

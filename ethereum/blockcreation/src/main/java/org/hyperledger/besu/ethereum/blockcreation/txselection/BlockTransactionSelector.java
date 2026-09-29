@@ -261,7 +261,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
               k ->
                   new TreeSet<>(
                       Comparator.comparingLong(Transaction::getNonce)
-                          .thenComparing(Transaction::getHash)))
+                          .thenComparing(t -> t.getHash().getBytes())))
           .add(tx);
     }
 

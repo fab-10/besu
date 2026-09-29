@@ -299,8 +299,7 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
     final ForkchoiceUpdatedResultV1 result =
         (ForkchoiceUpdatedResultV1) ((JsonRpcSuccessResponse) resp).getResult();
     assertThat(result.getPayloadStatus().getStatus()).isEqualTo(INVALID);
-    assertThat(result.getPayloadStatus().getLatestValidHash())
-        .isEqualTo(Optional.of(latestValidHash));
+    assertThat(result.getPayloadStatus().getLatestValidHash()).isEqualTo(latestValidHash);
     assertThat(result.getPayloadId()).isNull();
     verify(mergeCoordinator, never()).getOrSyncHeadByHash(any(), any());
     verify(engineCallListener, times(1)).executionEngineCalled();
@@ -321,7 +320,7 @@ public class EngineForkchoiceUpdatedV1Test extends AbstractScheduledApiTest {
     final ForkchoiceUpdatedResultV1 result =
         (ForkchoiceUpdatedResultV1) ((JsonRpcSuccessResponse) resp).getResult();
     assertThat(result.getPayloadStatus().getStatus()).isEqualTo(INVALID);
-    assertThat(result.getPayloadStatus().getLatestValidHash()).isEmpty();
+    assertThat(result.getPayloadStatus().getLatestValidHash()).isNull();
     verify(mergeCoordinator, never()).getOrSyncHeadByHash(any(), any());
   }
 
