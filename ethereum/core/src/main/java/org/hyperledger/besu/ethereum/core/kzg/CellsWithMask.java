@@ -20,6 +20,7 @@ import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELLS_PER_EX
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.PrimitiveIterator;
 
 /**
@@ -111,6 +112,25 @@ public class CellsWithMask {
     }
 
     return new CellsWithMask(mergedCells, mergedMask, mergedIndexMap);
+  }
+
+  @Override
+  public boolean equals(final Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+    final CellsWithMask that = (CellsWithMask) o;
+    // The index map is derived from the mask, so comparing the two fields it is built from is
+    // enough.
+    return cellMask.equals(that.cellMask) && cells.equals(that.cells);
+  }
+
+  @Override
+  public int hashCode() {
+    return Objects.hash(cells, cellMask);
   }
 
   @Override

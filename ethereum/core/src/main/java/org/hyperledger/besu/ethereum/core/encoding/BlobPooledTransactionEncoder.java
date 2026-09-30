@@ -35,7 +35,9 @@ public class BlobPooledTransactionEncoder {
   public static void encode(final Transaction transaction, final RLPOutput out) {
     LOG.trace("Encoding transaction with blobs {}", transaction);
     var blobsWithCommitments = transaction.getBlobsWithCommitments();
-    if (blobsWithCommitments.isEmpty() || blobsWithCommitments.get().getBlobs().isEmpty()) {
+    // A sidecar holding only cells has no blob payload to write: getBlobs() is the right length but
+    // holds nothing, so hasBlobData is what decides whether this form can be produced at all.
+    if (blobsWithCommitments.isEmpty() || !blobsWithCommitments.get().hasBlobData()) {
       throw new InvalidParameterException(NO_BLOBS_ERROR);
     }
     out.startList();

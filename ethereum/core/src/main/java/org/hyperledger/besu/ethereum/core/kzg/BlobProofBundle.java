@@ -25,7 +25,6 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.apache.tuweni.bytes.Bytes;
-import org.apache.tuweni.bytes.Bytes32;
 
 /** Represents a bundle of proofs for a blob, including KZG commitments and proofs. */
 public final class BlobProofBundle {
@@ -177,21 +176,33 @@ public final class BlobProofBundle {
         && Objects.equals(this.blob, that.blob)
         && Objects.equals(this.kzgCommitment, that.kzgCommitment)
         && Objects.equals(this.kzgProof, that.kzgProof)
-        && Objects.equals(this.versionedHash, that.versionedHash);
+        && Objects.equals(this.versionedHash, that.versionedHash)
+        // Two bundles of the same blob can hold different cells of it, and for a bundle that holds
+        // no blob the cells are all there is to tell them apart.
+        && Objects.equals(this.cellsWithMask, that.cellsWithMask);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(blobType, blob, kzgCommitment, kzgProof, versionedHash);
+    return Objects.hash(blobType, blob, kzgCommitment, kzgProof, versionedHash, cellsWithMask);
   }
 
-  public BlobProofBundle detachedCopy() {
+  /**
+   * A copy sharing no byte array with this one, taking the versioned hash and the proofs to use
+   * rather than copying its own.
+   *
+   * <p>Both are passed in because a sidecar detaches all of its bundles at once and holds them in
+   * one shape: the transaction and its sidecar hold the same versioned hashes, and the proofs of
+   * every blob come from one list that each bundle views its own part of.
+   *
+   * @param detachedVersionedHash the versioned hash the copy should hold
+   * @param detachedProofs the proofs the copy should hold
+   * @return the detached copy
+   */
+  public BlobProofBundle detachedCopy(
+      final VersionedHash detachedVersionedHash, final List<KZGProof> detachedProofs) {
 
     final KZGCommitment detachedCommitment = new KZGCommitment(kzgCommitment.getData().copy());
-    final List<KZGProof> detachedProofs =
-        kzgProof.stream().map(proof -> new KZGProof(proof.getData().copy())).toList();
-    final VersionedHash detachedVersionedHash =
-        new VersionedHash(Bytes32.wrap(versionedHash.getBytes().copy()));
 
     if (blob.isPresent()) {
       final Blob detachedBlob = new Blob(blob.get().getData().copy());

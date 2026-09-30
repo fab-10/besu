@@ -47,6 +47,9 @@ import org.hyperledger.besu.ethereum.core.BlobTestFixture;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
+import org.hyperledger.besu.ethereum.core.kzg.Cell;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
+import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
@@ -73,6 +76,11 @@ import org.mockito.quality.Strictness;
 @MockitoSettings(strictness = Strictness.LENIENT)
 public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
   private static final Bytes FULL_BITARRAY = Bytes.repeat((byte) 0xFF, 16);
+
+  /** Cell indexes 64 to 127, a plausible custody set and one that starts above zero. */
+  private static final CellMask UPPER_HALF =
+      CellMask.fromBytes(
+          Bytes.concatenate(Bytes.repeat((byte) 0x00, 8), Bytes.repeat((byte) 0xFF, 8)));
 
   @Mock private BlockHeader blockHeader;
   @Mock private MutableBlockchain blockchain;
@@ -211,6 +219,65 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
     assertThat(result.getFirst().getBlobCells()).containsExactly(expectedCell0, expectedCell127);
     assertThat(result.getFirst().getProofs())
         .containsExactly(bundle.getKzgProof().get(0), bundle.getKzgProof().get(127));
+  }
+
+  @Test
+  public void shouldReturnTheRequestedCellsOfASparselyHeldBlob() {
+    // Under eth/72 the pool may hold only some of a blob's cells. Reading them by cell index is not
+    // the same as slicing the concatenation at index * cellSize, which is what a held-cell count of
+    // 64 would make of cell index 64.
+    final BlobProofBundle full = new BlobTestFixture().createBlobProofBundle(KZG_CELL_PROOFS);
+    final CellsWithMask allCells = full.getCellsWithMask().orElseThrow();
+    final BlobProofBundle sparse = sparseCopyOf(full, UPPER_HALF);
+
+    // request cell index 64 and cell index 127, both held
+    final byte[] requested = new byte[16];
+    requested[8] = 0x01;
+    requested[15] = (byte) 0x80;
+
+    JsonRpcSuccessResponse response =
+        getSuccessResponse(buildRequestContext(Bytes.wrap(requested), sparse.getVersionedHash()));
+
+    @SuppressWarnings("unchecked")
+    List<BlobCellsAndProofsV1> result = (List<BlobCellsAndProofsV1>) response.getResult();
+    assertThat(result).hasSize(1);
+    assertThat(result.getFirst().getBlobCells())
+        .containsExactly(allCells.getCell(64).getData(), allCells.getCell(127).getData());
+    assertThat(result.getFirst().getProofs())
+        .containsExactly(full.getKzgProof().get(64), full.getKzgProof().get(127));
+  }
+
+  @Test
+  public void shouldReturnNullWhenARequestedCellIsNotHeld() {
+    final BlobProofBundle full = new BlobTestFixture().createBlobProofBundle(KZG_CELL_PROOFS);
+    final BlobProofBundle sparse = sparseCopyOf(full, UPPER_HALF);
+
+    // cell index 0, which this bundle does not hold
+    final byte[] requested = new byte[16];
+    requested[0] = 0x01;
+
+    JsonRpcSuccessResponse response =
+        getSuccessResponse(buildRequestContext(Bytes.wrap(requested), sparse.getVersionedHash()));
+
+    @SuppressWarnings("unchecked")
+    List<BlobCellsAndProofsV1> result = (List<BlobCellsAndProofsV1>) response.getResult();
+    assertThat(result).hasSize(1);
+    assertThat(result.getFirst()).isNull();
+  }
+
+  /** The same blob, holding only the cells of {@code mask}, as a sampling node would. */
+  private BlobProofBundle sparseCopyOf(final BlobProofBundle full, final CellMask mask) {
+    final CellsWithMask allCells = full.getCellsWithMask().orElseThrow();
+    final List<Cell> held = mask.streamIndexes().mapToObj(allCells::getCell).toList();
+    final BlobProofBundle sparse =
+        new BlobProofBundle(
+            KZG_CELL_PROOFS,
+            new CellsWithMask(held, mask),
+            full.getKzgCommitment(),
+            full.getKzgProof(),
+            full.getVersionedHash());
+    when(transactionPool.getBlobProofBundle(sparse.getVersionedHash())).thenReturn(sparse);
+    return sparse;
   }
 
   @Test
