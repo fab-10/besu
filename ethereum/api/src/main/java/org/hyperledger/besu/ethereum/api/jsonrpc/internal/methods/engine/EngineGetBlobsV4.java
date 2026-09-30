@@ -29,6 +29,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.BlobCellsAndProofsV1;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
+import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 
@@ -190,13 +191,23 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
           "Unsupported blob type KZG_PROOF for versioned hash: {}", bundle.getVersionedHash());
       return null;
     }
-    final Bytes blobCells = bundle.getBlobCellsBytes().orElse(null);
-    if (blobCells == null) {
+    final CellsWithMask cellsWithMask = bundle.getCellsWithMask().orElse(null);
+    if (cellsWithMask == null) {
       return null;
     }
-    final int cellSize = blobCells.size() / CKZG4844Helper.CELL_PROOFS_PER_BLOB;
+    // The pool may hold only some of a blob's cells, so a requested cell is not necessarily one we
+    // have, and the cells we do have are not necessarily the leading ones. Reading them by cell
+    // index is therefore not the same as slicing the concatenation at index * Cell.SIZE.
+    if (!cellIndexes.stream().allMatch(index -> cellsWithMask.getCellMask().contains(index))) {
+      LOG.debug(
+          "Requested cells {} not all held ({}) for versioned hash: {}",
+          cellIndexes,
+          cellsWithMask.getCellMask(),
+          bundle.getVersionedHash());
+      return null;
+    }
     final List<Bytes> cells =
-        cellIndexes.stream().map(index -> blobCells.slice(index * cellSize, cellSize)).toList();
+        cellIndexes.stream().map(index -> cellsWithMask.getCell(index).getData()).toList();
     final List<KZGProof> proofs =
         cellIndexes.stream().map(index -> bundle.getKzgProof().get(index)).toList();
     return new BlobCellsAndProofsV1(cells, proofs);

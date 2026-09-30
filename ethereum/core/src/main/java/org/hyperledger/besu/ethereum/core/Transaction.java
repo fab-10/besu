@@ -1247,8 +1247,7 @@ public class Transaction
                     .toList());
     final Optional<BlobsWithCommitments> detachedBlobsWithCommitments =
         blobsWithCommitments.map(
-            withCommitments ->
-                blobsWithCommitmentsDetachedCopy(withCommitments, detachedVersionedHashes.get()));
+            withCommitments -> withCommitments.detachedCopy(detachedVersionedHashes.get()));
     final Optional<List<CodeDelegation>> detachedCodeDelegationList =
         maybeCodeDelegationList.map(
             codeDelegations ->
@@ -1299,28 +1298,6 @@ public class Transaction
         detachedAddress,
         codeDelegation.nonce(),
         codeDelegation.signature());
-  }
-
-  private BlobsWithCommitments blobsWithCommitmentsDetachedCopy(
-      final BlobsWithCommitments blobsWithCommitments, final List<VersionedHash> versionedHashes) {
-    final var detachedCommitments =
-        blobsWithCommitments.getKzgCommitments().stream()
-            .map(kc -> new KZGCommitment(kc.getData().copy()))
-            .toList();
-    final var detachedBlobs =
-        blobsWithCommitments.getBlobs().stream()
-            .map(blob -> new Blob(blob.getData().copy()))
-            .toList();
-    final var detachedProofs =
-        blobsWithCommitments.getKzgProofs().stream()
-            .map(proof -> new KZGProof(proof.getData().copy()))
-            .toList();
-    return blobsWithCommitmentsOf(
-        blobsWithCommitments.getBlobType(),
-        detachedCommitments,
-        detachedBlobs,
-        detachedProofs,
-        versionedHashes);
   }
 
   /**

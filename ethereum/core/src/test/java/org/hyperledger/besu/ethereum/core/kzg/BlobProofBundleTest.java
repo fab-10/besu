@@ -129,4 +129,33 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
     boolean isValid = CKZG4844Helper.verify4844Kzg(blobsWithCommitments);
     assertTrue(isValid, "KZG proof verification should be valid");
   }
+
+  @Test
+  void bundlesOfTheSameBlobHoldingDifferentCellsAreNotEqual() {
+    // Everything else about these two is identical, and neither holds the blob, so the cells are
+    // all there is to tell them apart.
+    final Cell cell = new Cell(Bytes.repeat((byte) 0x11, Cell.SIZE));
+    final BlobProofBundle holdsCellZero =
+        cellsOnlyBundle(new CellsWithMask(List.of(cell), maskOf(0)));
+    final BlobProofBundle holdsCellOne =
+        cellsOnlyBundle(new CellsWithMask(List.of(cell), maskOf(1)));
+
+    assertThat(holdsCellZero).isNotEqualTo(holdsCellOne);
+    assertThat(holdsCellZero)
+        .isEqualTo(cellsOnlyBundle(new CellsWithMask(List.of(cell), maskOf(0))));
+    assertThat(holdsCellZero)
+        .hasSameHashCodeAs(cellsOnlyBundle(new CellsWithMask(List.of(cell), maskOf(0))));
+    assertThat(holdsCellZero).isNotEqualTo(cellsOnlyBundle(CellsWithMask.EMPTY));
+  }
+
+  private BlobProofBundle cellsOnlyBundle(final CellsWithMask cellsWithMask) {
+    return new BlobProofBundle(
+        BlobType.KZG_CELL_PROOFS, cellsWithMask, kzgCommitment, kzgCellProofs, versionedHash);
+  }
+
+  private static CellMask maskOf(final int index) {
+    final byte[] bytes = new byte[CellMask.BYTE_LENGTH];
+    bytes[index / Byte.SIZE] = (byte) (1 << (index % Byte.SIZE));
+    return CellMask.fromBytes(Bytes.wrap(bytes));
+  }
 }
