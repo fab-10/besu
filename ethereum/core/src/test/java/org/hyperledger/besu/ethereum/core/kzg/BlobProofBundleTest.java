@@ -27,6 +27,7 @@ import org.hyperledger.besu.ethereum.util.TrustedSetupClassLoaderExtension;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes48;
@@ -47,7 +48,7 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
         new BlobProofBundle(BlobType.KZG_PROOF, blob, kzgCommitment, kzgProofs, versionedHash);
 
     assertEquals(BlobType.KZG_PROOF, bundle.getBlobType());
-    assertEquals(blob, bundle.getBlob());
+    assertEquals(Optional.of(blob), bundle.getBlob());
     assertEquals(kzgCommitment, bundle.getKzgCommitment());
     assertEquals(versionedHash, bundle.getVersionedHash());
     assertEquals(kzgProofs, bundle.getKzgProof());
@@ -55,41 +56,41 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
 
   @Test
   void shouldThrowsExceptionWhenKzgCommitmentIsNull() {
-    IllegalArgumentException exception =
+    NullPointerException exception =
         assertThrows(
-            IllegalArgumentException.class,
+            NullPointerException.class,
             () -> new BlobProofBundle(BlobType.KZG_PROOF, blob, null, kzgProofs, versionedHash));
-    assertEquals("kzgCommitment must not be empty", exception.getMessage());
+    assertEquals("kzgCommitment must not be null", exception.getMessage());
   }
 
   @Test
   void shouldThrowsExceptionWhenVersionedHashIsNull() {
-    IllegalArgumentException exception =
+    NullPointerException exception =
         assertThrows(
-            IllegalArgumentException.class,
+            NullPointerException.class,
             () -> new BlobProofBundle(BlobType.KZG_PROOF, blob, kzgCommitment, kzgProofs, null));
-    assertEquals("versionedHash must not be empty", exception.getMessage());
+    assertEquals("versionedHash must not be null", exception.getMessage());
   }
 
   @Test
   void shouldThrowsExceptionWhenBlobIsNull() {
-    IllegalArgumentException exception =
+    NullPointerException exception =
         assertThrows(
-            IllegalArgumentException.class,
+            NullPointerException.class,
             () ->
                 new BlobProofBundle(
-                    BlobType.KZG_PROOF, null, kzgCommitment, kzgProofs, versionedHash));
-    assertEquals("blob must not be empty", exception.getMessage());
+                    BlobType.KZG_PROOF, (Blob) null, kzgCommitment, kzgProofs, versionedHash));
+    assertEquals("blob must not be null", exception.getMessage());
   }
 
   @Test
   void shouldThrowsExceptionWhenProof_empty() {
-    IllegalArgumentException exception =
+    NullPointerException exception =
         assertThrows(
-            IllegalArgumentException.class,
+            NullPointerException.class,
             () ->
                 new BlobProofBundle(BlobType.KZG_PROOF, blob, kzgCommitment, null, versionedHash));
-    assertEquals("kzgProof must not be empty", exception.getMessage());
+    assertEquals("kzgProof must not be null", exception.getMessage());
   }
 
   @Test
