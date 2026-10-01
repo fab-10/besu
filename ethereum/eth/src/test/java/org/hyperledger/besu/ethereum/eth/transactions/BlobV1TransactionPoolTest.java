@@ -35,6 +35,7 @@ import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
 import org.hyperledger.besu.ethereum.core.kzg.Cell;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
+import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.eth.transactions.sorter.BaseFeePendingTransactionsSorter;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.mainnet.transactionpool.OsakaTransactionPoolPreProcessor;
@@ -45,8 +46,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.function.BiFunction;
+import java.util.stream.IntStream;
 
 import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.Bytes48;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
@@ -206,6 +209,37 @@ public class BlobV1TransactionPoolTest extends AbstractTransactionPoolTestBase {
   }
 
   @Test
+  public void shouldTakeEachMergedProofFromTheTransactionHoldingItsCell() {
+    // A transaction holding only some cells carries every proof, but only those of its cells have
+    // been verified, so a merged bundle must not pair a cell with another transaction's proof.
+    final BlobProofBundle full = fullCellProofBundle();
+    final List<KZGProof> fullProofs = full.getKzgProof();
+    final Transaction lowerHalf =
+        blobTransactionHolding(
+            2,
+            full,
+            LOWER_HALF,
+            proofsVerifiedOnlyWhereHeld(fullProofs, LOWER_HALF, unverifiedProof(0xAA)));
+    final Transaction upperHalf =
+        blobTransactionHolding(
+            3,
+            full,
+            UPPER_HALF,
+            proofsVerifiedOnlyWhereHeld(fullProofs, UPPER_HALF, unverifiedProof(0xBB)));
+
+    givenTransactionIsValid(lowerHalf);
+    givenTransactionIsValid(upperHalf);
+    addAndAssertRemoteTransactionsValid(lowerHalf, upperHalf);
+
+    final BlobProofBundle merged =
+        transactionPool.getBlobProofBundle(full.getVersionedHash(), List.of(0, 127));
+
+    assertThat(merged).isNotNull();
+    assertThat(merged.getCellsWithMask().orElseThrow().getCellMask()).isEqualTo(CellMask.FULL);
+    assertThat(merged.getKzgProof()).containsExactlyElementsOf(fullProofs);
+  }
+
+  @Test
   public void shouldNotReturnABundleWhenNoTransactionHoldsARequestedCell() {
     final BlobProofBundle full = fullCellProofBundle();
     final Transaction lowerHalf = blobTransactionHolding(2, full, LOWER_HALF);
@@ -252,6 +286,14 @@ public class BlobV1TransactionPoolTest extends AbstractTransactionPoolTestBase {
   /** A transaction carrying one blob of which it holds only the cells of {@code mask}. */
   private Transaction blobTransactionHolding(
       final int nonce, final BlobProofBundle full, final CellMask mask) {
+    return blobTransactionHolding(nonce, full, mask, full.getKzgProof());
+  }
+
+  private Transaction blobTransactionHolding(
+      final int nonce,
+      final BlobProofBundle full,
+      final CellMask mask,
+      final List<KZGProof> proofs) {
     final CellsWithMask allCells = full.getCellsWithMask().orElseThrow();
     final List<Cell> held = mask.streamIndexes().mapToObj(allCells::getCell).toList();
     return createBlobTransactionWithSameBlobs(
@@ -259,8 +301,24 @@ public class BlobV1TransactionPoolTest extends AbstractTransactionPoolTestBase {
         BlobsWithCommitments.createFromBlobCells(
             List.of(full.getKzgCommitment()),
             List.of(new CellsWithMask(held, mask)),
-            full.getKzgProof(),
+            proofs,
             List.of(full.getVersionedHash())));
+  }
+
+  /** A proof no real cell has, so it shows wherever it leaks into a result. */
+  private static KZGProof unverifiedProof(final int fill) {
+    return new KZGProof(Bytes48.wrap(Bytes.repeat((byte) fill, 48)));
+  }
+
+  /**
+   * The proofs a peer holding the cells of {@code mask} could send: right where it holds the cell,
+   * and {@code wrongProof} elsewhere, since nothing checks those.
+   */
+  private static List<KZGProof> proofsVerifiedOnlyWhereHeld(
+      final List<KZGProof> fullProofs, final CellMask mask, final KZGProof wrongProof) {
+    return IntStream.range(0, fullProofs.size())
+        .mapToObj(i -> mask.contains(i) ? fullProofs.get(i) : wrongProof)
+        .toList();
   }
 
   @Test

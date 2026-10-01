@@ -38,7 +38,9 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
+import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
+import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
@@ -795,17 +797,21 @@ public class TransactionPool implements BlockAddedObserver {
   public BlobProofBundle getBlobProofBundle(final VersionedHash vh) {
     // the same blob could be part of different txs, and blob presence is optional for each one,
     // so we try searching for the first one with a blob present
-    return mapOfBlobsInTransactionPool.get(vh).stream()
-        .filter(b -> b.getBlob().isPresent())
-        .findFirst()
-        .orElseGet(
-            () -> {
-              final BlobProofBundle maybeCached = cacheForBlobsOfTransactionsAddedToABlock.get(vh);
-              if (maybeCached != null && maybeCached.getBlob().isPresent()) {
-                return maybeCached;
-              }
-              return null;
-            });
+    final Optional<BlobProofBundle> maybeInPool;
+    synchronized (mapOfBlobsInTransactionPool) {
+      maybeInPool =
+          mapOfBlobsInTransactionPool.get(vh).stream()
+              .filter(b -> b.getBlob().isPresent())
+              .findFirst();
+    }
+    return maybeInPool.orElseGet(
+        () -> {
+          final BlobProofBundle maybeCached = cacheForBlobsOfTransactionsAddedToABlock.get(vh);
+          if (maybeCached != null && maybeCached.getBlob().isPresent()) {
+            return maybeCached;
+          }
+          return null;
+        });
   }
 
   /**
@@ -830,14 +836,28 @@ public class TransactionPool implements BlockAddedObserver {
       final VersionedHash vh, final List<Integer> cellIndexes) {
     // the same blob could be part of different txs, and cells presence is optional for each one,
     // so we try searching until all requested cells are found or return null
-    final List<BlobProofBundle> bundlesWithCells =
-        mapOfBlobsInTransactionPool.get(vh).stream()
-            .filter(b -> b.getCellsWithMask().isPresent())
-            .collect(Collectors.toCollection(ArrayList::new));
+    final List<BlobProofBundle> bundlesWithCells;
+    synchronized (mapOfBlobsInTransactionPool) {
+      bundlesWithCells =
+          mapOfBlobsInTransactionPool.get(vh).stream()
+              .filter(b -> b.getCellsWithMask().isPresent())
+              .collect(Collectors.toCollection(ArrayList::new));
+    }
 
     final BlobProofBundle maybeCached = cacheForBlobsOfTransactionsAddedToABlock.get(vh);
     if (maybeCached != null && maybeCached.getCellsWithMask().isPresent()) {
       bundlesWithCells.add(maybeCached);
+    }
+
+    if (cellIndexes.isEmpty() || bundlesWithCells.isEmpty()) {
+      // nothing was asked for, or nothing holds any cells of this blob
+      return null;
+    }
+
+    // usually a single transaction carries the blob, so try the first bundle on its own
+    final BlobProofBundle firstBundle = bundlesWithCells.getFirst();
+    if (cellIndexes.stream().allMatch(firstBundle.getCellsWithMask().orElseThrow()::hasCell)) {
+      return firstBundle;
     }
 
     // Which bundles a requested cell was found in, tracked by position: a set would deduplicate by
@@ -863,30 +883,38 @@ public class TransactionPool implements BlockAddedObserver {
             .mapToObj(bundlesWithCells::get)
             .toList();
 
-    if (matchingBundles.isEmpty()) {
-      // nothing was asked for, or nothing holds any cells of this blob
-      return null;
-    }
-
-    final BlobProofBundle firstMatchingBundle = matchingBundles.getFirst();
-
     if (matchingBundles.size() == 1) {
-      return firstMatchingBundle;
+      return matchingBundles.getFirst();
     }
 
-    return matchingBundles.stream()
-        .map(BlobProofBundle::getCellsWithMask)
-        .map(Optional::orElseThrow)
-        .reduce(CellsWithMask::merge)
-        .map(
-            mergedCells ->
-                new BlobProofBundle(
-                    firstMatchingBundle.getBlobType(),
-                    mergedCells,
-                    firstMatchingBundle.getKzgCommitment(),
-                    firstMatchingBundle.getKzgProof(),
-                    firstMatchingBundle.getVersionedHash()))
-        .orElse(null);
+    // Merging in order keeps, at each index, the cell of the first bundle that holds it.
+    final CellsWithMask mergedCells =
+        matchingBundles.stream()
+            .map(BlobProofBundle::getCellsWithMask)
+            .map(Optional::orElseThrow)
+            .reduce(CellsWithMask::merge)
+            .orElseThrow();
+
+    // A partial bundle's proofs are verified only where it holds the cell, so each proof has to
+    // come from the same bundle as the cell at its index. Where no bundle holds the cell there is
+    // nothing for the proof to vouch for, and any bundle's will do.
+    final List<KZGProof> proofs = new ArrayList<>(CKZG4844Helper.CELL_PROOFS_PER_BLOB);
+    for (int index = 0; index < CKZG4844Helper.CELL_PROOFS_PER_BLOB; index++) {
+      final int cellIndex = index;
+      final BlobProofBundle supplier =
+          matchingBundles.stream()
+              .filter(b -> b.getCellsWithMask().orElseThrow().hasCell(cellIndex))
+              .findFirst()
+              .orElse(firstBundle);
+      proofs.add(supplier.getKzgProof().get(index));
+    }
+
+    return new BlobProofBundle(
+        firstBundle.getBlobType(),
+        mergedCells,
+        firstBundle.getKzgCommitment(),
+        proofs,
+        firstBundle.getVersionedHash());
   }
 
   /**
