@@ -42,7 +42,6 @@ import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlobTestFixture;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
-import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
@@ -146,28 +145,6 @@ public class EngineGetBlobsV2Test extends AbstractScheduledApiTest {
     List<BlobAndProofV2> result = extractResult(response);
 
     assertThat(result).isNull();
-  }
-
-  @Test
-  public void shouldReturnNullForABundleThatHoldsCellsButNoBlob() {
-    // A transaction received over eth/72 arrives with its blobs elided, so the pool can hold the
-    // bundle while the blob itself is still being sampled cell by cell. This method answers all or
-    // nothing, and it cannot serve that blob, so the answer is null rather than a failed request.
-    BlobTestFixture blobFixture = new BlobTestFixture();
-    BlobProofBundle full = blobFixture.createBlobProofBundle(KZG_CELL_PROOFS);
-    BlobProofBundle cellsOnly =
-        new BlobProofBundle(
-            KZG_CELL_PROOFS,
-            CellsWithMask.EMPTY,
-            full.getKzgCommitment(),
-            full.getKzgProof(),
-            full.getVersionedHash());
-    when(transactionPool.getBlobProofBundle(cellsOnly.getVersionedHash())).thenReturn(cellsOnly);
-
-    JsonRpcSuccessResponse response =
-        getSuccessResponse(buildRequestContext(cellsOnly.getVersionedHash()));
-
-    assertThat(extractResult(response)).isNull();
   }
 
   @Test

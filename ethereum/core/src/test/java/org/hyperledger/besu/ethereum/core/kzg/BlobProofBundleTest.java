@@ -131,6 +131,23 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
   }
 
   @Test
+  void shouldThrowExceptionWhenCellsAreGivenForABlobTypeThatHasNoCells() {
+    // Only a cell-proof blob is ever held as cells: nothing splits a v0 blob into any.
+    IllegalArgumentException exception =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                new BlobProofBundle(
+                    BlobType.KZG_PROOF,
+                    CellsWithMask.EMPTY,
+                    kzgCommitment,
+                    kzgProofs,
+                    versionedHash));
+    assertEquals(
+        "Cells-only BlobProofBundle requires blob type KZG_CELL_PROOFS", exception.getMessage());
+  }
+
+  @Test
   void bundlesOfTheSameBlobHoldingDifferentCellsAreNotEqual() {
     // Everything else about these two is identical, and neither holds the blob, so the cells are
     // all there is to tell them apart.

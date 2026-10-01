@@ -454,18 +454,7 @@ public abstract class PendingTransaction
     int KZG_PROOF_CONTAINER_SHALLOW_SIZE = 24;
     int KZG_PROOF_SIZE = 112;
     int BLOBS_WITH_COMMITMENTS_SIZE = 48;
-
-    /** A blob, and the two Optionals the bundle holds its blob and its cells in. */
     int BLOB_PROOF_BUNDLE_SIZE_V0 = 131568;
-
-    /**
-     * A blob, and its cells held as {@link org.hyperledger.besu.ethereum.core.kzg.CellsWithMask}.
-     *
-     * <p>7320 bytes more than the concatenated {@code Bytes} the cells used to be: a sparsely
-     * sampled blob has to be read by cell index rather than by offset, so the cells are 128 {@code
-     * Cell} objects over slices of the same payload, with an index of where each cell index sits in
-     * the list. That is under 2% of what the blob itself costs.
-     */
     int BLOB_PROOF_BUNDLE_SIZE_V1 = 400896;
 
     int PENDING_TRANSACTION_SHALLOW_SIZE = 40;

@@ -95,6 +95,16 @@ class CellsOnlySidecarTest extends TrustedSetupClassLoaderExtension {
   }
 
   @Test
+  void canBeLogged() {
+    // Both log lines counted the blobs through getBlobs(), which is null for a sidecar holding
+    // cells. Logging a transaction must not be the thing that throws.
+    final Transaction transaction = cellsOnlyTransaction();
+
+    assertThat(transaction.toString()).contains("numberOfBlobs=1");
+    assertThat(transaction.toTraceLog()).contains("b: 1");
+  }
+
+  @Test
   void pooledEncodingOfASidecarThatHasNoBlobsIsRejected() {
     // The eth/68 pooled form carries the blobs themselves, so a transaction holding only cells
     // cannot be encoded into it. The blob list is the right length but holds nothing, so an empty

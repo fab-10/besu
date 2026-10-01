@@ -38,6 +38,7 @@ import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
+import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
@@ -72,7 +73,6 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -88,6 +88,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import com.google.common.annotations.VisibleForTesting;
@@ -781,14 +782,111 @@ public class TransactionPool implements BlockAddedObserver {
     blobProofBundles.forEach(bq -> mapOfBlobsInTransactionPool.remove(bq.getVersionedHash(), bq));
   }
 
+  /**
+   * Retrieves a {@link BlobProofBundle} associated with the given {@link VersionedHash}. The blob
+   * could be part of different transactions, and its presence in each transaction is optional. This
+   * method searches the first transaction that contains a blob from the transaction pool. If no
+   * such transaction exists, it checks the cache for transactions that have been added to a block.
+   *
+   * @param vh the {@link VersionedHash} used to locate the associated {@link BlobProofBundle}.
+   * @return the {@link BlobProofBundle} if a blob is present in the transaction pool or cache,
+   *     otherwise returns null.
+   */
   public BlobProofBundle getBlobProofBundle(final VersionedHash vh) {
-    try {
-      // returns an empty list if the key is not present, so getFirst() will throw
-      return mapOfBlobsInTransactionPool.get(vh).getFirst();
-    } catch (NoSuchElementException e) {
-      // do nothing
+    // the same blob could be part of different txs, and blob presence is optional for each one,
+    // so we try searching for the first one with a blob present
+    return mapOfBlobsInTransactionPool.get(vh).stream()
+        .filter(b -> b.getBlob().isPresent())
+        .findFirst()
+        .orElseGet(
+            () -> {
+              final BlobProofBundle maybeCached = cacheForBlobsOfTransactionsAddedToABlock.get(vh);
+              if (maybeCached != null && maybeCached.getBlob().isPresent()) {
+                return maybeCached;
+              }
+              return null;
+            });
+  }
+
+  /**
+   * Retrieves a {@link BlobProofBundle} that matches the specified {@link VersionedHash} and
+   * contains the requested list of cell indexes. This method first searches for the blob within the
+   * transaction pool, and in the cache of blobs for transactions added to a block. The method
+   * ensures all requested cell indexes are present in the returned bundle. If any requested cell is
+   * missing, the method will return null.
+   *
+   * <p>Where no single transaction holds every requested cell, the cells of several are merged into
+   * one bundle. That is sound because the versioned hash is the hash of the commitment, so any two
+   * transactions carrying it carry the same blob, and the cell at a given index of that blob is the
+   * same cell whichever transaction it came with.
+   *
+   * @param vh the {@link VersionedHash} used to locate the associated {@link BlobProofBundle}.
+   * @param cellIndexes a list of cell indexes to check for presence within the retrieved blob proof
+   *     bundle.
+   * @return the {@link BlobProofBundle} containing all specified cell indexes, or null if any
+   *     requested cell index is missing or no matching bundle is found.
+   */
+  public BlobProofBundle getBlobProofBundle(
+      final VersionedHash vh, final List<Integer> cellIndexes) {
+    // the same blob could be part of different txs, and cells presence is optional for each one,
+    // so we try searching until all requested cells are found or return null
+    final List<BlobProofBundle> bundlesWithCells =
+        mapOfBlobsInTransactionPool.get(vh).stream()
+            .filter(b -> b.getCellsWithMask().isPresent())
+            .collect(Collectors.toCollection(ArrayList::new));
+
+    final BlobProofBundle maybeCached = cacheForBlobsOfTransactionsAddedToABlock.get(vh);
+    if (maybeCached != null && maybeCached.getCellsWithMask().isPresent()) {
+      bundlesWithCells.add(maybeCached);
     }
-    return cacheForBlobsOfTransactionsAddedToABlock.get(vh);
+
+    // Which bundles a requested cell was found in, tracked by position: a set would deduplicate by
+    // equality, and a bundle's equality now covers its cells, so every insertion would hash them.
+    final boolean[] contributes = new boolean[bundlesWithCells.size()];
+
+    nextIndex:
+    for (final Integer cellIndex : cellIndexes) {
+      for (int i = 0; i < bundlesWithCells.size(); i++) {
+        if (bundlesWithCells.get(i).getCellsWithMask().orElseThrow().hasCell(cellIndex)) {
+          contributes[i] = true;
+          continue nextIndex;
+        }
+      }
+
+      // no bundle holds the cell at this index, so the request cannot be answered in full
+      return null;
+    }
+
+    final List<BlobProofBundle> matchingBundles =
+        IntStream.range(0, bundlesWithCells.size())
+            .filter(i -> contributes[i])
+            .mapToObj(bundlesWithCells::get)
+            .toList();
+
+    if (matchingBundles.isEmpty()) {
+      // nothing was asked for, or nothing holds any cells of this blob
+      return null;
+    }
+
+    final BlobProofBundle firstMatchingBundle = matchingBundles.getFirst();
+
+    if (matchingBundles.size() == 1) {
+      return firstMatchingBundle;
+    }
+
+    return matchingBundles.stream()
+        .map(BlobProofBundle::getCellsWithMask)
+        .map(Optional::orElseThrow)
+        .reduce(CellsWithMask::merge)
+        .map(
+            mergedCells ->
+                new BlobProofBundle(
+                    firstMatchingBundle.getBlobType(),
+                    mergedCells,
+                    firstMatchingBundle.getKzgCommitment(),
+                    firstMatchingBundle.getKzgProof(),
+                    firstMatchingBundle.getVersionedHash()))
+        .orElse(null);
   }
 
   /**

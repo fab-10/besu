@@ -169,15 +169,6 @@ public sealed class EngineGetBlobsV1<BAP extends BlobAndProofV1>
         unsupportedBlobs++;
         continue;
       }
-      if (bundle.getBlob().isEmpty()) {
-        // The pool may hold a transaction whose blobs are still being sampled cell by cell, so it
-        // has the bundle but not the blob these methods return. Counted as missing rather than
-        // unsupported: the blob may well arrive, and the spec answer for one we cannot serve is a
-        // null entry, not a failed request.
-        LOG.trace("Blob not available yet for versioned hash: {}", hash);
-        missingBlobs++;
-        continue;
-      }
       validBundles.set(i, bundle);
       foundBlobs++;
     }

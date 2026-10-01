@@ -174,38 +174,29 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
 
   private @NotNull List<BlobCellsAndProofsV1> getBlobV4Result(
       final VersionedHash[] versionedHashes, final List<Integer> cellIndexes) {
+    // One entry per requested hash, in request order, null where we cannot answer: dropping the
+    // entries we cannot answer would shift every later one onto the wrong versioned hash.
     return Arrays.stream(versionedHashes)
-        .map(transactionPool::getBlobProofBundle)
-        .map(bundle -> getBlobCellsAndProofsV1(bundle, cellIndexes))
+        .map(vh -> transactionPool.getBlobProofBundle(vh, cellIndexes))
+        .map(bundle -> bundle == null ? null : getBlobCellsAndProofsV1(bundle, cellIndexes))
         .toList();
   }
 
   private @Nullable BlobCellsAndProofsV1 getBlobCellsAndProofsV1(
       final BlobProofBundle bundle, final List<Integer> cellIndexes) {
-    if (bundle == null) {
-      return null;
-    }
     // Only KZG_CELL_PROOFS blobs support cell-level extraction, reject KZG_PROOF
     if (bundle.getBlobType() == BlobType.KZG_PROOF) {
       LOG.debug(
           "Unsupported blob type KZG_PROOF for versioned hash: {}", bundle.getVersionedHash());
       return null;
     }
-    final CellsWithMask cellsWithMask = bundle.getCellsWithMask().orElse(null);
-    if (cellsWithMask == null) {
-      return null;
-    }
-    // The pool may hold only some of a blob's cells, so a requested cell is not necessarily one we
-    // have, and the cells we do have are not necessarily the leading ones. Reading them by cell
-    // index is therefore not the same as slicing the concatenation at index * Cell.SIZE.
-    if (!cellIndexes.stream().allMatch(index -> cellsWithMask.getCellMask().contains(index))) {
-      LOG.debug(
-          "Requested cells {} not all held ({}) for versioned hash: {}",
-          cellIndexes,
-          cellsWithMask.getCellMask(),
-          bundle.getVersionedHash());
-      return null;
-    }
+    final CellsWithMask cellsWithMask =
+        bundle
+            .getCellsWithMask()
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "Internal error: bundle must have cells with mask at this point"));
     final List<Bytes> cells =
         cellIndexes.stream().map(index -> cellsWithMask.getCell(index).getData()).toList();
     final List<KZGProof> proofs =
