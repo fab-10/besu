@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.Objects;
 import java.util.PrimitiveIterator;
 
+import org.jspecify.annotations.Nullable;
+
 /**
  * The cells of one blob that this node holds, and the mask saying which they are.
  *
@@ -64,8 +66,31 @@ public class CellsWithMask {
     return cellMask;
   }
 
-  public Cell getCell(final int index) {
-    return cells.get(indexMap[index]);
+  /**
+   * Whether the cell at one index is held, which a sparsely sampled blob's often is not.
+   *
+   * @param index the cell index to test
+   * @return true if this set holds that cell
+   */
+  public boolean hasCell(final int index) {
+    return indexMap[index] != -1;
+  }
+
+  /**
+   * The cell at one index, or null when it is not held.
+   *
+   * <p>Returns null rather than throwing because a sparsely sampled blob is missing most of its
+   * cells by design, so asking for one that is absent is a normal thing to do. Callers that cannot
+   * handle an absent cell should ask {@link #hasCell} first.
+   *
+   * @param index the cell index to read
+   * @return the cell, or null if this set does not hold it
+   */
+  public @Nullable Cell getCell(final int index) {
+    if (hasCell(index)) {
+      return cells.get(indexMap[index]);
+    }
+    return null;
   }
 
   public List<Cell> getCells() {

@@ -76,6 +76,8 @@ public class MainnetBlobsValidatorTest {
     when(transaction.getVersionedHashes()).thenReturn(Optional.of(List.of(versionedHash)));
     when(transaction.getBlobsWithCommitments()).thenReturn(Optional.of(blobsWithCommitments));
     when(blobsWithCommitments.getBlobType()).thenReturn(BlobType.KZG_CELL_PROOFS);
+    // the count is only asked of a transaction that carries its blobs
+    when(blobsWithCommitments.hasBlobData()).thenReturn(true);
     when(blobsWithCommitments.getBlobs()).thenReturn(List.of(mock(Blob.class)));
     when(blobsWithCommitments.getKzgCommitments()).thenReturn(List.of());
 
@@ -85,6 +87,21 @@ public class MainnetBlobsValidatorTest {
         result,
         TransactionInvalidReason.INVALID_BLOBS,
         "transaction blobs and commitments are not the same size");
+  }
+
+  @Test
+  void shouldNotAskForTheBlobCountOfATransactionThatHoldsCellsOnly() {
+    // getBlobs() is null for a sidecar holding cells, so asking it for a count threw. Reaching the
+    // completeness check at all means the count was not asked for.
+    setUpOneWellFormedBlob();
+    when(blobsWithCommitments.hasBlobData()).thenReturn(false);
+    when(blobsWithCommitments.getBlobs()).thenReturn(null);
+    when(blobsWithCommitments.allCellsPresent()).thenReturn(false);
+
+    var result =
+        blobsValidator.validate(transaction, TransactionValidationParams.processingBlock());
+
+    assertInvalidResult(result, TransactionInvalidReason.INVALID_BLOBS, "not all cells present");
   }
 
   @Test

@@ -184,8 +184,11 @@ public class MainnetBlobsValidator {
       return ValidationResult.invalid(TransactionInvalidReason.INVALID_BLOBS, error);
     }
 
-    // Blobs and commitments must be the same size
-    if (blobsWithCommitments.getBlobs().size() != blobsWithCommitments.getKzgCommitments().size()) {
+    // Blobs and commitments must be the same size. Asked only of a transaction that carries its
+    // blobs: getBlobs() is null for one holding cells instead, whose arity is the cell lists'.
+    if (blobsWithCommitments.hasBlobData()
+        && blobsWithCommitments.getBlobs().size()
+            != blobsWithCommitments.getKzgCommitments().size()) {
       return ValidationResult.invalid(
           TransactionInvalidReason.INVALID_BLOBS,
           "transaction blobs and commitments are not the same size");

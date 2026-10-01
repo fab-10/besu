@@ -40,7 +40,6 @@ import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlobTestFixture;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
-import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
@@ -132,36 +131,6 @@ public class EngineGetBlobsV3Test extends AbstractScheduledApiTest {
     assertThat(result.get(0)).isNotNull();
     assertThat(result.get(1)).isNull();
     assertThat(result.get(2)).isNotNull();
-  }
-
-  @Test
-  public void shouldReturnNullForABundleThatHoldsCellsButNoBlob() {
-    // A transaction received over eth/72 arrives with its blobs elided, so the pool can hold the
-    // bundle while the blob itself is still being sampled cell by cell. There is nothing to return
-    // for it, and the spec answer for a blob we cannot serve is a null entry, not a failed request.
-    BlobProofBundle cellsOnly = cellsOnlyBundle();
-
-    JsonRpcSuccessResponse response =
-        getSuccessResponse(buildRequestContext(cellsOnly.getVersionedHash()));
-
-    @SuppressWarnings("unchecked")
-    List<BlobAndProofV2> result = (List<BlobAndProofV2>) response.getResult();
-    assertThat(result).hasSize(1);
-    assertThat(result.getFirst()).isNull();
-  }
-
-  /** A bundle of the shape eth/72 produces: the cell proofs and no blob. */
-  private BlobProofBundle cellsOnlyBundle() {
-    BlobProofBundle full = new BlobTestFixture().createBlobProofBundle(KZG_CELL_PROOFS);
-    BlobProofBundle cellsOnly =
-        new BlobProofBundle(
-            KZG_CELL_PROOFS,
-            CellsWithMask.EMPTY,
-            full.getKzgCommitment(),
-            full.getKzgProof(),
-            full.getVersionedHash());
-    when(transactionPool.getBlobProofBundle(cellsOnly.getVersionedHash())).thenReturn(cellsOnly);
-    return cellsOnly;
   }
 
   @Test

@@ -294,17 +294,15 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
         "Cells must have the same cell mask");
   }
 
-  /**
-   * Get the blobs.
-   *
-   * @return the blobs
-   */
   @Override
   public List<Blob> getBlobs() {
-    return blobProofBundles.stream()
-        .map(BlobProofBundle::getBlob)
-        .map(b -> b.orElse(null))
-        .toList();
+    if (hasBlobData()) {
+      return blobProofBundles.stream()
+          .map(BlobProofBundle::getBlob)
+          .map(Optional::orElseThrow)
+          .toList();
+    }
+    return null;
   }
 
   /**
@@ -489,6 +487,7 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
    *
    * @return true if every blob of this transaction is held in full
    */
+  @Override
   public boolean hasBlobData() {
     // The canonical constructor rejects a mix, so the first bundle answers for all of them.
     return blobProofBundles.getFirst().getBlob().isPresent();

@@ -21,6 +21,7 @@ import static org.hyperledger.besu.datatypes.BlobType.KZG_PROOF;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.OSAKA;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineTestSupport.fromErrorResp;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -247,23 +248,9 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
         .containsExactly(full.getKzgProof().get(64), full.getKzgProof().get(127));
   }
 
-  @Test
-  public void shouldReturnNullWhenARequestedCellIsNotHeld() {
-    final BlobProofBundle full = new BlobTestFixture().createBlobProofBundle(KZG_CELL_PROOFS);
-    final BlobProofBundle sparse = sparseCopyOf(full, UPPER_HALF);
-
-    // cell index 0, which this bundle does not hold
-    final byte[] requested = new byte[16];
-    requested[0] = 0x01;
-
-    JsonRpcSuccessResponse response =
-        getSuccessResponse(buildRequestContext(Bytes.wrap(requested), sparse.getVersionedHash()));
-
-    @SuppressWarnings("unchecked")
-    List<BlobCellsAndProofsV1> result = (List<BlobCellsAndProofsV1>) response.getResult();
-    assertThat(result).hasSize(1);
-    assertThat(result.getFirst()).isNull();
-  }
+  // Whether the pool holds the requested cells at all is decided by the pool, which answers null
+  // when it cannot cover them; see BlobV1TransactionPoolTest. Here a null simply becomes a null
+  // entry, as shouldReturnNullForMissingBlobsInPartialResponse covers.
 
   /** The same blob, holding only the cells of {@code mask}, as a sampling node would. */
   private BlobProofBundle sparseCopyOf(final BlobProofBundle full, final CellMask mask) {
@@ -276,7 +263,8 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
             full.getKzgCommitment(),
             full.getKzgProof(),
             full.getVersionedHash());
-    when(transactionPool.getBlobProofBundle(sparse.getVersionedHash())).thenReturn(sparse);
+    when(transactionPool.getBlobProofBundle(eq(sparse.getVersionedHash()), anyList()))
+        .thenReturn(sparse);
     return sparse;
   }
 
@@ -286,9 +274,11 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
     VersionedHash unknownHash = new VersionedHash((byte) 1, Hash.ZERO);
     BlobProofBundle bundle3 = createBundleWithBlobType(KZG_CELL_PROOFS);
 
-    when(transactionPool.getBlobProofBundle(bundle1.getVersionedHash())).thenReturn(bundle1);
-    when(transactionPool.getBlobProofBundle(unknownHash)).thenReturn(null);
-    when(transactionPool.getBlobProofBundle(bundle3.getVersionedHash())).thenReturn(bundle3);
+    when(transactionPool.getBlobProofBundle(eq(bundle1.getVersionedHash()), anyList()))
+        .thenReturn(bundle1);
+    when(transactionPool.getBlobProofBundle(eq(unknownHash), anyList())).thenReturn(null);
+    when(transactionPool.getBlobProofBundle(eq(bundle3.getVersionedHash()), anyList()))
+        .thenReturn(bundle3);
 
     JsonRpcSuccessResponse response =
         getSuccessResponse(
@@ -423,7 +413,8 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
       final org.hyperledger.besu.datatypes.BlobType blobType) {
     BlobTestFixture blobTestFixture = new BlobTestFixture();
     BlobProofBundle bundle = blobTestFixture.createBlobProofBundle(blobType);
-    when(transactionPool.getBlobProofBundle(bundle.getVersionedHash())).thenReturn(bundle);
+    when(transactionPool.getBlobProofBundle(eq(bundle.getVersionedHash()), anyList()))
+        .thenReturn(bundle);
     return bundle;
   }
 

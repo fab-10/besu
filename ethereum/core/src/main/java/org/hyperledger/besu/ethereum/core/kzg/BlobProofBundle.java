@@ -85,13 +85,11 @@ public final class BlobProofBundle {
     checkNotNull(kzgCommitment, "kzgCommitment must not be null");
     checkNotNull(versionedHash, "versionedHash must not be null");
     checkNotNull(kzgProof, "kzgProof must not be null");
-    if (blobType == BlobType.KZG_PROOF && kzgProof.size() != 1) {
-      String errorMessage =
-          "Invalid kzgProof size for versionId 0, expected 1 but got " + kzgProof.size();
-      throw new IllegalArgumentException(errorMessage);
+    if (blobType != BlobType.KZG_CELL_PROOFS) {
+      throw new IllegalArgumentException(
+          "Cells-only BlobProofBundle requires blob type KZG_CELL_PROOFS");
     }
-    if (blobType == BlobType.KZG_CELL_PROOFS
-        && kzgProof.size() != CKZG4844Helper.CELL_PROOFS_PER_BLOB) {
+    if (kzgProof.size() != CKZG4844Helper.CELL_PROOFS_PER_BLOB) {
       String errorMessage =
           "Invalid kzgProof size for versionId 1, expected "
               + CKZG4844Helper.CELL_PROOFS_PER_BLOB
