@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.core.kzg;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Collections.emptyList;
 import static org.hyperledger.besu.datatypes.BlobType.KZG_CELL_PROOFS;
 import static org.hyperledger.besu.datatypes.BlobType.KZG_PROOF;
 import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELL_PROOFS_PER_BLOB;
@@ -97,7 +98,7 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
         blobProofBundles.stream().map(bundle -> bundle.getBlob().isPresent()).distinct().count()
             == 1,
         "BlobProofBundles must either all carry their blob payload or none of them");
-    return new BlobsWithCommitments(blobType, blobProofBundles);
+    return new BlobsWithCommitments(blobType, List.copyOf(blobProofBundles));
   }
 
   /**
@@ -302,7 +303,7 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
           .map(Optional::orElseThrow)
           .toList();
     }
-    return null;
+    return emptyList();
   }
 
   /**
@@ -487,7 +488,6 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
    *
    * @return true if every blob of this transaction is held in full
    */
-  @Override
   public boolean hasBlobData() {
     // The canonical constructor rejects a mix, so the first bundle answers for all of them.
     return blobProofBundles.getFirst().getBlob().isPresent();

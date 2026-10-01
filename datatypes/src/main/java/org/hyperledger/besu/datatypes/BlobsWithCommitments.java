@@ -16,8 +16,6 @@ package org.hyperledger.besu.datatypes;
 
 import java.util.List;
 
-import org.jspecify.annotations.Nullable;
-
 /** A class to hold the blobs, commitments, proofs and versioned hashes for a set of blobs. */
 public interface BlobsWithCommitments {
 
@@ -29,18 +27,11 @@ public interface BlobsWithCommitments {
   BlobType getBlobType();
 
   /**
-   * Whether the actual blob payloads are held.
+   * Get the blobs if present.
    *
-   * @return true if every blob of this transaction is held in full
+   * @return the blobs or empty list if not present
    */
-  boolean hasBlobData();
-
-  /**
-   * Get the blobs if present. Caller can use {@link #hasBlobData()} to check for blob presence.
-   *
-   * @return the blobs or null if not present
-   */
-  @Nullable List<? extends Blob> getBlobs();
+  List<? extends Blob> getBlobs();
 
   /**
    * Get the commitments.
