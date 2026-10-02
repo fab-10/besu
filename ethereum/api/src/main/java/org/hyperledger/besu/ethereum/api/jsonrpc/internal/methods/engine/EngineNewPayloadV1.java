@@ -244,7 +244,11 @@ public sealed class EngineNewPayloadV1<
           .addArgument(newBlockHeader::toLogString)
           .log();
       return respondWithValid(
-          reqId, blockParam, block.getHash(), PayloadPostExecutionValidationResultV1.SUCCESS);
+          reqId,
+          blockParam,
+          block.getHeader(),
+          new BlockProcessingResult(Optional.empty()),
+          PayloadPostExecutionValidationResultV1.SUCCESS);
     }
 
     if (needsSync) {
@@ -279,7 +283,8 @@ public sealed class EngineNewPayloadV1<
       lastExecutionTimeInNs = System.nanoTime() - startTimeNs;
       logImportedBlockInfo(
           block, lastExecutionTimeInNs, executionResult.getNbParallelizedTransactions());
-      return respondWithValid(reqId, blockParam, newBlockHeader.getHash(), postExecutionResult);
+      return respondWithValid(
+          reqId, blockParam, newBlockHeader, executionResult, postExecutionResult);
     } else {
       logger().debug("New payload is invalid: {}", executionResult);
       if (executionResult.isWorldStateUnavailable()) {
@@ -385,27 +390,28 @@ public sealed class EngineNewPayloadV1<
     }
   }
 
-    /**
-     * Responds to a payload that was just executed and imported. Overridable so variants can answer
-     * with data derived from block processing (e.g. the EIP-8025 execution witness), or with an error
-     * if they cannot produce it; the default responds with the standard VALID payload status.
-     *
-     * <p>Note this covers only the freshly-executed path: a payload whose block is already present
-     * returns VALID without passing through here.
-     *
-     * @param requestId the JSON-RPC request id
-     * @param param the execution payload parameter
-     * @param newBlockHeader the header of the imported block
-     * @param executionResult the result of processing the block
-     * @return the JSON-RPC response
-     */
+  /**
+   * Responds to a payload that was just executed and imported. Overridable so variants can answer
+   * with data derived from block processing (e.g. the EIP-8025 execution witness), or with an error
+   * if they cannot produce it; the default responds with the standard VALID payload status.
+   *
+   * <p>Note this covers only the freshly-executed path: a payload whose block is already present
+   * returns VALID without passing through here.
+   *
+   * @param requestId the JSON-RPC request id
+   * @param param the execution payload parameter
+   * @param newBlockHeader the header of the imported block
+   * @param executionResult the result of processing the block
+   * @param postExecutionResult the post-execution validation result
+   * @return the JSON-RPC response
+   */
   protected JsonRpcResponse respondWithValid(
       final Object requestId,
       final ExecutionPayloadV1 param,
       final BlockHeader newBlockHeader,
       final BlockProcessingResult executionResult,
       final PayloadPostExecutionValidationResultV1 postExecutionResult) {
-      logNewPayloadResponse(param, newBlockHeader.getHash(), VALID);
+    logNewPayloadResponse(param, newBlockHeader.getHash(), VALID);
     return new JsonRpcSuccessResponse(
         requestId, createValidPayloadStatus(newBlockHeader.getHash(), postExecutionResult));
   }
@@ -416,20 +422,20 @@ public sealed class EngineNewPayloadV1<
     return new PayloadStatusV1(VALID, latestValidHash);
   }
 
-    protected void logNewPayloadResponse(
-            final ExecutionPayloadV1 param, final Hash latestValidHash, final EngineStatus status) {
-        logger()
-                .atDebug()
-                .setMessage(
-                        "New payload: number: {}, hash: {}, parentHash: {}, latestValidHash: {}, status: {}")
-                .addArgument(param::getBlockNumber)
-                .addArgument(param::getBlockHash)
-                .addArgument(param::getParentHash)
-                .addArgument(
-                        () -> latestValidHash == null ? null : latestValidHash.getBytes().toHexString())
-                .addArgument(status::name)
-                .log();
-    }
+  protected void logNewPayloadResponse(
+      final ExecutionPayloadV1 param, final Hash latestValidHash, final EngineStatus status) {
+    logger()
+        .atDebug()
+        .setMessage(
+            "New payload: number: {}, hash: {}, parentHash: {}, latestValidHash: {}, status: {}")
+        .addArgument(param::getBlockNumber)
+        .addArgument(param::getBlockHash)
+        .addArgument(param::getParentHash)
+        .addArgument(
+            () -> latestValidHash == null ? null : latestValidHash.getBytes().toHexString())
+        .addArgument(status::name)
+        .log();
+  }
 
   private JsonRpcResponse respondWithSyncing(final Object requestId) {
     return new JsonRpcSuccessResponse(requestId, createSyncingPayloadStatus());
