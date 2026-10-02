@@ -1223,7 +1223,7 @@ public class Transaction
     }
     if (transactionType.supportsBlob()) {
       sb.append("numberOfBlobs=")
-          // counted from the bundles, since getBlobs() is null for a sidecar holding cells
+          // counted from the bundles, since getBlobs() is empty for a sidecar holding cells
           .append(blobsWithCommitments.map(bwc -> bwc.getBlobProofBundles().size()).orElse(-1))
           .append(", ");
       sb.append("cellsHeld=")
@@ -1264,7 +1264,7 @@ public class Transaction
     }
     if (transactionType.supportsBlob()) {
       sb.append("b: ")
-          // counted from the bundles, since getBlobs() is null for a sidecar holding cells
+          // counted from the bundles, since getBlobs() is empty for a sidecar holding cells
           .append(blobsWithCommitments.map(bwc -> bwc.getBlobProofBundles().size()).orElse(-1))
           .append(blobsWithCommitments.map(bwc -> bwc.getCellMask().toString()).orElse("{}"))
           .append(", ");
