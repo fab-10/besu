@@ -64,7 +64,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineQ
 import org.hyperledger.besu.ethereum.blockcreation.MiningCoordinator;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
-import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListConfiguration;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.provider.PathBasedWorldStateProvider;
 import org.hyperledger.besu.plugin.services.MetricsSystem;
@@ -102,8 +101,7 @@ public class ExecutionEngineJsonRpcMethods extends ApiGroupJsonRpcMethods {
       final String clientVersion,
       final String commit,
       final TransactionPool transactionPool,
-      final MetricsSystem metricsSystem,
-      final InclusionListConfiguration inclusionListConfiguration) {
+      final MetricsSystem metricsSystem) {
     this.mergeCoordinator =
         Optional.ofNullable(miningCoordinator)
             .filter(MiningCoordinator::isCompatibleWithEngineApi)

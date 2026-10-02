@@ -16,22 +16,74 @@ package org.hyperledger.besu.ethereum.eth.transactions.inclusionlist;
 
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 
+import java.util.ArrayList;
 import java.util.List;
 
-/**
- * Interface for selecting transactions to include in an EIP-7805 inclusion list. Implementations
- * define the strategy for choosing which mempool transactions should be included.
- */
-public interface InclusionListTransactionSelector {
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-  /**
-   * Selects transactions from the mempool for inclusion in an inclusion list.
-   *
-   * @param pendingTransactionsBySender the candidate transactions from the transaction pool grouped
-   *     by sender
-   * @param maxBytes the maximum total bytes allowed for selected transactions
-   * @return the selected pending transactions
-   */
-  List<PendingTransaction> selectTransactions(
-      List<List<PendingTransaction>> pendingTransactionsBySender, int maxBytes);
+/**
+ * Default implementation of {@link InclusionListTransactionSelector} that selects transactions for
+ * inclusion lists per EIP-7805. Transactions are prioritized by effective gas price (highest
+ * first), time in pool (older first for ties), and nonce sequentiality per sender is enforced.
+ */
+public class InclusionListTransactionSelector {
+
+  private static final Logger LOG = LoggerFactory.getLogger(InclusionListTransactionSelector.class);
+  public static final int MAX_BYTES_PER_INCLUSION_LIST = 8192;
+
+  public List<PendingTransaction> selectTransactions(
+      final List<List<PendingTransaction>> pendingTransactionsBySender, final int maxBytes) {
+
+    final List<PendingTransaction> selected = new ArrayList<>();
+
+    int totalBytes = 0;
+    boolean maxSizeReached = false;
+
+    goToNextSender:
+    for (List<PendingTransaction> senderPendingTransactions : pendingTransactionsBySender) {
+      for (PendingTransaction pendingTransaction : senderPendingTransactions) {
+        if (pendingTransaction.getTransaction().getType().supportsBlob()) {
+          continue goToNextSender;
+        }
+
+        final int txSize = pendingTransaction.getTransaction().getSizeForAnnouncement();
+
+        // TODO: this can be optimized checking if the remaining space could fit a smaller tx
+        if (totalBytes + txSize > maxBytes) {
+          LOG.info(
+              "Prioritized tx {}, which encoded size is {} bytes does not fit in the inclusion list already containing {} bytes",
+              pendingTransaction.toTraceLog(),
+              txSize,
+              totalBytes);
+
+          maxSizeReached = true;
+          break;
+        }
+
+        selected.add(pendingTransaction);
+        totalBytes += txSize;
+
+        LOG.info(
+            "Prioritized tx {}, which encoded size is {} bytes added to the inclusion list which new total size is {} bytes",
+            pendingTransaction.toTraceLog(),
+            txSize,
+            totalBytes);
+      }
+
+      if (maxSizeReached) {
+        break;
+      }
+    }
+
+    LOG.atInfo()
+        .setMessage("IL selector: selected {} transactions ({} bytes) from {} candidates")
+        .addArgument(selected.size())
+        .addArgument(totalBytes)
+        .addArgument(
+            () -> pendingTransactionsBySender.stream().map(List::size).reduce(0, Integer::sum))
+        .log();
+
+    return selected;
+  }
 }

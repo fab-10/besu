@@ -15,7 +15,6 @@
 package org.hyperledger.besu.cli.options;
 
 import org.hyperledger.besu.cli.custom.JsonRPCAllowlistHostsProperty;
-import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListConfiguration;
 
 import java.nio.file.Path;
 
@@ -34,15 +33,4 @@ public record EngineRPCConfiguration(
     Integer engineRpcPort,
     Path engineJwtKeyFile,
     Boolean isEngineAuthDisabled,
-    JsonRPCAllowlistHostsProperty engineHostsAllowlist) {
-
-  /**
-   * Creates a consolidated InclusionListConfiguration from the Engine RPC settings, using the
-   * default transaction selector.
-   *
-   * @return the inclusion list configuration
-   */
-  public InclusionListConfiguration toInclusionListConfiguration() {
-    return new InclusionListConfiguration(InclusionListConfiguration.DEFAULT.selector());
-  }
-}
+    JsonRPCAllowlistHostsProperty engineHostsAllowlist) {}

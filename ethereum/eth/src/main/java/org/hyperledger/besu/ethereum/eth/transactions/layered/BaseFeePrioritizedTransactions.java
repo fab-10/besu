@@ -14,6 +14,7 @@
  */
 package org.hyperledger.besu.ethereum.eth.transactions.layered;
 
+import static org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListTransactionSelector.MAX_BYTES_PER_INCLUSION_LIST;
 import static org.hyperledger.besu.ethereum.eth.transactions.layered.AddReason.MOVE;
 import static org.hyperledger.besu.ethereum.eth.transactions.layered.LayeredRemovalReason.LayerMoveReason.DEMOTED;
 
@@ -25,7 +26,6 @@ import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
-import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListConfiguration;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.BaseFeeMarket;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 
@@ -90,7 +90,7 @@ public class BaseFeePrioritizedTransactions extends AbstractPrioritizedTransacti
   @Override
   List<PendingTransaction> getInclusionList() {
     return inclusionListTransactionSelector.selectTransactions(
-        getBySender(), InclusionListConfiguration.MAX_BYTES_PER_INCLUSION_LIST);
+        getBySender(), MAX_BYTES_PER_INCLUSION_LIST);
   }
 
   /**
