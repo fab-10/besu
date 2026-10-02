@@ -124,7 +124,8 @@ public class EnginePayloadAttributesParameterTest {
             null,
             null,
             null,
-            "0xffffffffffffffff");
+            "0xffffffffffffffff",
+            null);
     assertThat(parameter.getTargetGasLimit()).isEqualTo(Long.MAX_VALUE);
   }
 
