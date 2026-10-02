@@ -815,11 +815,12 @@ public class TransactionPool implements BlockAddedObserver {
   }
 
   /**
-   * Retrieves a {@link BlobProofBundle} that matches the specified {@link VersionedHash} and
-   * contains the requested list of cell indexes. This method first searches for the blob within the
-   * transaction pool, and in the cache of blobs for transactions added to a block. The method
-   * ensures all requested cell indexes are present in the returned bundle. If any requested cell is
-   * missing, the method will return null.
+   * Retrieves a {@link BlobProofBundle} that matches the specified {@link VersionedHash} and holds
+   * as many of the requested cells as are available. This method searches for the blob within the
+   * transaction pool, and in the cache of blobs for transactions added to a block. The returned
+   * bundle need not hold every requested cell: engine_getBlobsV4 answers a cell it cannot serve
+   * with a null in place, so the caller has to ask the bundle which cells it holds. Only when none
+   * of the requested cells is held does this return null, as for an unknown blob.
    *
    * <p>Where no single transaction holds every requested cell, the cells of several are merged into
    * one bundle. That is sound because the versioned hash is the hash of the commitment, so any two
@@ -827,15 +828,14 @@ public class TransactionPool implements BlockAddedObserver {
    * same cell whichever transaction it came with.
    *
    * @param vh the {@link VersionedHash} used to locate the associated {@link BlobProofBundle}.
-   * @param cellIndexes a list of cell indexes to check for presence within the retrieved blob proof
-   *     bundle.
-   * @return the {@link BlobProofBundle} containing all specified cell indexes, or null if any
-   *     requested cell index is missing or no matching bundle is found.
+   * @param cellIndexes the indexes of the cells requested.
+   * @return a {@link BlobProofBundle} holding every requested cell that is available, or null if
+   *     none of them is or nothing was requested.
    */
   public BlobProofBundle getBlobProofBundle(
       final VersionedHash vh, final List<Integer> cellIndexes) {
     // the same blob could be part of different txs, and cells presence is optional for each one,
-    // so we try searching until all requested cells are found or return null
+    // so we gather each requested cell from whichever of them holds it
     final List<BlobProofBundle> bundlesWithCells;
     synchronized (mapOfBlobsInTransactionPool) {
       bundlesWithCells =
@@ -864,17 +864,15 @@ public class TransactionPool implements BlockAddedObserver {
     // equality, and a bundle's equality now covers its cells, so every insertion would hash them.
     final boolean[] contributes = new boolean[bundlesWithCells.size()];
 
-    nextIndex:
+    // A cell no bundle holds is left out rather than failing the request: the caller answers it
+    // with a null in place.
     for (final Integer cellIndex : cellIndexes) {
       for (int i = 0; i < bundlesWithCells.size(); i++) {
         if (bundlesWithCells.get(i).getCellsWithMask().orElseThrow().hasCell(cellIndex)) {
           contributes[i] = true;
-          continue nextIndex;
+          break;
         }
       }
-
-      // no bundle holds the cell at this index, so the request cannot be answered in full
-      return null;
     }
 
     final List<BlobProofBundle> matchingBundles =
@@ -882,6 +880,11 @@ public class TransactionPool implements BlockAddedObserver {
             .filter(i -> contributes[i])
             .mapToObj(bundlesWithCells::get)
             .toList();
+
+    if (matchingBundles.isEmpty()) {
+      // none of the requested cells is held, which is no different from not knowing the blob
+      return null;
+    }
 
     if (matchingBundles.size() == 1) {
       return matchingBundles.getFirst();
