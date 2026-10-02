@@ -240,15 +240,35 @@ public class BlobV1TransactionPoolTest extends AbstractTransactionPoolTestBase {
   }
 
   @Test
-  public void shouldNotReturnABundleWhenNoTransactionHoldsARequestedCell() {
+  public void shouldReturnTheHeldCellsWhenSomeRequestedCellsAreNotHeld() {
+    // engine_getBlobsV4 answers a cell it cannot serve with a null in place, so one missing cell is
+    // no reason to withhold the others.
     final BlobProofBundle full = fullCellProofBundle();
     final Transaction lowerHalf = blobTransactionHolding(2, full, LOWER_HALF);
 
     givenTransactionIsValid(lowerHalf);
     addAndAssertRemoteTransactionsValid(lowerHalf);
 
-    // 0 is held, 127 is not, so the request cannot be answered in full
-    assertThat(transactionPool.getBlobProofBundle(full.getVersionedHash(), List.of(0, 127)))
+    // 0 is held, 127 is not
+    final BlobProofBundle found =
+        transactionPool.getBlobProofBundle(full.getVersionedHash(), List.of(0, 127));
+
+    assertThat(found).isNotNull();
+    final CellsWithMask foundCells = found.getCellsWithMask().orElseThrow();
+    assertThat(foundCells.hasCell(0)).isTrue();
+    assertThat(foundCells.hasCell(127)).isFalse();
+  }
+
+  @Test
+  public void shouldNotReturnABundleWhenNoneOfTheRequestedCellsIsHeld() {
+    final BlobProofBundle full = fullCellProofBundle();
+    final Transaction lowerHalf = blobTransactionHolding(2, full, LOWER_HALF);
+
+    givenTransactionIsValid(lowerHalf);
+    addAndAssertRemoteTransactionsValid(lowerHalf);
+
+    // neither is held, which is no different from not knowing the blob
+    assertThat(transactionPool.getBlobProofBundle(full.getVersionedHash(), List.of(64, 127)))
         .isNull();
   }
 
