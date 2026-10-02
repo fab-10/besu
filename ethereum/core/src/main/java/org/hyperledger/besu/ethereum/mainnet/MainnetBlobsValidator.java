@@ -185,7 +185,7 @@ public class MainnetBlobsValidator {
     }
 
     // Blobs and commitments must be the same size. Asked only of a transaction that carries its
-    // blobs: getBlobs() is null for one holding cells instead, whose arity is the cell lists'.
+    // blobs: getBlobs() is empty for one holding cells instead, whose arity is the cell lists'.
     if (blobsWithCommitments.hasBlobData()
         && blobsWithCommitments.getBlobs().size()
             != blobsWithCommitments.getKzgCommitments().size()) {

@@ -91,11 +91,11 @@ public class MainnetBlobsValidatorTest {
 
   @Test
   void shouldNotAskForTheBlobCountOfATransactionThatHoldsCellsOnly() {
-    // getBlobs() is null for a sidecar holding cells, so asking it for a count threw. Reaching the
-    // completeness check at all means the count was not asked for.
+    // getBlobs() is empty for a sidecar holding cells, so asking it for a count would report a
+    // size mismatch. Reaching the completeness check at all means the count was not asked for.
     setUpOneWellFormedBlob();
     when(blobsWithCommitments.hasBlobData()).thenReturn(false);
-    when(blobsWithCommitments.getBlobs()).thenReturn(null);
+    when(blobsWithCommitments.getBlobs()).thenReturn(List.of());
     when(blobsWithCommitments.allCellsPresent()).thenReturn(false);
 
     var result =
