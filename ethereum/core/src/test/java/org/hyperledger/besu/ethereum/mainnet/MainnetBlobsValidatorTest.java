@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.mainnet;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -27,6 +28,7 @@ import org.hyperledger.besu.ethereum.GasLimitCalculator;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.kzg.Blob;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGCommitment;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.gascalculator.GasCalculator;
@@ -74,6 +76,8 @@ public class MainnetBlobsValidatorTest {
     when(transaction.getVersionedHashes()).thenReturn(Optional.of(List.of(versionedHash)));
     when(transaction.getBlobsWithCommitments()).thenReturn(Optional.of(blobsWithCommitments));
     when(blobsWithCommitments.getBlobType()).thenReturn(BlobType.KZG_CELL_PROOFS);
+    // the count is only asked of a transaction that carries its blobs
+    when(blobsWithCommitments.hasBlobData()).thenReturn(true);
     when(blobsWithCommitments.getBlobs()).thenReturn(List.of(mock(Blob.class)));
     when(blobsWithCommitments.getKzgCommitments()).thenReturn(List.of());
 
@@ -83,6 +87,21 @@ public class MainnetBlobsValidatorTest {
         result,
         TransactionInvalidReason.INVALID_BLOBS,
         "transaction blobs and commitments are not the same size");
+  }
+
+  @Test
+  void shouldNotAskForTheBlobCountOfATransactionThatHoldsCellsOnly() {
+    // getBlobs() is null for a sidecar holding cells, so asking it for a count threw. Reaching the
+    // completeness check at all means the count was not asked for.
+    setUpOneWellFormedBlob();
+    when(blobsWithCommitments.hasBlobData()).thenReturn(false);
+    when(blobsWithCommitments.getBlobs()).thenReturn(null);
+    when(blobsWithCommitments.allCellsPresent()).thenReturn(false);
+
+    var result =
+        blobsValidator.validate(transaction, TransactionValidationParams.processingBlock());
+
+    assertInvalidResult(result, TransactionInvalidReason.INVALID_BLOBS, "not all cells present");
   }
 
   @Test
@@ -195,6 +214,48 @@ public class MainnetBlobsValidatorTest {
         result,
         TransactionInvalidReason.INVALID_BLOBS,
         "Unsupported blob type: KZG_CELL_PROOFS. Supported types: [KZG_PROOF].");
+  }
+
+  @Test
+  void shouldRejectAPartiallySampledTransactionWhenProcessingABlock() {
+    setUpOneWellFormedBlob();
+    when(blobsWithCommitments.allCellsPresent()).thenReturn(false);
+
+    var result =
+        blobsValidator.validate(transaction, TransactionValidationParams.processingBlock());
+
+    assertInvalidResult(result, TransactionInvalidReason.INVALID_BLOBS, "not all cells present");
+  }
+
+  @Test
+  void shouldAcceptAPartiallySampledTransactionInTheTransactionPool() {
+    // The eth/72 case: a transaction arrives with its blobs elided, and the pool holds it while the
+    // cells are sampled. Nothing is verifiable while no cell is held.
+    setUpOneWellFormedBlob();
+    when(blobsWithCommitments.allCellsPresent()).thenReturn(false);
+    when(blobsWithCommitments.getCellMask()).thenReturn(CellMask.EMPTY);
+
+    var result =
+        blobsValidator.validate(transaction, TransactionValidationParams.transactionPool());
+
+    assertTrue(result.isValid());
+  }
+
+  /**
+   * One blob whose commitment matches its versioned hash, so validation reaches the cell checks.
+   */
+  private void setUpOneWellFormedBlob() {
+    final KZGCommitment commitment = mock(KZGCommitment.class);
+    when(commitment.getData()).thenReturn(Bytes48.random());
+    // hashCommitment reads the commitment, so it cannot be called inside a when(...) argument
+    final VersionedHash versionedHash = MainnetBlobsValidator.hashCommitment(commitment);
+    when(transaction.getType()).thenReturn(TransactionType.BLOB);
+    when(transaction.getTo()).thenReturn(Optional.of(mock(Address.class)));
+    when(transaction.getVersionedHashes()).thenReturn(Optional.of(List.of(versionedHash)));
+    when(transaction.getBlobsWithCommitments()).thenReturn(Optional.of(blobsWithCommitments));
+    when(blobsWithCommitments.getBlobType()).thenReturn(BlobType.KZG_CELL_PROOFS);
+    when(blobsWithCommitments.getBlobs()).thenReturn(List.of(mock(Blob.class)));
+    when(blobsWithCommitments.getKzgCommitments()).thenReturn(List.of(commitment));
   }
 
   private void assertInvalidResult(

@@ -29,25 +29,24 @@ import org.slf4j.Logger;
 
 public class BlobPooledTransactionEncoder {
   private static final Logger LOG = getLogger(BlobPooledTransactionEncoder.class);
-  static final String NO_BLOB_DATA_ERROR =
-      "Transaction whose blobs are not held cannot be encoded for Pooled Transaction";
-
-  static final String NO_BLOBS_ERROR =
+  static final String NO_BLOBS_WITH_COMMITMENTS_ERROR =
       "Transaction with no blobsWithCommitments cannot be encoded for Pooled Transaction";
+  static final String NO_BLOBS_ERROR =
+      "Transaction with no blobs data cannot be encoded for Pooled Transaction";
 
   public static void encode(
       final Transaction transaction, final boolean elideBlobs, final RLPOutput out) {
     LOG.trace("Encoding transaction with blobs {}, blobs elision {}", transaction, elideBlobs);
     var blobsWithCommitments = transaction.getBlobsWithCommitments();
     if (blobsWithCommitments.isEmpty()) {
-      throw new InvalidParameterException(NO_BLOBS_ERROR);
+      throw new InvalidParameterException(NO_BLOBS_WITH_COMMITMENTS_ERROR);
     }
-    // Without elision the payloads are written out, so they must actually be held. getBlobs()
-    // yields a list of nulls for a transaction held as cells, which would otherwise surface far
-    // from here as a NullPointerException inside Blob::writeTo. Callers decide whether a
+    // Without elision the payloads are written out, so they must actually be held: a sidecar
+    // holding only cells has none, and getBlobs() is empty for it. With elision, as eth/72 sends
+    // it, there is nothing of the payloads to write, so cells are enough. Callers decide whether a
     // transaction is encodable with EncodingContext#canEncode; this is the backstop.
     if (!elideBlobs && !blobsWithCommitments.get().hasBlobData()) {
-      throw new InvalidParameterException(NO_BLOB_DATA_ERROR);
+      throw new InvalidParameterException(NO_BLOBS_ERROR);
     }
     out.startList();
     BlobTransactionEncoder.encode(transaction, out);

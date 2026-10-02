@@ -86,13 +86,11 @@ public final class BlobProofBundle {
     checkNotNull(kzgCommitment, "kzgCommitment must not be null");
     checkNotNull(versionedHash, "versionedHash must not be null");
     checkNotNull(kzgProof, "kzgProof must not be null");
-    if (blobType == BlobType.KZG_PROOF && kzgProof.size() != 1) {
-      String errorMessage =
-          "Invalid kzgProof size for versionId 0, expected 1 but got " + kzgProof.size();
-      throw new IllegalArgumentException(errorMessage);
+    if (blobType != BlobType.KZG_CELL_PROOFS) {
+      throw new IllegalArgumentException(
+          "Cells-only BlobProofBundle requires blob type KZG_CELL_PROOFS");
     }
-    if (blobType == BlobType.KZG_CELL_PROOFS
-        && kzgProof.size() != CKZG4844Helper.CELL_PROOFS_PER_BLOB) {
+    if (kzgProof.size() != CKZG4844Helper.CELL_PROOFS_PER_BLOB) {
       String errorMessage =
           "Invalid kzgProof size for versionId 1, expected "
               + CKZG4844Helper.CELL_PROOFS_PER_BLOB
@@ -177,12 +175,50 @@ public final class BlobProofBundle {
         && Objects.equals(this.blob, that.blob)
         && Objects.equals(this.kzgCommitment, that.kzgCommitment)
         && Objects.equals(this.kzgProof, that.kzgProof)
-        && Objects.equals(this.versionedHash, that.versionedHash);
+        && Objects.equals(this.versionedHash, that.versionedHash)
+        // Two bundles of the same blob can hold different cells of it, and for a bundle that holds
+        // no blob the cells are all there is to tell them apart.
+        && Objects.equals(this.cellsWithMask, that.cellsWithMask);
   }
 
   @Override
   public int hashCode() {
-    return Objects.hash(blobType, blob, kzgCommitment, kzgProof, versionedHash);
+    return Objects.hash(blobType, blob, kzgCommitment, kzgProof, versionedHash, cellsWithMask);
+  }
+
+  /**
+   * A copy sharing no byte array with this one, taking the versioned hash and the proofs to use
+   * rather than copying its own.
+   *
+   * <p>Both are passed in because a sidecar detaches all of its bundles at once and holds them in
+   * one shape: the transaction and its sidecar hold the same versioned hashes, and the proofs of
+   * every blob come from one list that each bundle views its own part of.
+   *
+   * @param detachedVersionedHash the versioned hash the copy should hold
+   * @param detachedProofs the proofs the copy should hold
+   * @return the detached copy
+   */
+  public BlobProofBundle detachedCopy(
+      final VersionedHash detachedVersionedHash, final List<KZGProof> detachedProofs) {
+
+    final KZGCommitment detachedCommitment = new KZGCommitment(kzgCommitment.getData().copy());
+
+    if (blob.isPresent()) {
+      final Blob detachedBlob = new Blob(blob.get().getData().copy());
+      return new BlobProofBundle(
+          blobType, detachedBlob, detachedCommitment, detachedProofs, detachedVersionedHash);
+    }
+
+    final CellsWithMask cwm =
+        cellsWithMask.orElseThrow(
+            () ->
+                new IllegalStateException(
+                    "Internal error: cellsWithMask must be present when blob is not"));
+
+    final CellsWithMask detachedCellsWithMask = cwm.detachedCopy();
+
+    return new BlobProofBundle(
+        blobType, detachedCellsWithMask, detachedCommitment, detachedProofs, detachedVersionedHash);
   }
 
   public BlobProofBundle detachedCopy() {

@@ -16,6 +16,7 @@ package org.hyperledger.besu.ethereum.core.kzg;
 
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Preconditions.checkNotNull;
+import static java.util.Collections.emptyList;
 import static org.hyperledger.besu.datatypes.BlobType.KZG_CELL_PROOFS;
 import static org.hyperledger.besu.datatypes.BlobType.KZG_PROOF;
 import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELL_PROOFS_PER_BLOB;
@@ -97,7 +98,7 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
         blobProofBundles.stream().map(bundle -> bundle.getBlob().isPresent()).distinct().count()
             == 1,
         "BlobProofBundles must either all carry their blob payload or none of them");
-    return new BlobsWithCommitments(blobType, blobProofBundles);
+    return new BlobsWithCommitments(blobType, List.copyOf(blobProofBundles));
   }
 
   /**
@@ -294,17 +295,15 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
         "Cells must have the same cell mask");
   }
 
-  /**
-   * Get the blobs.
-   *
-   * @return the blobs
-   */
   @Override
   public List<Blob> getBlobs() {
-    return blobProofBundles.stream()
-        .map(BlobProofBundle::getBlob)
-        .map(b -> b.orElse(null))
-        .toList();
+    if (hasBlobData()) {
+      return blobProofBundles.stream()
+          .map(BlobProofBundle::getBlob)
+          .map(Optional::orElseThrow)
+          .toList();
+    }
+    return emptyList();
   }
 
   /**
@@ -508,13 +507,51 @@ public class BlobsWithCommitments implements org.hyperledger.besu.datatypes.Blob
   }
 
   /**
-   * A copy sharing nothing with this one, for holding beyond the lifetime of the message it was
-   * decoded from.
+   * A copy sharing no byte array with this one, for holding beyond the lifetime of the message it
+   * was decoded from.
    *
+   * <p>The versioned hashes are passed in rather than copied: a blob transaction holds the same
+   * hashes as its sidecar does, so detaching the whole transaction copies them once and hands them
+   * to both, rather than leaving the copy with two sets of identical hashes where the original had
+   * one.
+   *
+   * @param detachedVersionedHashes the hashes the copy should hold, one per blob and in blob order
    * @return the detached copy
    */
-  public BlobsWithCommitments detachedCopy() {
+  public BlobsWithCommitments detachedCopy(final List<VersionedHash> detachedVersionedHashes) {
+    checkArgument(
+        detachedVersionedHashes.size() == blobProofBundles.size(),
+        "Invalid number of versionedHashes, expected %s, got %s",
+        blobProofBundles.size(),
+        detachedVersionedHashes.size());
+
+    final List<KZGProof> detachedProofs =
+        getKzgProofs().stream().map(proof -> new KZGProof(proof.getData().copy())).toList();
+    final int proofsPerBlob = detachedProofs.size() / blobProofBundles.size();
+
     return new BlobsWithCommitments(
-        blobType, blobProofBundles.stream().map(BlobProofBundle::detachedCopy).toList());
+        blobType,
+        IntStream.range(0, blobProofBundles.size())
+            .mapToObj(
+                index ->
+                    blobProofBundles
+                        .get(index)
+                        .detachedCopy(
+                            detachedVersionedHashes.get(index),
+                            proofsFor(detachedProofs, index, proofsPerBlob)))
+            .toList());
+  }
+
+  /**
+   * One blob's proofs out of the copied list, in the shape a decoded sidecar holds them, which is
+   * the shape the blobpool accounts for: a cell-proof sidecar keeps one list for the whole
+   * transaction and each blob views its own part of it, where a sidecar with one proof per blob
+   * keeps that proof on its own.
+   */
+  private List<KZGProof> proofsFor(
+      final List<KZGProof> detachedProofs, final int index, final int proofsPerBlob) {
+    return blobType == KZG_CELL_PROOFS
+        ? detachedProofs.subList(index * proofsPerBlob, (index + 1) * proofsPerBlob)
+        : List.of(detachedProofs.get(index));
   }
 }

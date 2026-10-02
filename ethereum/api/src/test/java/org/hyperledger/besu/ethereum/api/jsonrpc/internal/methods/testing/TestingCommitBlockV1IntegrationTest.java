@@ -44,6 +44,7 @@ import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
+import org.hyperledger.besu.ethereum.eth.transactions.PeerTransactionTracker;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
@@ -236,6 +237,7 @@ class TestingCommitBlockV1IntegrationTest {
             fixture.getProtocolSchedule(),
             fixture.getProtocolContext(),
             mock(TransactionBroadcaster.class),
+            mock(PeerTransactionTracker.class),
             ethContext,
             new TransactionPoolMetrics(new NoOpMetricsSystem()),
             poolConf,

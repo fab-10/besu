@@ -47,8 +47,19 @@ public class GetBlockAccessListsFromPeerTask implements PeerTask<List<Optional<B
 
   private final List<BlockHeader> blockHeaders;
   private final long requiredBlockchainHeight;
+  private final boolean singleAttempt;
 
   public GetBlockAccessListsFromPeerTask(final List<BlockHeader> blockHeaders) {
+    this(blockHeaders, false);
+  }
+
+  /**
+   * @param blockHeaders headers of the requested BALs, all advertising a BAL hash
+   * @param singleAttempt when true, the request is sent once to a single peer without retries, for
+   *     best-effort callers that can reconstruct missing BALs
+   */
+  public GetBlockAccessListsFromPeerTask(
+      final List<BlockHeader> blockHeaders, final boolean singleAttempt) {
     checkArgument(
         blockHeaders != null && !blockHeaders.isEmpty(), "Block headers must not be empty");
     checkArgument(
@@ -60,11 +71,22 @@ public class GetBlockAccessListsFromPeerTask implements PeerTask<List<Optional<B
             .mapToLong(BlockHeader::getNumber)
             .max()
             .orElse(BlockHeader.GENESIS_BLOCK_NUMBER);
+    this.singleAttempt = singleAttempt;
   }
 
   @Override
   public SubProtocol getSubProtocol() {
     return EthProtocol.get();
+  }
+
+  @Override
+  public int getRetriesWithOtherPeer() {
+    return singleAttempt ? 0 : PeerTask.super.getRetriesWithOtherPeer();
+  }
+
+  @Override
+  public int getRetriesWithSamePeer() {
+    return singleAttempt ? 0 : PeerTask.super.getRetriesWithSamePeer();
   }
 
   @Override
@@ -104,7 +126,8 @@ public class GetBlockAccessListsFromPeerTask implements PeerTask<List<Optional<B
       final Hash expectedBalHash = blockHeaders.get(i).getBalHash().orElse(null);
       final Optional<BlockAccessList> maybeBal = result.get(i);
       if (maybeBal.isEmpty()) {
-        // If the request BAL lies beyond WSP, the peer may not have the BAL available
+        // If the request BAL lies beyond the history expiry window, the peer may not have the BAL
+        // available
         // legitimately. TODO: Verify legitimacy of BAL unavailability.
         continue;
       }
@@ -137,6 +160,9 @@ public class GetBlockAccessListsFromPeerTask implements PeerTask<List<Optional<B
 
   @Override
   public Predicate<EthPeerImmutableAttributes> getPeerRequirementFilter() {
-    return ethPeer -> ethPeer.estimatedChainHeight() >= requiredBlockchainHeight;
+    return ethPeer ->
+        ethPeer.estimatedChainHeight() >= requiredBlockchainHeight
+            && ethPeer.ethPeer().getAgreedCapabilities().stream()
+                .anyMatch(EthProtocol::isEth71Compatible);
   }
 }

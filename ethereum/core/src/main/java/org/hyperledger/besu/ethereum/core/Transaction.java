@@ -1223,7 +1223,11 @@ public class Transaction
     }
     if (transactionType.supportsBlob()) {
       sb.append("numberOfBlobs=")
-          .append(blobsWithCommitments.map(bwc -> bwc.getBlobs().size()).orElse(-1))
+          // counted from the bundles, since getBlobs() is null for a sidecar holding cells
+          .append(blobsWithCommitments.map(bwc -> bwc.getBlobProofBundles().size()).orElse(-1))
+          .append(", ");
+      sb.append("cellsHeld=")
+          .append(blobsWithCommitments.map(bwc -> bwc.getCellMask().toString()).orElse("{}"))
           .append(", ");
     }
     if (transactionType.supportsDelegateCode()) {
@@ -1260,7 +1264,9 @@ public class Transaction
     }
     if (transactionType.supportsBlob()) {
       sb.append("b: ")
-          .append(blobsWithCommitments.map(bwc -> bwc.getBlobs().size()).orElse(-1))
+          // counted from the bundles, since getBlobs() is null for a sidecar holding cells
+          .append(blobsWithCommitments.map(bwc -> bwc.getBlobProofBundles().size()).orElse(-1))
+          .append(blobsWithCommitments.map(bwc -> bwc.getCellMask().toString()).orElse("{}"))
           .append(", ");
     }
     if (transactionType.supportsDelegateCode()) {
@@ -1304,7 +1310,8 @@ public class Transaction
                     .map(vh -> new VersionedHash(Bytes32.wrap(vh.getBytes().copy())))
                     .toList());
     final Optional<BlobsWithCommitments> detachedBlobsWithCommitments =
-        blobsWithCommitments.map(BlobsWithCommitments::detachedCopy);
+        blobsWithCommitments.map(
+            withCommitments -> withCommitments.detachedCopy(detachedVersionedHashes.get()));
     final Optional<List<CodeDelegation>> detachedCodeDelegationList =
         maybeCodeDelegationList.map(
             codeDelegations ->

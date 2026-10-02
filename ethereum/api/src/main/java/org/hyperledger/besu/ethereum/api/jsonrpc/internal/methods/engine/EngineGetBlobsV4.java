@@ -33,13 +33,10 @@ import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
-import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 import jakarta.validation.constraints.NotNull;
 import org.apache.tuweni.bytes.Bytes;
@@ -56,6 +53,7 @@ import org.slf4j.LoggerFactory;
  * <p>Specification:
  *
  * <ul>
+ *   <li>Returns null while syncing and before cell proofs exist, which is before Osaka
  *   <li>Returns partial responses with null entries for missing blobs
  *   <li>Supports at least 128 blob versioned hashes per request
  *   <li>Only supports KZG_CELL_PROOFS blob type (rejects KZG_PROOF)
@@ -98,15 +96,17 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
     if (mergeContext.get().isSyncing()) {
       return new JsonRpcSuccessResponse(requestContext.getRequest().getId(), null);
     }
-    long timestamp = protocolContext.getBlockchain().getChainHeadHeader().getTimestamp();
-    ValidationResult<RpcErrorType> forkValidationResult = validateForkSupported(timestamp);
-    if (!forkValidationResult.isValid()) {
-      return new JsonRpcErrorResponse(requestContext.getRequest().getId(), forkValidationResult);
+    final long timestamp = protocolContext.getBlockchain().getChainHeadHeader().getTimestamp();
+    if (!validateForkSupported(timestamp).isValid()) {
+      // this method has no unsupported fork error, without cell proofs it is unable to serve blob
+      // pool data
+      return new JsonRpcSuccessResponse(requestContext.getRequest().getId(), null);
     }
 
     getBlobsMetrics.increaseRequested(versionedHashes.length);
 
-    final List<BlobCellsAndProofsV1> result = getBlobV4Result(versionedHashes, cellMask);
+    final List<Integer> cellIndexes = cellMask.streamIndexes().boxed().toList();
+    final List<BlobCellsAndProofsV1> result = getBlobV4Result(versionedHashes, cellIndexes);
 
     // count available blobs (non-null entries)
     final int availableCount = (int) result.stream().filter(Objects::nonNull).count();
@@ -161,47 +161,33 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
   }
 
   private @NotNull List<BlobCellsAndProofsV1> getBlobV4Result(
-      final VersionedHash[] versionedHashes, final CellMask cellMask) {
+      final VersionedHash[] versionedHashes, final List<Integer> cellIndexes) {
+    // One entry per requested hash, in request order, null where we cannot answer: dropping the
+    // entries we cannot answer would shift every later one onto the wrong versioned hash.
     return Arrays.stream(versionedHashes)
-        .map(transactionPool::getBlobProofBundle)
-        .map(bundle -> getBlobCellsAndProofsV1(bundle, cellMask))
+        .map(vh -> transactionPool.getBlobProofBundle(vh, cellIndexes))
+        .map(bundle -> bundle == null ? null : getBlobCellsAndProofsV1(bundle, cellIndexes))
         .toList();
   }
 
   private @Nullable BlobCellsAndProofsV1 getBlobCellsAndProofsV1(
-      final BlobProofBundle bundle, final CellMask reqCellMask) {
-    if (bundle == null) {
-      return null;
-    }
+      final BlobProofBundle bundle, final List<Integer> cellIndexes) {
     // Only KZG_CELL_PROOFS blobs support cell-level extraction, reject KZG_PROOF
     if (bundle.getBlobType() == BlobType.KZG_PROOF) {
       LOG.debug(
           "Unsupported blob type KZG_PROOF for versioned hash: {}", bundle.getVersionedHash());
       return null;
     }
-
-    final Optional<CellsWithMask> maybeCellsWithMask = bundle.getCellsWithMask();
-
-    if (maybeCellsWithMask.isEmpty()) {
-      return null;
-    }
-
-    final CellsWithMask cellsWithMask = maybeCellsWithMask.get();
-
-    if (!cellsWithMask.getCellMask().containsAll(reqCellMask)) {
-      return null;
-    }
-
-    final int[] cellIndexes = reqCellMask.indexes();
-
-    final List<Cell> resCells = new ArrayList<>(cellIndexes.length);
-    final List<KZGProof> proofs = new ArrayList<>(cellIndexes.length);
-
-    for (final int cellIndex : cellIndexes) {
-      resCells.add(cellsWithMask.getCell(cellIndex));
-      proofs.add(bundle.getKzgProof().get(cellIndex));
-    }
-
-    return new BlobCellsAndProofsV1(resCells, proofs);
+    final CellsWithMask cellsWithMask =
+        bundle
+            .getCellsWithMask()
+            .orElseThrow(
+                () ->
+                    new IllegalStateException(
+                        "Internal error: bundle must have cells with mask at this point"));
+    final List<Cell> cells = cellIndexes.stream().map(cellsWithMask::getCell).toList();
+    final List<KZGProof> proofs =
+        cellIndexes.stream().map(index -> bundle.getKzgProof().get(index)).toList();
+    return new BlobCellsAndProofsV1(cells, proofs);
   }
 }
