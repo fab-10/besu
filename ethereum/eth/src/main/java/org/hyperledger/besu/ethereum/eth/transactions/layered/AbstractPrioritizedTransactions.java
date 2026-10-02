@@ -27,7 +27,6 @@ import org.hyperledger.besu.ethereum.eth.transactions.PendingTransaction;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAddedResult;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
-import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.DefaultInclusionListSelector;
 import org.hyperledger.besu.ethereum.eth.transactions.inclusionlist.InclusionListTransactionSelector;
 
 import java.util.ArrayList;
@@ -50,7 +49,7 @@ public abstract class AbstractPrioritizedTransactions extends AbstractSequential
   protected final TreeSet<PendingTransaction> orderByFee;
   private final MiningConfiguration miningConfiguration;
   protected final InclusionListTransactionSelector inclusionListTransactionSelector =
-      new DefaultInclusionListSelector();
+      new InclusionListTransactionSelector();
 
   public AbstractPrioritizedTransactions(
       final TransactionPoolConfiguration poolConfig,
