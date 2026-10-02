@@ -263,8 +263,6 @@ public interface Blockchain {
    */
   Optional<Hash> getTransactionHashBySenderAndNonce(Address sender, long nonce);
 
-  Optional<List<String>> getInclusionListHexTransactions(Hash blockHash);
-
   /**
    * Adds an observer that will get called when a new block is added.
    *

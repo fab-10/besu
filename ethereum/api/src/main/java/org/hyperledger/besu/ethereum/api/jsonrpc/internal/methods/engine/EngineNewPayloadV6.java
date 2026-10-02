@@ -106,14 +106,6 @@ public final class EngineNewPayloadV6<
   }
 
   @Override
-  protected void processAcceptedBlock(final Block block, final NPRP requestParameters) {
-    protocolContext
-        .getBlockchain()
-        .storeInclusionListTransactions(
-            block.getHash(), requestParameters.inclusionListTransactions());
-  }
-
-  @Override
   protected PayloadStatusV2 createValidPayloadStatus(
       final Hash latestValidHash,
       final PayloadPostExecutionValidationResultV1 postExecutionResult) {

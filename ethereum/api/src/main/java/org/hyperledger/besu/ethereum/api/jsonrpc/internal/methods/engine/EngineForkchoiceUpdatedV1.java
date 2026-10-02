@@ -39,7 +39,6 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcRespon
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.JsonRpcSuccessResponse;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.ForkchoiceUpdatedResultV1;
-import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.PayloadPostExecutionValidationResultV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.PayloadStatusV1;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
@@ -183,9 +182,7 @@ public sealed class EngineForkchoiceUpdatedV1<
     if (mergeCoordinator.isAncestorOfFinalized(newHead)) {
       logFCU(VALID, forkChoice);
       return new JsonRpcSuccessResponse(
-          requestId,
-          creteValidResult(
-              forkChoice.getHeadBlockHash(), null, PayloadPostExecutionValidationResultV1.SUCCESS));
+          requestId, creteValidResult(forkChoice.getHeadBlockHash(), null));
     }
 
     // 3. If forkchoiceState.headBlockHash references a PoW block, client software
@@ -231,11 +228,8 @@ public sealed class EngineForkchoiceUpdatedV1<
       return handleNonValidForkchoiceUpdate(requestId, forkChoice, forkchoiceResult);
     }
 
-    final PayloadPostExecutionValidationResultV1 postExecutionResult =
-        validatePostExecution(newHead);
-
     PayloadIdentifier payloadId = null;
-    if (postExecutionResult.isSuccess() && maybePayloadAttributes.isPresent()) {
+    if (maybePayloadAttributes.isPresent()) {
       final PA attrs = maybePayloadAttributes.get();
 
       // Version-specific payload field checks.
@@ -269,25 +263,11 @@ public sealed class EngineForkchoiceUpdatedV1<
     return new JsonRpcSuccessResponse(
         requestId,
         creteValidResult(
-            forkchoiceResult.getNewHead().map(BlockHeader::getHash).orElse(null),
-            payloadId,
-            postExecutionResult));
-  }
-
-  /**
-   * Extension point for version-specific validation that requires a successfully processed block
-   * (e.g. inclusion list satisfaction, EIP-7805). Returns a response to short-circuit with if
-   * validation fails.
-   */
-  protected PayloadPostExecutionValidationResultV1 validatePostExecution(
-      final BlockHeader newHead) {
-    return PayloadPostExecutionValidationResultV1.SUCCESS;
+            forkchoiceResult.getNewHead().map(BlockHeader::getHash).orElse(null), payloadId));
   }
 
   protected ForkchoiceUpdatedResultV1 creteValidResult(
-      final Hash lastValid,
-      final PayloadIdentifier payloadId,
-      final PayloadPostExecutionValidationResultV1 postExecutionResult) {
+      final Hash lastValid, final PayloadIdentifier payloadId) {
     return new ForkchoiceUpdatedResultV1(new PayloadStatusV1(VALID, lastValid), payloadId);
   }
 
