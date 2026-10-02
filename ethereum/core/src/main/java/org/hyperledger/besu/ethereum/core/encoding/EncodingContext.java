@@ -73,10 +73,11 @@ public enum EncodingContext {
    * transaction on arrival, and permanently so for one this node only ever samples.
    *
    * <p>Callers serving or announcing to a peer should skip a transaction this rejects, rather than
-   * discovering the gap while encoding: the blob list of such a transaction is a list of nulls, so
-   * encoding it fails with a {@link NullPointerException} well away from the cause. Deciding it
-   * here also keeps serving and announcing consistent — announcing a transaction to a peer whose
-   * protocol version we could not then serve claims an availability we do not have.
+   * discovering the gap while encoding: the blob list of such a transaction is empty, so encoding
+   * it unguarded would send a malformed transaction rather than fail, and the encoder's guard only
+   * fails well away from the cause. Deciding it here also keeps serving and announcing consistent —
+   * announcing a transaction to a peer whose protocol version we could not then serve claims an
+   * availability we do not have.
    *
    * @param transaction the transaction to encode
    * @return true if this context can encode it

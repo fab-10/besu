@@ -115,7 +115,7 @@ class BlobPooledTransactionElidedDecodingTest extends TrustedSetupClassLoaderExt
   @Test
   void encodingACellsOnlyTransactionForAPreEth72PeerFailsLegibly() {
     // The backstop for anything that reaches the encoder without asking canEncode first: the blob
-    // list is a list of nulls, so without this the failure is a NullPointerException in Blob.
+    // list is empty, so without this the encoder would write a malformed transaction, not fail.
     final Transaction asCells = roundTripElided(blobTransaction());
 
     assertThatExceptionOfType(InvalidParameterException.class)
