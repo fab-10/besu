@@ -185,9 +185,15 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
                 () ->
                     new IllegalStateException(
                         "Internal error: bundle must have cells with mask at this point"));
+    // The pool may hold only some of the requested cells. Each one it does not hold is a null in
+    // both lists, as the spec requires, and the proof has to be null too: a partial bundle's proofs
+    // are verified only where it holds the cell, so any other proof is one nobody has checked.
+    // getCell already answers null for a cell that is not held.
     final List<Cell> cells = cellIndexes.stream().map(cellsWithMask::getCell).toList();
     final List<KZGProof> proofs =
-        cellIndexes.stream().map(index -> bundle.getKzgProof().get(index)).toList();
+        cellIndexes.stream()
+            .map(index -> cellsWithMask.hasCell(index) ? bundle.getKzgProof().get(index) : null)
+            .toList();
     return new BlobCellsAndProofsV1(cells, proofs);
   }
 }

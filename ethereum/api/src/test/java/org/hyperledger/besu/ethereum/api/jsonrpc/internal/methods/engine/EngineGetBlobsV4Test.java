@@ -34,6 +34,7 @@ import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.VersionedHash;
 import org.hyperledger.besu.ethereum.ProtocolContext;
+import org.hyperledger.besu.ethereum.api.jsonrpc.JsonRpcObjectMapperFactory;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequest;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
@@ -63,6 +64,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 
+import com.fasterxml.jackson.databind.JsonNode;
 import io.vertx.core.Vertx;
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.BeforeEach;
@@ -249,9 +251,40 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
         .containsExactly(full.getKzgProof().get(64), full.getKzgProof().get(127));
   }
 
-  // Whether the pool holds the requested cells at all is decided by the pool, which answers null
-  // when it cannot cover them; see BlobV1TransactionPoolTest. Here a null simply becomes a null
-  // entry, as shouldReturnNullForMissingBlobsInPartialResponse covers.
+  @Test
+  public void shouldReturnNullInPlaceOfARequestedCellThatIsNotHeld() throws Exception {
+    // The spec: a cell unavailable for an otherwise available blob is null in blob_cells, and its
+    // entry in proofs is null too, rather than the whole blob being null.
+    final BlobProofBundle full = new BlobTestFixture().createBlobProofBundle(KZG_CELL_PROOFS);
+    final CellsWithMask allCells = full.getCellsWithMask().orElseThrow();
+    final BlobProofBundle sparse = sparseCopyOf(full, UPPER_HALF);
+
+    // request cell index 0, not held, and cell index 127, held
+    final byte[] requested = new byte[16];
+    requested[0] = 0x01;
+    requested[15] = (byte) 0x80;
+
+    JsonRpcSuccessResponse response =
+        getSuccessResponse(buildRequestContext(Bytes.wrap(requested), sparse.getVersionedHash()));
+
+    @SuppressWarnings("unchecked")
+    List<BlobCellsAndProofsV1> result = (List<BlobCellsAndProofsV1>) response.getResult();
+    assertThat(result).hasSize(1);
+    assertThat(result.getFirst().getBlobCells()).containsExactly(null, allCells.getCell(127));
+    assertThat(result.getFirst().getProofs()).containsExactly(null, full.getKzgProof().get(127));
+
+    // and the nulls survive serialization, in place
+    final JsonNode json =
+        JsonRpcObjectMapperFactory.getResponseMapper().valueToTree(result.getFirst());
+    assertThat(json.get("blob_cells").get(0).isNull()).isTrue();
+    assertThat(json.get("blob_cells").get(1).isTextual()).isTrue();
+    assertThat(json.get("proofs").get(0).isNull()).isTrue();
+    assertThat(json.get("proofs").get(1).isTextual()).isTrue();
+  }
+
+  // Which bundle answers a hash, and whether one does at all, is decided by the pool, which answers
+  // null when it holds none of the requested cells; see BlobV1TransactionPoolTest. Here a null
+  // simply becomes a null entry, as shouldReturnNullForMissingBlobsInPartialResponse covers.
 
   /** The same blob, holding only the cells of {@code mask}, as a sampling node would. */
   private BlobProofBundle sparseCopyOf(final BlobProofBundle full, final CellMask mask) {
