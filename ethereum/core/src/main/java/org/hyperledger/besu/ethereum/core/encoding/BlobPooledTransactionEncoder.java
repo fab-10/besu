@@ -41,8 +41,7 @@ public class BlobPooledTransactionEncoder {
       throw new InvalidParameterException(NO_BLOBS_WITH_COMMITMENTS_ERROR);
     }
     if (!blobsWithCommitments.get().hasBlobData()) {
-      // A sidecar holding only cells has no blob payload to write: getBlobs() is the right length
-      // but holds nothing, so hasBlobData is what decides whether this form can be produced at all.
+      // A sidecar holding only cells has no blob payload to write.
       throw new InvalidParameterException(NO_BLOBS_ERROR);
     }
     out.startList();

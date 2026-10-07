@@ -17,7 +17,6 @@ package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 import static org.hyperledger.besu.datatypes.BlobType.KZG_CELL_PROOFS;
-import static org.hyperledger.besu.datatypes.BlobType.KZG_PROOF;
 import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.OSAKA;
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine.EngineTestSupport.fromErrorResp;
 import static org.mockito.ArgumentMatchers.any;
@@ -101,11 +100,15 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
   @Mock LabelledMetric<Counter> missingLabelledCounter;
   @Mock LabelledMetric<Counter> partialResponseLabelledCounter;
   @Mock LabelledMetric<Counter> fullResponseLabelledCounter;
+  @Mock LabelledMetric<Counter> cellsFullyReturnedLabelledCounter;
+  @Mock LabelledMetric<Counter> cellsPartiallyReturnedLabelledCounter;
   @Mock Counter requestedCounter;
   @Mock Counter availableCounter;
   @Mock Counter missingCounter;
   @Mock Counter partialResponseCounter;
   @Mock Counter fullResponseCounter;
+  @Mock Counter cellsFullyReturnedCounter;
+  @Mock Counter cellsPartiallyReturnedCounter;
   @Mock ObservableMetricsSystem metricsSystem;
   @Mock MergeContext mergeContext;
 
@@ -149,12 +152,28 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
             anyString(),
             eq("version")))
         .thenReturn(fullResponseLabelledCounter);
+    when(metricsSystem.createLabelledCounter(
+            eq(BesuMetricCategory.RPC),
+            eq("execution_engine_getblobs_cells_fully_returned_total"),
+            anyString(),
+            eq("version")))
+        .thenReturn(cellsFullyReturnedLabelledCounter);
+    when(metricsSystem.createLabelledCounter(
+            eq(BesuMetricCategory.RPC),
+            eq("execution_engine_getblobs_cells_partially_returned_total"),
+            anyString(),
+            eq("version")))
+        .thenReturn(cellsPartiallyReturnedLabelledCounter);
 
     when(requestedLabelledCounter.labels(anyString())).thenReturn(requestedCounter);
     when(availableLabelledCounter.labels(anyString())).thenReturn(availableCounter);
     when(missingLabelledCounter.labels(anyString())).thenReturn(missingCounter);
     when(partialResponseLabelledCounter.labels(anyString())).thenReturn(partialResponseCounter);
     when(fullResponseLabelledCounter.labels(anyString())).thenReturn(fullResponseCounter);
+    when(cellsFullyReturnedLabelledCounter.labels(anyString()))
+        .thenReturn(cellsFullyReturnedCounter);
+    when(cellsPartiallyReturnedLabelledCounter.labels(anyString()))
+        .thenReturn(cellsPartiallyReturnedCounter);
 
     method =
         new EngineGetBlobsV4(
@@ -248,6 +267,9 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
         .containsExactly(allCells.getCell(64).getData(), allCells.getCell(127).getData());
     assertThat(result.getFirst().getProofs())
         .containsExactly(full.getKzgProof().get(64), full.getKzgProof().get(127));
+
+    verify(cellsFullyReturnedCounter).inc();
+    verifyNoInteractions(cellsPartiallyReturnedCounter);
   }
 
   @Test
@@ -280,6 +302,34 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
     assertThat(json.get("blob_cells").get(1).isTextual()).isTrue();
     assertThat(json.get("proofs").get(0).isNull()).isTrue();
     assertThat(json.get("proofs").get(1).isTextual()).isTrue();
+
+    // A null in place keeps the list at the requested size, so the count has to look at the cells.
+    // The response is still full: every requested blob got an entry.
+    verify(cellsPartiallyReturnedCounter).inc();
+    verifyNoInteractions(cellsFullyReturnedCounter);
+    verify(fullResponseCounter).inc();
+    verifyNoInteractions(partialResponseCounter);
+  }
+
+  @Test
+  public void shouldReturnAnEmptyEntryForAnAllZeroBitarray() {
+    // Nothing requested of a blob we hold is still an answer about a blob we hold, not a miss.
+    BlobProofBundle bundle = createBundleWithBlobType(KZG_CELL_PROOFS);
+
+    JsonRpcSuccessResponse response =
+        getSuccessResponse(
+            buildRequestContext(Bytes.wrap(new byte[16]), bundle.getVersionedHash()));
+
+    @SuppressWarnings("unchecked")
+    List<BlobCellsAndProofsV1> result = (List<BlobCellsAndProofsV1>) response.getResult();
+    assertThat(result).hasSize(1);
+    assertThat(result.getFirst()).isNotNull();
+    assertThat(result.getFirst().getBlobCells()).isEmpty();
+    assertThat(result.getFirst().getProofs()).isEmpty();
+
+    verify(availableCounter).inc(1);
+    verify(missingCounter).inc(0);
+    verify(fullResponseCounter).inc();
   }
 
   // Which bundle answers a hash, and whether one does at all, is decided by the pool, which answers
@@ -331,24 +381,6 @@ public class EngineGetBlobsV4Test extends AbstractScheduledApiTest {
 
     verify(requestedCounter).inc(3);
     verify(availableCounter).inc(2);
-    verify(missingCounter).inc(1);
-    verify(partialResponseCounter).inc();
-    verifyNoInteractions(fullResponseCounter);
-  }
-
-  @Test
-  public void shouldReturnNullForKzgProofBlobType() {
-    BlobProofBundle bundle = createBundleWithBlobType(KZG_PROOF);
-    JsonRpcSuccessResponse response =
-        getSuccessResponse(buildRequestContext(FULL_BITARRAY, bundle.getVersionedHash()));
-
-    @SuppressWarnings("unchecked")
-    List<BlobCellsAndProofsV1> result = (List<BlobCellsAndProofsV1>) response.getResult();
-    assertThat(result).hasSize(1);
-    assertThat(result.getFirst()).isNull();
-
-    verify(requestedCounter).inc(1);
-    verify(availableCounter).inc(0);
     verify(missingCounter).inc(1);
     verify(partialResponseCounter).inc();
     verifyNoInteractions(fullResponseCounter);

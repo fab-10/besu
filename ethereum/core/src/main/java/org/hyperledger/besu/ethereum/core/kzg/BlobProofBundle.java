@@ -25,6 +25,7 @@ import java.util.Objects;
 import java.util.Optional;
 
 import org.apache.tuweni.bytes.Bytes;
+import org.apache.tuweni.bytes.MutableBytes;
 
 /** Represents a bundle of proofs for a blob, including KZG commitments and proofs. */
 public final class BlobProofBundle {
@@ -105,16 +106,43 @@ public final class BlobProofBundle {
     this.versionedHash = versionedHash;
   }
 
+  /**
+   * For {@link #detachedCopy}, which copies a bundle that was validated when it was built, so the
+   * checks of the public constructors would only repeat, and the cells are copied rather than
+   * computed again from the blob.
+   */
+  private BlobProofBundle(
+      final BlobType blobType,
+      final Optional<Blob> blob,
+      final Optional<CellsWithMask> cellsWithMask,
+      final KZGCommitment kzgCommitment,
+      final List<KZGProof> kzgProof,
+      final VersionedHash versionedHash) {
+    this.blobType = blobType;
+    this.blob = blob;
+    this.cellsWithMask = cellsWithMask;
+    this.kzgCommitment = kzgCommitment;
+    this.kzgProof = kzgProof;
+    this.versionedHash = versionedHash;
+  }
+
   private CellsWithMask computeCells(final Blob blob, final BlobType blobType) {
     if (blobType == BlobType.KZG_CELL_PROOFS) {
-      final Bytes cellsBytes = CKZG4844Helper.computeCells(blob);
-      final List<Cell> cells = new ArrayList<>(CKZG4844Helper.CELLS_PER_EXT_BLOB);
-      for (int i = 0; i < CKZG4844Helper.CELLS_PER_EXT_BLOB; i++) {
-        cells.add(new Cell(cellsBytes.slice(i * Cell.SIZE, Cell.SIZE)));
-      }
-      return new CellsWithMask(cells, CellMask.FULL);
+      return cellsOf(CKZG4844Helper.computeCells(blob));
     }
     return null;
+  }
+
+  /**
+   * Every cell of a blob, held as slices of the one array that carries them all, which is the shape
+   * the blobpool's memory accounting measures.
+   */
+  private static CellsWithMask cellsOf(final Bytes cellsBytes) {
+    final List<Cell> cells = new ArrayList<>(CKZG4844Helper.CELLS_PER_EXT_BLOB);
+    for (int i = 0; i < CKZG4844Helper.CELLS_PER_EXT_BLOB; i++) {
+      cells.add(new Cell(cellsBytes.slice(i * Cell.SIZE, Cell.SIZE)));
+    }
+    return new CellsWithMask(cells, CellMask.FULL);
   }
 
   public BlobType getBlobType() {
@@ -203,9 +231,17 @@ public final class BlobProofBundle {
     final KZGCommitment detachedCommitment = new KZGCommitment(kzgCommitment.getData().copy());
 
     if (blob.isPresent()) {
+      // The cells were computed from the blob when this bundle was built, so they are copied
+      // rather than computed again: extending a blob into its cells is far more expensive than
+      // copying them, and the pool detaches every transaction it adds.
       final Blob detachedBlob = new Blob(blob.get().getData().copy());
       return new BlobProofBundle(
-          blobType, detachedBlob, detachedCommitment, detachedProofs, detachedVersionedHash);
+          blobType,
+          Optional.of(detachedBlob),
+          cellsWithMask.map(BlobProofBundle::detachedCopyOfComputedCells),
+          detachedCommitment,
+          detachedProofs,
+          detachedVersionedHash);
     }
 
     final CellsWithMask cwm =
@@ -218,5 +254,21 @@ public final class BlobProofBundle {
 
     return new BlobProofBundle(
         blobType, detachedCellsWithMask, detachedCommitment, detachedProofs, detachedVersionedHash);
+  }
+
+  /**
+   * Copies the cells of a blob into one new array and slices it as {@link #computeCells} does, so
+   * the copy is held in the same shape as cells computed from the blob, rather than in the array
+   * per cell that {@link CellsWithMask#detachedCopy} would give.
+   */
+  private static CellsWithMask detachedCopyOfComputedCells(final CellsWithMask computed) {
+    final List<Cell> cells = computed.getCells();
+    final byte[] copied = new byte[cells.size() * Cell.SIZE];
+    final MutableBytes destination = MutableBytes.wrap(copied);
+    for (int i = 0; i < cells.size(); i++) {
+      cells.get(i).getData().copyTo(destination, i * Cell.SIZE);
+    }
+    // wrapped as computeCells wraps the array it gets back, so the slices are the same kind
+    return cellsOf(Bytes.wrap(copied));
   }
 }

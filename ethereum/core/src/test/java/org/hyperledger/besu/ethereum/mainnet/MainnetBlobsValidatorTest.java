@@ -96,12 +96,12 @@ public class MainnetBlobsValidatorTest {
     setUpOneWellFormedBlob();
     when(blobsWithCommitments.hasBlobData()).thenReturn(false);
     when(blobsWithCommitments.getBlobs()).thenReturn(List.of());
-    when(blobsWithCommitments.allCellsPresent()).thenReturn(false);
 
     var result =
         blobsValidator.validate(transaction, TransactionValidationParams.processingBlock());
 
-    assertInvalidResult(result, TransactionInvalidReason.INVALID_BLOBS, "not all cells present");
+    assertInvalidResult(
+        result, TransactionInvalidReason.INVALID_BLOBS, "transaction blob data not present");
   }
 
   @Test
@@ -219,12 +219,30 @@ public class MainnetBlobsValidatorTest {
   @Test
   void shouldRejectAPartiallySampledTransactionWhenProcessingABlock() {
     setUpOneWellFormedBlob();
-    when(blobsWithCommitments.allCellsPresent()).thenReturn(false);
+    when(blobsWithCommitments.hasBlobData()).thenReturn(false);
 
     var result =
         blobsValidator.validate(transaction, TransactionValidationParams.processingBlock());
 
-    assertInvalidResult(result, TransactionInvalidReason.INVALID_BLOBS, "not all cells present");
+    assertInvalidResult(
+        result, TransactionInvalidReason.INVALID_BLOBS, "transaction blob data not present");
+  }
+
+  @Test
+  void shouldRejectATransactionHoldingEveryCellButNoBlobWhenProcessingABlock() {
+    // Every cell is not enough: engine_getPayload builds its blobs bundle from getBlobs(), which is
+    // empty for a sidecar holding cells, so the block would go out with fewer blobs than
+    // commitments.
+    setUpOneWellFormedBlob();
+    when(blobsWithCommitments.allCellsPresent()).thenReturn(true);
+    when(blobsWithCommitments.hasBlobData()).thenReturn(false);
+    when(blobsWithCommitments.getCellMask()).thenReturn(CellMask.FULL);
+
+    var result =
+        blobsValidator.validate(transaction, TransactionValidationParams.processingBlock());
+
+    assertInvalidResult(
+        result, TransactionInvalidReason.INVALID_BLOBS, "transaction blob data not present");
   }
 
   @Test
@@ -232,7 +250,7 @@ public class MainnetBlobsValidatorTest {
     // The eth/72 case: a transaction arrives with its blobs elided, and the pool holds it while the
     // cells are sampled. Nothing is verifiable while no cell is held.
     setUpOneWellFormedBlob();
-    when(blobsWithCommitments.allCellsPresent()).thenReturn(false);
+    when(blobsWithCommitments.hasBlobData()).thenReturn(false);
     when(blobsWithCommitments.getCellMask()).thenReturn(CellMask.EMPTY);
 
     var result =
