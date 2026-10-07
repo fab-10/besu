@@ -29,10 +29,6 @@ import java.util.Set;
 public class EthProtocol implements SubProtocol {
   public static final String NAME = "eth";
   private static final EthProtocol INSTANCE = new EthProtocol();
-  public static final Capability ETH68 = EthProtocolVersion.V68.getCapability();
-  public static final Capability ETH69 = EthProtocolVersion.V69.getCapability();
-  public static final Capability ETH70 = EthProtocolVersion.V70.getCapability();
-  public static final Capability ETH71 = EthProtocolVersion.V71.getCapability();
   public static final BitSet REQUEST_ID_MESSAGES;
 
   static {
@@ -110,10 +106,12 @@ public class EthProtocol implements SubProtocol {
   }
 
   public static boolean isEth70Compatible(final Capability capability) {
-    return NAME.equals(capability.getName()) && capability.getVersion() >= ETH70.getVersion();
+    return NAME.equals(capability.getName())
+        && capability.getVersion() >= EthProtocolVersion.V70.getVersion();
   }
 
   public static boolean isEth71Compatible(final Capability capability) {
-    return NAME.equals(capability.getName()) && capability.getVersion() >= ETH71.getVersion();
+    return NAME.equals(capability.getName())
+        && capability.getVersion() >= EthProtocolVersion.V71.getVersion();
   }
 }

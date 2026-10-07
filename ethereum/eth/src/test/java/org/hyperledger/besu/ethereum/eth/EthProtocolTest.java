@@ -89,7 +89,7 @@ public class EthProtocolTest {
 
   @Test
   void latestIsTheLastVersion() {
-    assertThat(EthProtocol.LATEST).isEqualTo(EthProtocol.ETH71);
+    assertThat(EthProtocol.LATEST).isEqualTo(EthProtocolVersion.V71.getCapability());
   }
 
   @Test
