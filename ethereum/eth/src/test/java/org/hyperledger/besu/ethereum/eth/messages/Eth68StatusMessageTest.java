@@ -94,7 +94,7 @@ public class Eth68StatusMessageTest {
             IllegalArgumentException.class,
             () ->
                 builder
-                    .protocolVersion(EthProtocolVersion.V68)
+                    .protocolVersion(EthProtocolVersion.V68.getVersion())
                     .blockRange(new StatusMessage.BlockRange(0L, 10))
                     .build());
     assertThat(exception.getMessage())
@@ -106,7 +106,11 @@ public class Eth68StatusMessageTest {
     Exception exception =
         assertThrows(
             IllegalArgumentException.class,
-            () -> builder.protocolVersion(EthProtocolVersion.V69).blockRange(null).build());
+            () ->
+                builder
+                    .protocolVersion(EthProtocolVersion.V69.getVersion())
+                    .blockRange(null)
+                    .build());
     assertThat(exception.getMessage())
         .contains("blockRange must be present for protocol version >= 69");
   }
@@ -116,7 +120,11 @@ public class Eth68StatusMessageTest {
     Exception exception =
         assertThrows(
             IllegalArgumentException.class,
-            () -> builder.protocolVersion(EthProtocolVersion.V68).totalDifficulty(null).build());
+            () ->
+                builder
+                    .protocolVersion(EthProtocolVersion.V68.getVersion())
+                    .totalDifficulty(null)
+                    .build());
     assertThat(exception.getMessage())
         .contains("totalDifficulty must be present for protocol version <= 68");
   }
@@ -128,7 +136,7 @@ public class Eth68StatusMessageTest {
             IllegalArgumentException.class,
             () ->
                 builder
-                    .protocolVersion(EthProtocolVersion.V69)
+                    .protocolVersion(EthProtocolVersion.V69.getVersion())
                     .blockRange(new StatusMessage.BlockRange(0L, 10L))
                     .totalDifficulty(Difficulty.ZERO)
                     .build());

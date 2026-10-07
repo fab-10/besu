@@ -29,10 +29,14 @@ import java.util.Set;
 public class EthProtocol implements SubProtocol {
   public static final String NAME = "eth";
   private static final EthProtocol INSTANCE = new EthProtocol();
-  public static final Capability ETH68 = Capability.create(NAME, EthProtocolVersion.V68);
-  public static final Capability ETH69 = Capability.create(NAME, EthProtocolVersion.V69);
-  public static final Capability ETH70 = Capability.create(NAME, EthProtocolVersion.V70);
-  public static final Capability ETH71 = Capability.create(NAME, EthProtocolVersion.V71);
+  public static final Capability ETH68 =
+      Capability.create(NAME, EthProtocolVersion.V68.getVersion());
+  public static final Capability ETH69 =
+      Capability.create(NAME, EthProtocolVersion.V69.getVersion());
+  public static final Capability ETH70 =
+      Capability.create(NAME, EthProtocolVersion.V70.getVersion());
+  public static final Capability ETH71 =
+      Capability.create(NAME, EthProtocolVersion.V71.getVersion());
   public static final BitSet REQUEST_ID_MESSAGES;
 
   static {
@@ -67,17 +71,16 @@ public class EthProtocol implements SubProtocol {
 
   @Override
   public int messageSpace(final int protocolVersion) {
-    return switch (protocolVersion) {
-      case EthProtocolVersion.V68 -> 17;
-      case EthProtocolVersion.V69, EthProtocolVersion.V70 -> 18;
-      case EthProtocolVersion.V71 -> 20;
-      default -> 0;
-    };
+    return EthProtocolVersion.fromVersion(protocolVersion)
+        .map(EthProtocolVersion::getMessageSpace)
+        .orElse(0);
   }
 
   @Override
   public boolean isValidMessageCode(final int protocolVersion, final int code) {
-    return EthProtocolVersion.getSupportedMessages(protocolVersion).contains(code);
+    return EthProtocolVersion.fromVersion(protocolVersion)
+        .map(v -> v.getSupportedMessages().contains(code))
+        .orElse(false);
   }
 
   @Override

@@ -320,7 +320,7 @@ public final class EthProtocolManagerTest {
             .setTransactionPool(transactionPool)
             .setEthereumWireProtocolConfiguration(
                 ImmutableEthProtocolConfiguration.builder()
-                    .maxEthCapability(EthProtocolVersion.V69)
+                    .maxEthCapability(EthProtocolVersion.V69.getVersion())
                     .build())
             .build()) {
 
@@ -328,7 +328,7 @@ public final class EthProtocolManagerTest {
           setupPeerWithoutStatusExchange(ethManager, (cap, msg, conn) -> {}, EthProtocol.ETH69);
       StatusMessage statusMessage =
           StatusMessage.builder()
-              .protocolVersion(EthProtocolVersion.V68)
+              .protocolVersion(EthProtocolVersion.V68.getVersion())
               .totalDifficulty(blockchain.getChainHead().getTotalDifficulty())
               .networkId(BigInteger.ONE)
               .bestHash(blockchain.getChainHeadHash())
@@ -1363,7 +1363,7 @@ public final class EthProtocolManagerTest {
     // Test with max capability = 65. should respect flag
     final EthProtocolConfiguration configuration =
         ImmutableEthProtocolConfiguration.builder()
-            .maxEthCapability(EthProtocolVersion.V68)
+            .maxEthCapability(EthProtocolVersion.V68.getVersion())
             .build();
 
     assertHighestCapability(SyncMode.SNAP, EthProtocol.ETH68, configuration);
@@ -1376,7 +1376,7 @@ public final class EthProtocolManagerTest {
     // If min cap = v67, should not contain v66
     final EthProtocolConfiguration configuration =
         ImmutableEthProtocolConfiguration.builder()
-            .minEthCapability(EthProtocolVersion.V69)
+            .minEthCapability(EthProtocolVersion.V69.getVersion())
             .build();
 
     final EthProtocolManager ethManager = createEthManager(SyncMode.SNAP, configuration);
@@ -1391,7 +1391,7 @@ public final class EthProtocolManagerTest {
     // Test with max capability = 68. should respect protocol
     final EthProtocolConfiguration configuration =
         ImmutableEthProtocolConfiguration.builder()
-            .maxEthCapability(EthProtocolVersion.V68)
+            .maxEthCapability(EthProtocolVersion.V68.getVersion())
             .build();
 
     assertHighestCapability(SyncMode.SNAP, EthProtocol.ETH68, configuration);
@@ -1402,8 +1402,8 @@ public final class EthProtocolManagerTest {
   public void shouldThrowExceptionWhenNoCapabilities() {
     final EthProtocolConfiguration configuration =
         ImmutableEthProtocolConfiguration.builder()
-            .minEthCapability(EthProtocolVersion.V69)
-            .maxEthCapability(EthProtocolVersion.V68)
+            .minEthCapability(EthProtocolVersion.V69.getVersion())
+            .maxEthCapability(EthProtocolVersion.V68.getVersion())
             .build();
 
     assertThatThrownBy(() -> createEthManager(SyncMode.SNAP, configuration))
