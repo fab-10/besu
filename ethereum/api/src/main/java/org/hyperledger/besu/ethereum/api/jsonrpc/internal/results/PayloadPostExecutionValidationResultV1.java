@@ -14,21 +14,32 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.results;
 
+/**
+ * The outcome of the validations that can only be done on a successfully processed block, and that
+ * are specific to a version of the new payload method.
+ */
 public class PayloadPostExecutionValidationResultV1 {
+  /** The result for a block that passed all the post-execution validations. */
   public static final PayloadPostExecutionValidationResultV1 SUCCESS =
       new PayloadPostExecutionValidationResultV1(true);
 
-  protected final boolean inclusionListSatisfied;
+  private final boolean inclusionListSatisfied;
 
+  /**
+   * Instantiates a new Payload post execution validation result.
+   *
+   * @param inclusionListSatisfied true if the block satisfies the inclusion list (EIP-7805)
+   */
   public PayloadPostExecutionValidationResultV1(final boolean inclusionListSatisfied) {
     this.inclusionListSatisfied = inclusionListSatisfied;
   }
 
+  /**
+   * Is the inclusion list satisfied.
+   *
+   * @return true if the block satisfies the inclusion list
+   */
   public boolean isInclusionListSatisfied() {
-    return inclusionListSatisfied;
-  }
-
-  public boolean isSuccess() {
     return inclusionListSatisfied;
   }
 }

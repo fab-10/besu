@@ -134,7 +134,7 @@ public sealed class EngineForkchoiceUpdatedV1<
     if (mergeCoordinator.isBadBlock(forkChoice.getHeadBlockHash())
         || mergeCoordinator.checkAndMarkBadDescendant(forkChoice.getHeadBlockHash())) {
       logFCU(INVALID, forkChoice);
-      return new JsonRpcSuccessResponse(requestId, creteInvalidBlockResult(forkChoice));
+      return new JsonRpcSuccessResponse(requestId, createInvalidBlockResult(forkChoice));
     }
 
     // this event is used to inform initial sync about chain progress
@@ -182,7 +182,7 @@ public sealed class EngineForkchoiceUpdatedV1<
     if (mergeCoordinator.isAncestorOfFinalized(newHead)) {
       logFCU(VALID, forkChoice);
       return new JsonRpcSuccessResponse(
-          requestId, creteValidResult(forkChoice.getHeadBlockHash(), null));
+          requestId, createValidResult(forkChoice.getHeadBlockHash(), null));
     }
 
     // 3. If forkchoiceState.headBlockHash references a PoW block, client software
@@ -239,7 +239,7 @@ public sealed class EngineForkchoiceUpdatedV1<
         return new JsonRpcErrorResponse(requestId, attrResult);
       }
 
-      // Fork-range check (-38005) is owned here; concrete versions never call
+      // Fork-range check (-38005) is owned here; concreate versions never call
       // ForkSupportHelper directly.
       final ValidationResult<RpcErrorType> forkResult = validateForkSupported(attrs.getTimestamp());
       if (!forkResult.isValid()) {
@@ -262,16 +262,16 @@ public sealed class EngineForkchoiceUpdatedV1<
     logFCU(VALID, forkChoice);
     return new JsonRpcSuccessResponse(
         requestId,
-        creteValidResult(
+        createValidResult(
             forkchoiceResult.getNewHead().map(BlockHeader::getHash).orElse(null), payloadId));
   }
 
-  protected ForkchoiceUpdatedResultV1 creteValidResult(
+  protected ForkchoiceUpdatedResultV1 createValidResult(
       final Hash lastValid, final PayloadIdentifier payloadId) {
     return new ForkchoiceUpdatedResultV1(new PayloadStatusV1(VALID, lastValid), payloadId);
   }
 
-  protected ForkchoiceUpdatedResultV1 creteInvalidBlockResult(final ForkchoiceStateV1 forkChoice) {
+  protected ForkchoiceUpdatedResultV1 createInvalidBlockResult(final ForkchoiceStateV1 forkChoice) {
     return new ForkchoiceUpdatedResultV1(
         new PayloadStatusV1(
             INVALID,
@@ -424,7 +424,7 @@ public sealed class EngineForkchoiceUpdatedV1<
     if (result.getStatus() == ForkchoiceResult.Status.INVALID) {
       return new JsonRpcSuccessResponse(
           requestId,
-          creteNonValidForkchoiceUpdateResult(
+          createInvalidForkchoiceUpdateResult(
               latestValid.orElse(null), result.getErrorMessage().orElse(null)));
     }
     throw new AssertionError(
@@ -433,7 +433,7 @@ public sealed class EngineForkchoiceUpdatedV1<
             + " (updateForkChoiceWithoutLegacySkip should not emit IGNORE_UPDATE_TO_OLD_HEAD)");
   }
 
-  protected ForkchoiceUpdatedResultV1 creteNonValidForkchoiceUpdateResult(
+  protected ForkchoiceUpdatedResultV1 createInvalidForkchoiceUpdateResult(
       final Hash latestValid, final String errorMessage) {
     return new ForkchoiceUpdatedResultV1(new PayloadStatusV1(INVALID, latestValid, errorMessage));
   }
@@ -447,10 +447,10 @@ public sealed class EngineForkchoiceUpdatedV1<
             forkChoice.getHeadBlockHash(),
             forkChoice.getSafeBlockHash(),
             forkChoice.getFinalizedBlockHash());
-    return new JsonRpcSuccessResponse(requestId, creteSyncingResult());
+    return new JsonRpcSuccessResponse(requestId, createSyncingResult());
   }
 
-  protected ForkchoiceUpdatedResultV1 creteSyncingResult() {
+  protected ForkchoiceUpdatedResultV1 createSyncingResult() {
     return new ForkchoiceUpdatedResultV1(new PayloadStatusV1(SYNCING));
   }
 

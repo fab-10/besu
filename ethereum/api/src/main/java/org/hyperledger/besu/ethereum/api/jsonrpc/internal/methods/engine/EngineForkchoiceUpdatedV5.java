@@ -146,7 +146,7 @@ public final class EngineForkchoiceUpdatedV5<
   }
 
   @Override
-  protected ForkchoiceUpdatedResultV1 creteInvalidBlockResult(final ForkchoiceStateV1 forkChoice) {
+  protected ForkchoiceUpdatedResultV1 createInvalidBlockResult(final ForkchoiceStateV1 forkChoice) {
     return new ForkchoiceUpdatedResultV2(
         new PayloadStatusV2(
             INVALID,
@@ -157,18 +157,18 @@ public final class EngineForkchoiceUpdatedV5<
   }
 
   @Override
-  protected ForkchoiceUpdatedResultV1 creteNonValidForkchoiceUpdateResult(
+  protected ForkchoiceUpdatedResultV1 createInvalidForkchoiceUpdateResult(
       final Hash latestValid, final String errorMessage) {
     return new ForkchoiceUpdatedResultV2(new PayloadStatusV2(INVALID, latestValid, errorMessage));
   }
 
   @Override
-  protected ForkchoiceUpdatedResultV1 creteSyncingResult() {
+  protected ForkchoiceUpdatedResultV1 createSyncingResult() {
     return new ForkchoiceUpdatedResultV2(new PayloadStatusV2(SYNCING));
   }
 
   @Override
-  protected ForkchoiceUpdatedResultV1 creteValidResult(
+  protected ForkchoiceUpdatedResultV1 createValidResult(
       final Hash lastValid, final PayloadIdentifier payloadId) {
     return new ForkchoiceUpdatedResultV2(
         new PayloadStatusV2(VALID, lastValid, Boolean.TRUE), payloadId);

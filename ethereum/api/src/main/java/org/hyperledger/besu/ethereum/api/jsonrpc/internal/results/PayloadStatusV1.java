@@ -21,18 +21,19 @@ import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonGetter;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
+import org.jspecify.annotations.Nullable;
 
 @JsonPropertyOrder({"status", "latestValidHash", "validationError"})
 public class PayloadStatusV1 {
-  EngineStatus status;
-  Hash latestValidHash;
-  String validationError;
+  private final EngineStatus status;
+  private final Hash latestValidHash;
+  private final String validationError;
 
   @JsonCreator
   public PayloadStatusV1(
       @JsonProperty("status") final EngineStatus status,
-      @JsonProperty("latestValidHash") final Hash latestValidHash,
-      @JsonProperty("validationError") final String validationError) {
+      @JsonProperty("latestValidHash") @Nullable final Hash latestValidHash,
+      @JsonProperty("validationError") @Nullable final String validationError) {
     this.status = status;
     this.latestValidHash = latestValidHash;
     this.validationError = validationError;
@@ -52,11 +53,13 @@ public class PayloadStatusV1 {
   }
 
   @JsonGetter(value = "latestValidHash")
+  @Nullable
   public Hash getLatestValidHash() {
     return latestValidHash;
   }
 
   @JsonGetter(value = "validationError")
+  @Nullable
   public String getError() {
     return validationError;
   }

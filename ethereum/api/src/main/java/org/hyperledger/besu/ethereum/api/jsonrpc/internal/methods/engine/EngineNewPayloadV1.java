@@ -255,7 +255,7 @@ public sealed class EngineNewPayloadV1<
       // 6. Client software MUST respond to this method call in the following way:
       // {status: SYNCING, latestValidHash: null, validationError: null} if requisite data for the
       // payload's acceptance or validation is missing
-      return respondWithSyncing(reqId);
+      return respondWithSyncing(reqId, blockParam);
     }
 
     // an ancestor is always found here: the parent header is present in the chain (needsSync is
@@ -291,7 +291,7 @@ public sealed class EngineNewPayloadV1<
         // we respond with SYNCING here to ensure a VALID newPayload is not marked INVALID.
         // however besu should not trigger a worldstate resync until/unless this chain is
         // finalized via forkchoiceUpdated.
-        return respondWithSyncing(reqId);
+        return respondWithSyncing(reqId, blockParam);
       }
       if (executionResult.isLocalFailure()) {
         return new JsonRpcErrorResponse(reqId, RpcErrorType.INTERNAL_ERROR);
@@ -437,7 +437,9 @@ public sealed class EngineNewPayloadV1<
         .log();
   }
 
-  private JsonRpcResponse respondWithSyncing(final Object requestId) {
+  private JsonRpcResponse respondWithSyncing(
+      final Object requestId, final ExecutionPayloadV1 param) {
+    logNewPayloadResponse(param, null, SYNCING);
     return new JsonRpcSuccessResponse(requestId, createSyncingPayloadStatus());
   }
 
@@ -494,8 +496,14 @@ public sealed class EngineNewPayloadV1<
 
   /**
    * Extension point for version-specific validation that requires a successfully processed block
-   * (e.g. inclusion list satisfaction, EIP-7805). Returns a response to short-circuit with if
-   * validation fails; {@link Optional#empty()} to proceed with the normal VALID response.
+   * (e.g. inclusion list satisfaction, EIP-7805). The result is passed to {@link
+   * #createValidPayloadStatus} so that the VALID response can report it.
+   *
+   * @param reqId the request id
+   * @param requestParameters the request parameters
+   * @param block the successfully processed block
+   * @param executionResult the result of processing the block
+   * @return the post-execution validation result
    */
   protected PayloadPostExecutionValidationResultV1 validatePostExecution(
       final Object reqId,
