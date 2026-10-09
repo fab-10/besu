@@ -14,7 +14,6 @@
  */
 package org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.engine;
 
-import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.datatypes.VersionedHash;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
@@ -40,7 +39,6 @@ import java.util.Objects;
 
 import jakarta.validation.constraints.NotNull;
 import org.apache.tuweni.bytes.Bytes;
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -109,11 +107,27 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
     final List<BlobCellsAndProofsV1> result = getBlobV4Result(versionedHashes, cellIndexes);
 
     // count available blobs (non-null entries)
-    final int availableCount = (int) result.stream().filter(Objects::nonNull).count();
+    int nonNullCount = 0;
+    for (final BlobCellsAndProofsV1 bcp : result) {
+      if (bcp != null) {
+        ++nonNullCount;
+        // a cell that is not held is a null in place, so the list always has the requested size
+        if (bcp.getBlobCells().stream().allMatch(Objects::nonNull)) {
+          getBlobsMetrics.increaseCellsFullyReturned();
+        } else {
+          getBlobsMetrics.increaseCellsPartiallyReturned();
+        }
+      }
+    }
+
+    final int availableCount = nonNullCount;
+
     getBlobsMetrics.increaseAvailable(availableCount);
     getBlobsMetrics.increaseMissing(versionedHashes.length - availableCount);
 
-    // track if this was a partial or full response
+    // Track if this was a partial or full response. For V4 a full response means every requested
+    // blob was available and something was returned for each one, even if only some of the
+    // requested cells: whether all of them were is tracked per blob by the cells counters above.
     if (availableCount == versionedHashes.length) {
       getBlobsMetrics.increaseFull();
     } else {
@@ -170,21 +184,10 @@ public class EngineGetBlobsV4 extends ExecutionEngineJsonRpcMethod {
         .toList();
   }
 
-  private @Nullable BlobCellsAndProofsV1 getBlobCellsAndProofsV1(
+  private BlobCellsAndProofsV1 getBlobCellsAndProofsV1(
       final BlobProofBundle bundle, final List<Integer> cellIndexes) {
-    // Only KZG_CELL_PROOFS blobs support cell-level extraction, reject KZG_PROOF
-    if (bundle.getBlobType() == BlobType.KZG_PROOF) {
-      LOG.debug(
-          "Unsupported blob type KZG_PROOF for versioned hash: {}", bundle.getVersionedHash());
-      return null;
-    }
-    final CellsWithMask cellsWithMask =
-        bundle
-            .getCellsWithMask()
-            .orElseThrow(
-                () ->
-                    new IllegalStateException(
-                        "Internal error: bundle must have cells with mask at this point"));
+    // the pool only returns bundles that hold cells
+    final CellsWithMask cellsWithMask = bundle.getCellsWithMask().orElseThrow();
     // The pool may hold only some of the requested cells. Each one it does not hold is a null in
     // both lists, as the spec requires, and the proof has to be null too: a partial bundle's proofs
     // are verified only where it holds the cell, so any other proof is one nobody has checked.

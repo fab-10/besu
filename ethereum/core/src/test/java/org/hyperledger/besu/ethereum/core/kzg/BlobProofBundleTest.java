@@ -19,6 +19,10 @@ import static org.hyperledger.besu.datatypes.VersionedHash.DEFAULT_VERSIONED_HAS
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 
 import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.VersionedHash;
@@ -32,6 +36,7 @@ import java.util.Optional;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes48;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
 
@@ -163,6 +168,26 @@ public class BlobProofBundleTest extends TrustedSetupClassLoaderExtension {
     assertThat(holdsCellZero)
         .hasSameHashCodeAs(cellsOnlyBundle(new CellsWithMask(List.of(cell), maskOf(0))));
     assertThat(holdsCellZero).isNotEqualTo(cellsOnlyBundle(CellsWithMask.EMPTY));
+  }
+
+  @Test
+  void detachedCopyOfABlobBundleCopiesItsCellsRatherThanComputingThemAgain() {
+    // The pool detaches every transaction it adds, and extending a blob into its cells is far more
+    // expensive than copying the cells the bundle already holds.
+    final BlobTestFixture fixture = new BlobTestFixture();
+    fixture.createBlobProofBundle(BlobType.KZG_CELL_PROOFS);
+    // the fixture's first blob is all zeros, which would leave every cell equal to every other
+    final BlobProofBundle bundle = fixture.createBlobProofBundle(BlobType.KZG_CELL_PROOFS);
+
+    final BlobProofBundle detached;
+    try (MockedStatic<CKZG4844Helper> helper =
+        mockStatic(CKZG4844Helper.class, CALLS_REAL_METHODS)) {
+      detached = bundle.detachedCopy(bundle.getVersionedHash(), bundle.getKzgProof());
+      helper.verify(() -> CKZG4844Helper.computeCells(any()), never());
+    }
+
+    assertThat(detached).isEqualTo(bundle);
+    assertThat(detached.getCellsWithMask().orElseThrow().getCellMask()).isEqualTo(CellMask.FULL);
   }
 
   private BlobProofBundle cellsOnlyBundle(final CellsWithMask cellsWithMask) {

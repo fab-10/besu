@@ -273,17 +273,25 @@ public class BlobV1TransactionPoolTest extends AbstractTransactionPoolTestBase {
   }
 
   @Test
-  public void shouldNotReturnABundleForAnUnknownHashOrAnEmptyCellRequest() {
+  public void shouldNotReturnABundleForAnUnknownHash() {
+    final VersionedHash unknown = new VersionedHash((byte) 1, Hash.ZERO);
+
+    assertThat(transactionPool.getBlobProofBundle(unknown, List.of(0))).isNull();
+    assertThat(transactionPool.getBlobProofBundle(unknown, List.of())).isNull();
+    assertThat(transactionPool.getBlobProofBundle(unknown)).isNull();
+  }
+
+  @Test
+  public void shouldReturnTheBundleOfAKnownBlobForAnEmptyCellRequest() {
+    // engine_getBlobsV4 with an all-zero bitarray: nothing is asked of a blob we hold, which is an
+    // empty answer about it rather than a miss.
     final BlobProofBundle full = fullCellProofBundle();
     final Transaction cellsOnly = blobTransactionHolding(2, full, LOWER_HALF);
 
     givenTransactionIsValid(cellsOnly);
     addAndAssertRemoteTransactionsValid(cellsOnly);
 
-    final VersionedHash unknown = new VersionedHash((byte) 1, Hash.ZERO);
-    assertThat(transactionPool.getBlobProofBundle(unknown, List.of(0))).isNull();
-    assertThat(transactionPool.getBlobProofBundle(unknown)).isNull();
-    assertThat(transactionPool.getBlobProofBundle(full.getVersionedHash(), List.of())).isNull();
+    assertThat(transactionPool.getBlobProofBundle(full.getVersionedHash(), List.of())).isNotNull();
   }
 
   /** Cell indexes 0 to 63. */

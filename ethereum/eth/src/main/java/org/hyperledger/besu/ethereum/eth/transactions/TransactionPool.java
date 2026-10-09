@@ -836,7 +836,8 @@ public class TransactionPool implements BlockAddedObserver {
    * transaction pool, and in the cache of blobs for transactions added to a block. The returned
    * bundle need not hold every requested cell: engine_getBlobsV4 answers a cell it cannot serve
    * with a null in place, so the caller has to ask the bundle which cells it holds. Only when none
-   * of the requested cells is held does this return null, as for an unknown blob.
+   * of the requested cells is held does this return null, as for an unknown blob; an empty request
+   * for a blob some transaction holds cells of returns a bundle, to answer with no cells.
    *
    * <p>Where no single transaction holds every requested cell, the cells of several are merged into
    * one bundle. That is sound because the versioned hash is the hash of the commitment, so any two
@@ -845,8 +846,8 @@ public class TransactionPool implements BlockAddedObserver {
    *
    * @param vh the {@link VersionedHash} used to locate the associated {@link BlobProofBundle}.
    * @param cellIndexes the indexes of the cells requested.
-   * @return a {@link BlobProofBundle} holding every requested cell that is available, or null if
-   *     none of them is or nothing was requested.
+   * @return a {@link BlobProofBundle} holding every requested cell that is available, or null if no
+   *     transaction holds any cells of the blob or none of the requested ones.
    */
   public BlobProofBundle getBlobProofBundle(
       final VersionedHash vh, final List<Integer> cellIndexes) {
@@ -865,8 +866,8 @@ public class TransactionPool implements BlockAddedObserver {
       bundlesWithCells.add(maybeCached);
     }
 
-    if (cellIndexes.isEmpty() || bundlesWithCells.isEmpty()) {
-      // nothing was asked for, or nothing holds any cells of this blob
+    if (bundlesWithCells.isEmpty()) {
+      // nothing holds any cells of this blob
       return null;
     }
 

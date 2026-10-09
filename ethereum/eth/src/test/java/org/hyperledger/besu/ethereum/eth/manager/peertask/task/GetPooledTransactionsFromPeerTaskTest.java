@@ -24,6 +24,7 @@ import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
 import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
+import org.hyperledger.besu.ethereum.eth.EthProtocolVersion;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.InvalidPeerTaskResponseException;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.MalformedRlpFromPeerException;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskValidationResponse;
@@ -112,7 +113,8 @@ public class GetPooledTransactionsFromPeerTaskTest {
 
     final List<Transaction> result =
         task.processResponse(
-            PooledTransactionsMessage.createUnsafe(out.encoded()), Set.of(EthProtocol.ETH72));
+            PooledTransactionsMessage.createUnsafe(out.encoded()),
+            Set.of(EthProtocolVersion.V72.getCapability()));
 
     Assertions.assertEquals(List.of(transaction.getHash()), Transaction.toHashList(result));
   }

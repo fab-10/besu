@@ -47,6 +47,7 @@ import org.hyperledger.besu.ethereum.core.kzg.KZGCommitment;
 import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
+import org.hyperledger.besu.ethereum.eth.EthProtocolVersion;
 import org.hyperledger.besu.ethereum.eth.ImmutableEthProtocolConfiguration;
 import org.hyperledger.besu.ethereum.eth.manager.exceptions.ProtocolViolationException;
 import org.hyperledger.besu.ethereum.eth.messages.BlockAccessListsMessage;
@@ -211,7 +212,8 @@ public class EthServerTest {
             serializeReceiptsList(
                 expectedResults,
                 TransactionReceiptEncodingConfiguration.ETH69_RECEIPT_CONFIGURATION));
-    final Optional<MessageData> result = ethMessages.dispatch(ethMsg, EthProtocol.ETH69);
+    final Optional<MessageData> result =
+        ethMessages.dispatch(ethMsg, EthProtocolVersion.V69.getCapability());
     assertThat(result).contains(expectedMsg);
   }
 
@@ -235,7 +237,8 @@ public class EthServerTest {
             serializeReceiptsList(
                 expectedResults,
                 TransactionReceiptEncodingConfiguration.ETH69_RECEIPT_CONFIGURATION));
-    final Optional<MessageData> result = ethMessages.dispatch(ethMsg, EthProtocol.ETH69);
+    final Optional<MessageData> result =
+        ethMessages.dispatch(ethMsg, EthProtocolVersion.V69.getCapability());
     assertThat(result).contains(expectedMsg);
   }
 
@@ -309,7 +312,7 @@ public class EthServerTest {
             serializePaginatedReceiptsList(List.of(receipts0, receipts1, receipts2), false), false);
 
     final Optional<MessageData> result =
-        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocol.ETH70);
+        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocolVersion.V70.getCapability());
     assertThat(result).contains(expectedMsg);
   }
 
@@ -336,7 +339,7 @@ public class EthServerTest {
             serializePaginatedReceiptsList(allReceipts.subList(0, limit), false), false);
 
     final Optional<MessageData> result =
-        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocol.ETH70);
+        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocolVersion.V70.getCapability());
     assertThat(result).contains(expectedMsg);
   }
 
@@ -376,7 +379,7 @@ public class EthServerTest {
             serializePaginatedReceiptsList(List.of(List.of(receipt0), List.of()), true), true);
 
     final Optional<MessageData> result =
-        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocol.ETH70);
+        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocolVersion.V70.getCapability());
     assertThat(result).contains(expectedMsg);
   }
 
@@ -408,7 +411,8 @@ public class EthServerTest {
         PaginatedReceiptsMessage.createUnsafe(
             serializePaginatedReceiptsList(expectedReceipts, false), false);
 
-    final Optional<MessageData> result = ethMessages.dispatch(ethMsg, EthProtocol.ETH70);
+    final Optional<MessageData> result =
+        ethMessages.dispatch(ethMsg, EthProtocolVersion.V70.getCapability());
     assertThat(result).contains(expectedMsg);
   }
 
@@ -425,7 +429,7 @@ public class EthServerTest {
     final GetPaginatedReceiptsMessage msg =
         GetPaginatedReceiptsMessage.create(List.of(knownHash, unknownHash), 0);
     final Optional<MessageData> result =
-        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocol.ETH70);
+        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocolVersion.V70.getCapability());
 
     // Server stops at the unknown block and returns what was collected before it
     final PaginatedReceiptsMessage expectedMsg =
@@ -446,7 +450,10 @@ public class EthServerTest {
     final GetPaginatedReceiptsMessage msg =
         GetPaginatedReceiptsMessage.create(List.of(blockHash), 3);
 
-    assertThatThrownBy(() -> ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocol.ETH70))
+    assertThatThrownBy(
+            () ->
+                ethMessages.dispatch(
+                    new EthMessage(ethPeer, msg), EthProtocolVersion.V70.getCapability()))
         .isInstanceOf(ProtocolViolationException.class);
   }
 
@@ -473,7 +480,7 @@ public class EthServerTest {
             serializePaginatedReceiptsList(List.of(List.of(), block1Receipts), false), false);
 
     final Optional<MessageData> result =
-        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocol.ETH70);
+        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocolVersion.V70.getCapability());
     assertThat(result).contains(expectedMsg);
   }
 
@@ -504,7 +511,7 @@ public class EthServerTest {
             serializePaginatedReceiptsList(List.of(List.of(r1), List.of()), true), true);
 
     final Optional<MessageData> result =
-        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocol.ETH70);
+        ethMessages.dispatch(new EthMessage(ethPeer, msg), EthProtocolVersion.V70.getCapability());
     assertThat(result).contains(expectedMsg);
   }
 
@@ -710,7 +717,7 @@ public class EthServerTest {
             GetPooledTransactionsMessage.create(Transaction.toHashList(requested)),
             16,
             EthProtocolConfiguration.DEFAULT_MAX_MESSAGE_SIZE,
-            EthProtocol.ETH71);
+            EthProtocolVersion.V71.getCapability());
 
     assertThat(PooledTransactionsMessage.readFrom(eth71).transactions())
         .containsExactlyElementsOf(plainTxs);
@@ -723,7 +730,7 @@ public class EthServerTest {
             GetPooledTransactionsMessage.create(Transaction.toHashList(requested)),
             16,
             EthProtocolConfiguration.DEFAULT_MAX_MESSAGE_SIZE,
-            EthProtocol.ETH72);
+            EthProtocolVersion.V72.getCapability());
 
     assertThat(Transaction.toHashList(PooledTransactionsMessage.readFrom(eth72).transactions()))
         .containsExactlyElementsOf(Transaction.toHashList(requested));

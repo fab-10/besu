@@ -1265,9 +1265,12 @@ public class Transaction
     if (transactionType.supportsBlob()) {
       sb.append("b: ")
           // counted from the bundles, since getBlobs() is empty for a sidecar holding cells
-          .append(blobsWithCommitments.map(bwc -> bwc.getBlobProofBundles().size()).orElse(-1))
-          .append(blobsWithCommitments.map(bwc -> bwc.getCellMask().toString()).orElse("{}"))
-          .append(", ");
+          .append(blobsWithCommitments.map(bwc -> bwc.getBlobProofBundles().size()).orElse(-1));
+      // only cell proof sidecars have a cell mask, and without a sidecar the -1 above says enough
+      blobsWithCommitments
+          .filter(bwc -> bwc.getBlobType() != BlobType.KZG_PROOF)
+          .ifPresent(bwc -> sb.append(bwc.getCellMask()));
+      sb.append(", ");
     }
     if (transactionType.supportsDelegateCode()) {
       sb.append("cd: ").append(maybeCodeDelegationList.map(List::size).orElse(-1)).append(", ");

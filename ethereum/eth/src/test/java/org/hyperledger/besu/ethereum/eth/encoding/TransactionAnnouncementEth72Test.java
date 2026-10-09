@@ -20,7 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
-import org.hyperledger.besu.ethereum.eth.EthProtocol;
+import org.hyperledger.besu.ethereum.eth.EthProtocolVersion;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAnnouncement;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
 import org.hyperledger.besu.ethereum.rlp.RLP;
@@ -82,7 +82,7 @@ class TransactionAnnouncementEth72Test {
   @Test
   void roundTripsCellMaskOnEth72() {
     final List<TransactionAnnouncement> announcements =
-        TransactionAnnouncementDecoder.getDecoder(EthProtocol.ETH72)
+        TransactionAnnouncementDecoder.getDecoder(EthProtocolVersion.V72.getCapability())
             .decode(RLP.input(encodeEth72(MASK)));
 
     assertThat(announcements).hasSize(2);
@@ -111,7 +111,8 @@ class TransactionAnnouncementEth72Test {
     assertThat(input.readBytes().size()).isEqualTo(CellMask.BYTE_LENGTH);
 
     assertThat(
-            TransactionAnnouncementDecoder.getDecoder(EthProtocol.ETH72).decode(RLP.input(encoded)))
+            TransactionAnnouncementDecoder.getDecoder(EthProtocolVersion.V72.getCapability())
+                .decode(RLP.input(encoded)))
         .hasSize(1);
   }
 
@@ -126,7 +127,8 @@ class TransactionAnnouncementEth72Test {
             List.of(hash(1)));
 
     final List<TransactionAnnouncement> announcements =
-        TransactionAnnouncementDecoder.getDecoder(EthProtocol.ETH71).decode(RLP.input(encoded));
+        TransactionAnnouncementDecoder.getDecoder(EthProtocolVersion.V71.getCapability())
+            .decode(RLP.input(encoded));
 
     assertThat(announcements).hasSize(1);
     assertThat(announcements.getFirst().cellMask()).isEqualTo(CellMask.FULL);
@@ -144,11 +146,12 @@ class TransactionAnnouncementEth72Test {
     assertThatExceptionOfType(RuntimeException.class)
         .isThrownBy(
             () ->
-                TransactionAnnouncementDecoder.getDecoder(EthProtocol.ETH72)
+                TransactionAnnouncementDecoder.getDecoder(EthProtocolVersion.V72.getCapability())
                     .decode(RLP.input(eth68)));
 
     assertThat(
-            TransactionAnnouncementDecoder.getDecoder(EthProtocol.ETH71).decode(RLP.input(eth68)))
+            TransactionAnnouncementDecoder.getDecoder(EthProtocolVersion.V71.getCapability())
+                .decode(RLP.input(eth68)))
         .hasSize(1);
   }
 }

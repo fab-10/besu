@@ -35,7 +35,7 @@ import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
 import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
-import org.hyperledger.besu.ethereum.eth.EthProtocol;
+import org.hyperledger.besu.ethereum.eth.EthProtocolVersion;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.peertask.PeerTaskExecutor;
@@ -388,7 +388,9 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
     final GetCellsFromPeerTask task = invocation.getArgument(0);
     final EthPeer peer = invocation.getArgument(1);
     final CellMask requested =
-        GetCellsMessage.readFrom(task.getRequestMessage(Set.of(EthProtocol.ETH72))).cellMask();
+        GetCellsMessage.readFrom(
+                task.getRequestMessage(Set.of(EthProtocolVersion.V72.getCapability())))
+            .cellMask();
     requests.add(Map.entry(peer, requested));
 
     return servedByPeer
@@ -417,7 +419,8 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
    */
   private EthPeer announcingPeer(final CellMask announcedMask, final CellMask servedMask) {
     final EthPeer peer = mock(EthPeer.class);
-    when(peer.getAgreedCapabilities()).thenReturn(Set.<Capability>of(EthProtocol.ETH72));
+    when(peer.getAgreedCapabilities())
+        .thenReturn(Set.<Capability>of(EthProtocolVersion.V72.getCapability()));
     servedByPeer.put(peer, Optional.ofNullable(servedMask));
     announcedByPeer.put(peer, announcedMask);
     return peer;

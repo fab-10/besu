@@ -88,6 +88,7 @@ import org.hyperledger.besu.testutil.TestClock;
 import org.hyperledger.besu.util.number.Fraction;
 
 import java.math.BigInteger;
+import java.time.Duration;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
@@ -96,6 +97,7 @@ import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -751,6 +753,54 @@ public class MergeCoordinatorTest implements MergeGenesisConfigHelper {
   }
 
   @Test
+  public void finalizingDuringThePauseBetweenBlockCreationsDoesNotWaitForThePauseToEnd()
+      throws InterruptedException {
+    final long pauseBetweenBlockCreations = 2000;
+    final MergeCoordinator slowRepetitionCoordinator =
+        new MergeCoordinator(
+            protocolContext,
+            protocolSchedule,
+            ethScheduler,
+            transactionPool,
+            ImmutableMiningConfiguration.builder()
+                .mutableInitValues(MutableInitValues.builder().coinbase(coinbase).build())
+                .unstable(
+                    Unstable.builder()
+                        .posBlockCreationRepetitionMinDuration(pauseBetweenBlockCreations)
+                        .build())
+                .build(),
+            backwardSyncContext);
+
+    // the empty block first, then the block built from the empty pool
+    final CountDownLatch firstBlockBuilt = new CountDownLatch(2);
+    doAnswer(
+            invocation -> {
+              firstBlockBuilt.countDown();
+              return null;
+            })
+        .when(mergeContext)
+        .putPayloadById(any());
+
+    final var payloadId =
+        slowRepetitionCoordinator.preparePayload(
+            new PreparePayloadArgsBuilder()
+                .parentHeader(genesisState.getBlock().getHeader())
+                .timestamp(System.currentTimeMillis() / 1000)
+                .prevRandao(Bytes32.ZERO)
+                .feeRecipient(suggestedFeeRecipient)
+                .build());
+    firstBlockBuilt.await();
+
+    final long startedAt = System.nanoTime();
+    slowRepetitionCoordinator.finalizeProposalById(payloadId);
+    slowRepetitionCoordinator.awaitCurrentBuildCompletion(payloadId);
+    final long waitedMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startedAt);
+
+    assertThat(waitedMs).isLessThan(400);
+    assertThat(blockCreationTask).succeedsWithin(Duration.ofMillis(500));
+  }
+
+  @Test
   public void shouldNotStartAnotherBlockCreationJobIfCalledAgainWithTheSamePayloadId()
       throws ExecutionException, InterruptedException {
     final AtomicLong retries = new AtomicLong(0);
@@ -847,6 +897,61 @@ public class MergeCoordinatorTest implements MergeGenesisConfigHelper {
     assertThat(payloadId1).isNotEqualTo(payloadId2);
     assertThat(coordinator.isBlockCreationCancelled(payloadId1)).isTrue();
     assertThat(coordinator.isBlockCreationCancelled(payloadId2)).isFalse();
+  }
+
+  @Test
+  public void describePayloadArgsChangesListsParentAndWithdrawalChanges() {
+    final BlockHeader previousParent = genesisState.getBlock().getHeader();
+    final BlockHeader nextParent = headerGenerator.number(1).buildHeader();
+    final PreparePayloadArgsBuilder args =
+        new PreparePayloadArgsBuilder()
+            .timestamp(1L)
+            .prevRandao(Bytes32.ZERO)
+            .feeRecipient(suggestedFeeRecipient);
+
+    final String changes =
+        MergeCoordinator.describePayloadArgsChanges(
+            args.parentHeader(previousParent).withdrawals(Optional.empty()).build(),
+            args.parentHeader(nextParent).withdrawals(Optional.of(List.of())).build());
+
+    assertThat(changes)
+        .isEqualTo(
+            "parent "
+                + previousParent.getHash()
+                + " -> "
+                + nextParent.getHash()
+                + ", withdrawals changed (none -> 0)");
+  }
+
+  @Test
+  public void describePayloadArgsChangesListsOnlyTheChangedAttributes() {
+    final PreparePayloadArgsBuilder args =
+        new PreparePayloadArgsBuilder()
+            .parentHeader(genesisState.getBlock().getHeader())
+            .timestamp(1L)
+            .prevRandao(Bytes32.ZERO)
+            .feeRecipient(suggestedFeeRecipient)
+            .slotNumber(Optional.of(7L));
+
+    final String changes =
+        MergeCoordinator.describePayloadArgsChanges(
+            args.targetGasLimit(Optional.of(60_000_000L)).build(),
+            args.targetGasLimit(Optional.of(45_000_000L)).build());
+
+    assertThat(changes).isEqualTo("targetGasLimit 60000000 -> 45000000");
+  }
+
+  @Test
+  public void describePayloadArgsChangesReportsNoneForTheSameArguments() {
+    final MergeMiningCoordinator.PreparePayloadArgs args =
+        new PreparePayloadArgsBuilder()
+            .parentHeader(genesisState.getBlock().getHeader())
+            .timestamp(1L)
+            .prevRandao(Bytes32.ZERO)
+            .feeRecipient(suggestedFeeRecipient)
+            .build();
+
+    assertThat(MergeCoordinator.describePayloadArgsChanges(args, args)).isEqualTo("none");
   }
 
   @Test

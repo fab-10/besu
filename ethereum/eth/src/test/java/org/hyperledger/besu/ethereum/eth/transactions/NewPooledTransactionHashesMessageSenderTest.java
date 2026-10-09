@@ -31,6 +31,7 @@ import org.hyperledger.besu.ethereum.core.CellsOnlyBlobTransactionFixture;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
+import org.hyperledger.besu.ethereum.eth.EthProtocolVersion;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
@@ -84,9 +85,13 @@ public class NewPooledTransactionHashesMessageSenderTest {
     transactionTracker.onPeerConnected(peer2);
 
     when(peer1.getConnection())
-        .thenReturn(new MockPeerConnection(Set.of(EthProtocol.ETH68), (cap, msg, conn) -> {}));
+        .thenReturn(
+            new MockPeerConnection(
+                Set.of(EthProtocolVersion.V68.getCapability()), (cap, msg, conn) -> {}));
     when(peer2.getConnection())
-        .thenReturn(new MockPeerConnection(Set.of(EthProtocol.ETH68), (cap, msg, conn) -> {}));
+        .thenReturn(
+            new MockPeerConnection(
+                Set.of(EthProtocolVersion.V68.getCapability()), (cap, msg, conn) -> {}));
   }
 
   @Test
@@ -218,7 +223,9 @@ public class NewPooledTransactionHashesMessageSenderTest {
   @Test
   public void shouldAnnounceACellsOnlyTransactionToAnEth72Peer() throws Exception {
     when(peer2.getConnection())
-        .thenReturn(new MockPeerConnection(Set.of(EthProtocol.ETH72), (cap, msg, conn) -> {}));
+        .thenReturn(
+            new MockPeerConnection(
+                Set.of(EthProtocolVersion.V72.getCapability()), (cap, msg, conn) -> {}));
     final Transaction cellsOnly = cellsOnlyFixture.create(1, CellMask.FULL);
 
     transactionTracker.addToPeerAnnouncementsSendQueue(peer2, List.of(cellsOnly));
@@ -238,7 +245,9 @@ public class NewPooledTransactionHashesMessageSenderTest {
   @Test
   public void shouldStartANewMessageWhenTheCellMaskChanges() throws Exception {
     when(peer2.getConnection())
-        .thenReturn(new MockPeerConnection(Set.of(EthProtocol.ETH72), (cap, msg, conn) -> {}));
+        .thenReturn(
+            new MockPeerConnection(
+                Set.of(EthProtocolVersion.V72.getCapability()), (cap, msg, conn) -> {}));
     final CellMask partialMask =
         CellMask.fromBytes(Bytes.concatenate(Bytes.of((byte) 0x0f), Bytes.repeat((byte) 0, 15)));
     final Transaction fullyHeld = cellsOnlyFixture.create(1, CellMask.FULL);

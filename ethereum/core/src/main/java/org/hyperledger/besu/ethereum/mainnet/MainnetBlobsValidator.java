@@ -216,11 +216,10 @@ public class MainnetBlobsValidator {
       }
     }
 
-    // Blocks need every cell, so only contexts that opted in may accept a partial transaction.
-    if (!blobsWithCommitments.allCellsPresent()
-        && !transactionValidationParams.allowIncompleteBlob()) {
+    // Blocks need blob data, so only contexts that opted in may accept a partial transaction.
+    if (!blobsWithCommitments.hasBlobData() && !transactionValidationParams.allowIncompleteBlob()) {
       return ValidationResult.invalid(
-          TransactionInvalidReason.INVALID_BLOBS, "not all cells present");
+          TransactionInvalidReason.INVALID_BLOBS, "transaction blob data not present");
     }
 
     // Verify the KZG proofs. For a partially sampled transaction this covers the cells actually
