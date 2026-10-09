@@ -78,6 +78,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -144,6 +145,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
   private volatile @Nullable TransactionSelectionResult validTxSelectionTimeoutResult;
   private volatile @Nullable TransactionSelectionResult invalidTxSelectionTimeoutResult;
   private volatile @Nullable FutureTask<Void> currTxSelectionTask;
+  private final List<CompletableFuture<Void>> scheduledSelectionTasks = new ArrayList<>(2);
   private final Set<Transaction> inclusionListTransactions;
 
   public BlockTransactionSelector(
@@ -245,6 +247,17 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     return transactionSelectionResults;
   }
 
+  /**
+   * Returns a future that completes once no selection task is running anymore. A task that timed
+   * out or was cancelled can keep executing its current transaction after the selection returned,
+   * so the world state must stay open until then.
+   *
+   * @return a future that completes when every scheduled selection task has stopped
+   */
+  public CompletableFuture<Void> selectionTasksDone() {
+    return CompletableFuture.allOf(scheduledSelectionTasks.toArray(CompletableFuture[]::new));
+  }
+
   private List<Transaction> sortTransactionList(
       final Collection<Transaction> inclusionListTransactions) {
     // for the moment we just make sure txs are sorted by nonce for each sender (note that there
@@ -339,8 +352,9 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
             },
             null);
 
-    ethScheduler.scheduleBlockCreationTask(
-        blockSelectionContext.pendingBlockHeader().getNumber(), currTxSelectionTask);
+    scheduledSelectionTasks.add(
+        ethScheduler.scheduleBlockCreationTask(
+            blockSelectionContext.pendingBlockHeader().getNumber(), currTxSelectionTask));
 
     try {
       currTxSelectionTask.get(remainingSelectionTime, TimeUnit.NANOSECONDS);
@@ -406,8 +420,9 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
             },
             null);
 
-    ethScheduler.scheduleBlockCreationTask(
-        blockSelectionContext.pendingBlockHeader().getNumber(), currTxSelectionTask);
+    scheduledSelectionTasks.add(
+        ethScheduler.scheduleBlockCreationTask(
+            blockSelectionContext.pendingBlockHeader().getNumber(), currTxSelectionTask));
 
     try {
       currTxSelectionTask.get(pluginTxsSelectionMaxTimeNanos, TimeUnit.NANOSECONDS);
