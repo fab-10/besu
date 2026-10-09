@@ -23,14 +23,15 @@ import static org.hyperledger.besu.datatypes.HardforkId.MainnetHardforkId.SHANGH
 import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.ExecutionEngineJsonRpcMethod.EngineStatus.VALID;
 import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import org.hyperledger.besu.consensus.merge.MergeContext;
-import org.hyperledger.besu.consensus.merge.PostMergeContext;
 import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator;
 import org.hyperledger.besu.consensus.merge.blockcreation.MergeMiningCoordinator.ForkchoiceResult;
 import org.hyperledger.besu.consensus.merge.blockcreation.PayloadIdentifier;
@@ -115,7 +116,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
-import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
@@ -155,7 +155,7 @@ public class InclusionListWorkflowIntegrationTest {
   @Mock private ProtocolContext protocolContext;
   @Mock private DefaultProtocolSchedule protocolSchedule;
   @Mock private ProtocolSpec protocolSpec;
-  @Spy private MergeContext mergeContext = new PostMergeContext();
+  @Mock private MergeContext mergeContext;
   @Mock private MergeMiningCoordinator mergeCoordinator;
   @Mock private MutableBlockchain blockchain;
   @Mock private WorldStateArchive worldStateArchive;
@@ -178,6 +178,18 @@ public class InclusionListWorkflowIntegrationTest {
     when(protocolContext.safeConsensusContext(any())).thenReturn(Optional.of(mergeContext));
     when(mergeContext.isSyncing()).thenReturn(false);
     when(protocolContext.getBlockchain()).thenReturn(blockchain);
+    // the inclusion list status is stored in the blockchain, back it with a map
+    final Map<Hash, Boolean> inclusionListStatusByBlockHash = new HashMap<>();
+    doAnswer(
+            invocation ->
+                inclusionListStatusByBlockHash.put(
+                    invocation.getArgument(0), invocation.getArgument(1)))
+        .when(blockchain)
+        .putInclusionListStatus(any(), anyBoolean());
+    when(blockchain.getInclusionListStatus(any()))
+        .thenAnswer(
+            invocation ->
+                Optional.ofNullable(inclusionListStatusByBlockHash.get(invocation.getArgument(0))));
     when(worldStateArchive.isWorldStateAvailable(any(), any())).thenReturn(true);
     when(protocolContext.getWorldStateArchive()).thenReturn(worldStateArchive);
     when(protocolSpec.getWithdrawalsValidator())

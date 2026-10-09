@@ -70,7 +70,10 @@ public class KeyValueStoragePrefixedKeyBlockchainStorage implements BlockchainSt
   private static final Bytes TRANSACTION_LOCATION_PREFIX = Bytes.of(7);
   private static final Bytes BLOCK_ACCESS_LIST_PREFIX = Bytes.of(8);
   private static final Bytes SENDER_NONCE_TO_TX_HASH_PREFIX = Bytes.of(9);
+  private static final Bytes INCLUSION_LIST_SATISFIED_PREFIX = Bytes.of(10);
   private static final SimpleNoCopyRlpEncoder NO_COPY_RLP_ENCODER = new SimpleNoCopyRlpEncoder();
+  private static final Bytes TRUE = Bytes.of(1);
+  private static final Bytes FALSE = Bytes.of(0);
 
   final KeyValueStorage blockchainStorage;
   final VariablesStorage variablesStorage;
@@ -184,6 +187,11 @@ public class KeyValueStoragePrefixedKeyBlockchainStorage implements BlockchainSt
   public Optional<Hash> getTransactionHashBySenderAndNonce(final Address sender, final long nonce) {
     return get(SENDER_NONCE_TO_TX_HASH_PREFIX, senderNonceKey(sender, nonce))
         .map(bytes -> Hash.wrap(Bytes32.wrap(bytes, 0)));
+  }
+
+  @Override
+  public Optional<Boolean> getInclusionListStatus(final Hash blockHash) {
+    return get(INCLUSION_LIST_SATISFIED_PREFIX, blockHash.getBytes()).map(b -> b.get(0) > 0);
   }
 
   private static Bytes senderNonceKey(final Address sender, final long nonce) {
@@ -466,6 +474,20 @@ public class KeyValueStoragePrefixedKeyBlockchainStorage implements BlockchainSt
     @Override
     public void removeTotalDifficulty(final Hash blockHash) {
       remove(TOTAL_DIFFICULTY_PREFIX, blockHash.getBytes());
+    }
+
+    @Override
+    public void removeInclusionListStatus(final Hash blockHash) {
+      remove(INCLUSION_LIST_SATISFIED_PREFIX, blockHash.getBytes());
+    }
+
+    @Override
+    public void putInclusionListStatus(
+        final Hash blockHash, final boolean isInclusionListSatisfied) {
+      set(
+          INCLUSION_LIST_SATISFIED_PREFIX,
+          blockHash.getBytes(),
+          isInclusionListSatisfied ? TRUE : FALSE);
     }
 
     @Override

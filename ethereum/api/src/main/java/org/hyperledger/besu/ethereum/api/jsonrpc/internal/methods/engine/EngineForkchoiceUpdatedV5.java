@@ -30,6 +30,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.ForkchoiceUpdatedResultV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.ForkchoiceUpdatedResultV2;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.PayloadStatusV2;
+import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
@@ -59,6 +60,7 @@ public final class EngineForkchoiceUpdatedV5<
 
   private static final Logger LOG = LoggerFactory.getLogger(EngineForkchoiceUpdatedV5.class);
   private final TransactionPool transactionPool;
+  private final MutableBlockchain blockchain;
 
   @Override
   protected Logger logger() {
@@ -71,6 +73,7 @@ public final class EngineForkchoiceUpdatedV5<
       final HardforkId maxFork) {
     super(constructorArguments, minFork, maxFork);
     this.transactionPool = constructorArguments.transactionPool();
+    this.blockchain = constructorArguments.protocolContext().getBlockchain();
   }
 
   @Override
@@ -175,8 +178,7 @@ public final class EngineForkchoiceUpdatedV5<
   protected ForkchoiceUpdatedResultV1 createValidResult(
       final Hash lastValid, final PayloadIdentifier payloadId) {
     final boolean inclusionListSatisfied =
-        lastValid == null
-            || mergeContext.get().retrieveInclusionListSatisfied(lastValid).orElse(true);
+        blockchain.getInclusionListStatus(lastValid).orElse(true);
     return new ForkchoiceUpdatedResultV2(
         new PayloadStatusV2(VALID, lastValid, inclusionListSatisfied), payloadId);
   }

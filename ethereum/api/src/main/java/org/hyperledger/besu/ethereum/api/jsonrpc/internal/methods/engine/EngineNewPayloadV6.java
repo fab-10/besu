@@ -29,6 +29,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.NewPayloadR
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.response.RpcErrorType;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.PayloadPostExecutionValidationResultV1;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.PayloadStatusV2;
+import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
@@ -59,12 +60,14 @@ public final class EngineNewPayloadV6<
 
   private static final Logger LOG = LoggerFactory.getLogger(EngineNewPayloadV6.class);
   private final InclusionListValidator inclusionListValidator = new InclusionListValidator();
+  private final MutableBlockchain blockchain;
 
   public EngineNewPayloadV6(
       final ConstructorArguments constructorArguments,
       final HardforkId minSupportedFork,
       final HardforkId firstUnsupportedFork) {
     super(constructorArguments, minSupportedFork, firstUnsupportedFork);
+    this.blockchain = constructorArguments.protocolContext().getBlockchain();
   }
 
   @Override
@@ -127,10 +130,7 @@ public final class EngineNewPayloadV6<
       final Object reqId, final NPRP requestParameters, final Block block) {
     final PayloadPostExecutionValidationResultV1 result =
         validateInclusionList(requestParameters, block);
-    // engine_forkchoiceUpdatedV5 must report the same verdict for this payload
-    mergeContext
-        .get()
-        .putInclusionListSatisfied(block.getHash(), result.isInclusionListSatisfied());
+    blockchain.putInclusionListStatus(block.getHash(), result.isInclusionListSatisfied());
     return result;
   }
 

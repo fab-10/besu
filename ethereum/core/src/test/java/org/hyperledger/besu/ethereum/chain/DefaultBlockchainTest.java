@@ -87,6 +87,31 @@ public class DefaultBlockchainTest {
   }
 
   @Test
+  public void inclusionListStatusIsStoredAndSurvivesRestart() {
+    final BlockDataGenerator gen = new BlockDataGenerator();
+    final KeyValueStorage kvStore = new InMemoryKeyValueStorage();
+    final KeyValueStorage kvStoreVariables = new InMemoryKeyValueStorage();
+    final Block genesisBlock = gen.genesisBlock();
+    final Hash blockHash = gen.hash();
+
+    // created with the block caches disabled, as with the default configuration
+    final DefaultBlockchain blockchain =
+        createMutableBlockchain(kvStore, kvStoreVariables, genesisBlock);
+    assertThat(blockchain.getInclusionListStatus(blockHash)).isEmpty();
+
+    blockchain.putInclusionListStatus(blockHash, false);
+    assertThat(blockchain.getInclusionListStatus(blockHash)).contains(false);
+
+    // a new status replaces the cached one
+    blockchain.putInclusionListStatus(blockHash, true);
+    assertThat(blockchain.getInclusionListStatus(blockHash)).contains(true);
+
+    final DefaultBlockchain restartedBlockchain =
+        createMutableBlockchain(kvStore, kvStoreVariables, genesisBlock);
+    assertThat(restartedBlockchain.getInclusionListStatus(blockHash)).contains(true);
+  }
+
+  @Test
   public void initializeExisting() {
     final BlockDataGenerator gen = new BlockDataGenerator();
 

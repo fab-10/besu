@@ -260,10 +260,7 @@ public sealed class EngineForkchoiceUpdatedV1<
     }
 
     logFCU(VALID, forkChoice);
-    return new JsonRpcSuccessResponse(
-        requestId,
-        createValidResult(
-            forkchoiceResult.getNewHead().map(BlockHeader::getHash).orElse(null), payloadId));
+    return new JsonRpcSuccessResponse(requestId, createValidResult(newHead.getHash(), payloadId));
   }
 
   protected ForkchoiceUpdatedResultV1 createValidResult(
