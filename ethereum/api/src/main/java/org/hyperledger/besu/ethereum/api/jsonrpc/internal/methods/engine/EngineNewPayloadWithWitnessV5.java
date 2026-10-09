@@ -38,7 +38,6 @@ import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.storage.BonsaiExecuti
 import java.util.Map;
 import java.util.Optional;
 
-import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -84,17 +83,11 @@ public final class EngineNewPayloadWithWitnessV5<
       final Object requestId,
       final ExecutionPayloadV1 param,
       final BlockHeader newBlockHeader,
-      @Nullable final BlockProcessingResult executionResult,
+      final BlockProcessingResult executionResult,
       final PayloadPostExecutionValidationResultV1 postExecutionResult) {
     final Hash validHash = newBlockHeader.getHash();
-    if (executionResult == null) {
-      LOG.debug("Witness data unavailable for imported block {}", validHash);
-      return new JsonRpcErrorResponse(requestId, RpcErrorType.INTERNAL_ERROR);
-    }
-
     final Optional<BlockAccessList> blockAccessList =
         executionResult.getYield().flatMap(BlockProcessingOutputs::getBlockAccessList);
-
     if (blockAccessList.isEmpty()) {
       LOG.debug("Witness data unavailable for imported block {}", validHash);
       return new JsonRpcErrorResponse(requestId, RpcErrorType.INTERNAL_ERROR);

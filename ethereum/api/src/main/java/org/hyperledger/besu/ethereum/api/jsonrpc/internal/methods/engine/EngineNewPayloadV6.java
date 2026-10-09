@@ -19,8 +19,6 @@ import static org.hyperledger.besu.ethereum.api.jsonrpc.internal.methods.Executi
 
 import org.hyperledger.besu.datatypes.HardforkId;
 import org.hyperledger.besu.datatypes.Hash;
-import org.hyperledger.besu.ethereum.BlockProcessingOutputs;
-import org.hyperledger.besu.ethereum.BlockProcessingResult;
 import org.hyperledger.besu.ethereum.api.jsonrpc.RpcMethod;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.JsonRpcRequestContext;
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.parameters.ExecutionPayloadV4;
@@ -126,12 +124,9 @@ public final class EngineNewPayloadV6<
 
   @Override
   protected PayloadPostExecutionValidationResultV1 validatePostExecution(
-      final Object reqId,
-      final NPRP requestParameters,
-      final Block block,
-      final BlockProcessingResult executionResult) {
+      final Object reqId, final NPRP requestParameters, final Block block) {
     final PayloadPostExecutionValidationResultV1 result =
-        validateInclusionList(requestParameters, block, executionResult);
+        validateInclusionList(requestParameters, block);
     // engine_forkchoiceUpdatedV5 must report the same verdict for this payload
     mergeContext
         .get()
@@ -140,9 +135,7 @@ public final class EngineNewPayloadV6<
   }
 
   private PayloadPostExecutionValidationResultV1 validateInclusionList(
-      final NPRP requestParameters,
-      final Block block,
-      final BlockProcessingResult executionResult) {
+      final NPRP requestParameters, final Block block) {
 
     final EP blockParam = requestParameters.payloadParameter();
     final List<String> inclusionListHexTransactions = requestParameters.inclusionListTransactions();
@@ -169,17 +162,14 @@ public final class EngineNewPayloadV6<
 
       final ProtocolSpec protocolSpec = protocolSchedule.getByBlockHeader(block.getHeader());
 
-      final BlockProcessingOutputs blockProcessingOutputs =
-          executionResult
-              .getYield()
-              .orElseThrow(() -> new IllegalStateException("No block processing outputs present"));
-
+      // the block has been validated, so its gas used is the cumulative block gas used, and it is
+      // also available when the block was already present and not processed again
       final InclusionListValidationResult result =
           inclusionListValidator.validate(
               protocolSpec,
               protocolContext,
               block.getHeader(),
-              blockProcessingOutputs.getCumulativeBlockGasUsed(),
+              block.getHeader().getGasUsed(),
               notConfirmedILTxs);
       if (result.isValid()) {
         return PayloadPostExecutionValidationResultV1.SUCCESS;

@@ -25,6 +25,7 @@ import static org.mockito.Answers.RETURNS_DEEP_STUBS;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -61,6 +62,7 @@ import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.PayloadStatusV
 import org.hyperledger.besu.ethereum.api.jsonrpc.internal.results.PayloadStatusV2;
 import org.hyperledger.besu.ethereum.chain.BadBlockManager;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
+import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.BlockHeaderTestFixture;
 import org.hyperledger.besu.ethereum.core.Request;
@@ -419,6 +421,45 @@ public class InclusionListWorkflowIntegrationTest {
     when(mergeCoordinator.isDescendantOf(any(), any())).thenReturn(true);
     when(blockchain.getBlockHeader(header.getHash())).thenReturn(Optional.of(header));
     when(blockchain.getBlockHeader(parent.getHash())).thenReturn(Optional.of(parent));
+  }
+
+  @Test
+  public void newPayload_reEvaluatesInclusionListOfAlreadyPresentPayload() {
+    final BlockHeader payloadHeader = setupValidPayloadHeader();
+    setupInclusionListValidation();
+    // a blob transaction in the inclusion list can never be satisfied
+    final String blobTx =
+        TransactionEncoder.encodeOpaqueBytes(createBlobTransaction(), EncodingContext.BLOCK_BODY)
+            .toHexString();
+
+    final PayloadStatusV2 firstStatus =
+        (PayloadStatusV2)
+            fromSuccessResp(callNewPayload(payloadHeader, emptyList(), List.of(blobTx)));
+    assertThat(firstStatus.getInclusionListSatisfied()).isFalse();
+
+    // the payload is now part of the chain
+    when(blockchain.getBlockByHash(payloadHeader.getHash()))
+        .thenReturn(Optional.of(mock(Block.class)));
+
+    // sent again with an inclusion list it satisfies
+    final PayloadStatusV2 resentStatus =
+        (PayloadStatusV2) fromSuccessResp(callNewPayload(payloadHeader, emptyList(), emptyList()));
+    assertThat(resentStatus.getStatus()).isEqualTo(VALID);
+    assertThat(resentStatus.getInclusionListSatisfied()).isTrue();
+    assertThat(callForkchoiceUpdatedWithoutAttributes(payloadHeader).getInclusionListSatisfied())
+        .isTrue();
+
+    // sent again with the unsatisfiable inclusion list
+    final PayloadStatusV2 resentAgainStatus =
+        (PayloadStatusV2)
+            fromSuccessResp(callNewPayload(payloadHeader, emptyList(), List.of(blobTx)));
+    assertThat(resentAgainStatus.getStatus()).isEqualTo(VALID);
+    assertThat(resentAgainStatus.getInclusionListSatisfied()).isFalse();
+    assertThat(callForkchoiceUpdatedWithoutAttributes(payloadHeader).getInclusionListSatisfied())
+        .isFalse();
+
+    // the block was processed only the first time
+    verify(mergeCoordinator, times(1)).rememberBlock(any(), any());
   }
 
   private void setupInclusionListValidation() {

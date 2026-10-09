@@ -243,12 +243,14 @@ public sealed class EngineNewPayloadV1<
           .setMessage("block {} already present")
           .addArgument(newBlockHeader::toLogString)
           .log();
-      return respondWithValid(
+      // the block was validated when it was first received, but this request can carry data it was
+      // not checked against (e.g. a different inclusion list), so the post-execution validation
+      // runs again
+      return respondWithValidStatus(
           reqId,
           blockParam,
-          block.getHeader(),
-          new BlockProcessingResult(Optional.empty()),
-          PayloadPostExecutionValidationResultV1.SUCCESS);
+          block.getHash(),
+          validatePostExecution(reqId, requestParameters, block));
     }
 
     if (needsSync) {
@@ -278,7 +280,7 @@ public sealed class EngineNewPayloadV1<
     final BlockProcessingResult executionResult = rememberBlock(block, blockParam);
     if (executionResult.isSuccessful()) {
       final PayloadPostExecutionValidationResultV1 postExecutionResult =
-          validatePostExecution(reqId, requestParameters, block, executionResult);
+          validatePostExecution(reqId, requestParameters, block);
 
       lastExecutionTimeInNs = System.nanoTime() - startTimeNs;
       logImportedBlockInfo(
@@ -304,10 +306,6 @@ public sealed class EngineNewPayloadV1<
           INVALID,
           executionResult.errorMessage.orElse("N/A"));
     }
-  }
-
-  protected void processAcceptedBlock(final Block block, final NPRP requestParameters) {
-    // no-op
   }
 
   protected ExecutionPayloadV1 readPayloadParameter(final JsonRpcRequestContext requestContext) {
@@ -396,7 +394,8 @@ public sealed class EngineNewPayloadV1<
    * if they cannot produce it; the default responds with the standard VALID payload status.
    *
    * <p>Note this covers only the freshly-executed path: a payload whose block is already present
-   * returns VALID without passing through here.
+   * returns the standard VALID payload status without passing through here, since there is no block
+   * processing data for it.
    *
    * @param requestId the JSON-RPC request id
    * @param param the execution payload parameter
@@ -411,9 +410,17 @@ public sealed class EngineNewPayloadV1<
       final BlockHeader newBlockHeader,
       final BlockProcessingResult executionResult,
       final PayloadPostExecutionValidationResultV1 postExecutionResult) {
-    logNewPayloadResponse(param, newBlockHeader.getHash(), VALID);
+    return respondWithValidStatus(requestId, param, newBlockHeader.getHash(), postExecutionResult);
+  }
+
+  private JsonRpcResponse respondWithValidStatus(
+      final Object requestId,
+      final ExecutionPayloadV1 param,
+      final Hash validHash,
+      final PayloadPostExecutionValidationResultV1 postExecutionResult) {
+    logNewPayloadResponse(param, validHash, VALID);
     return new JsonRpcSuccessResponse(
-        requestId, createValidPayloadStatus(newBlockHeader.getHash(), postExecutionResult));
+        requestId, createValidPayloadStatus(validHash, postExecutionResult));
   }
 
   protected PayloadStatusV1 createValidPayloadStatus(
@@ -499,17 +506,16 @@ public sealed class EngineNewPayloadV1<
    * (e.g. inclusion list satisfaction, EIP-7805). The result is passed to {@link
    * #createValidPayloadStatus} so that the VALID response can report it.
    *
+   * <p>It is called both for a block that was just processed and for a block that was already
+   * present, since the request can carry data the block was not checked against yet.
+   *
    * @param reqId the request id
    * @param requestParameters the request parameters
    * @param block the successfully processed block
-   * @param executionResult the result of processing the block
    * @return the post-execution validation result
    */
   protected PayloadPostExecutionValidationResultV1 validatePostExecution(
-      final Object reqId,
-      final NPRP requestParameters,
-      final Block block,
-      final BlockProcessingResult executionResult) {
+      final Object reqId, final NPRP requestParameters, final Block block) {
     return PayloadPostExecutionValidationResultV1.SUCCESS;
   }
 
