@@ -212,21 +212,24 @@ public class LayeredPendingTransactions implements PendingTransactions {
 
     if (!reAddTxs.isEmpty()) {
       // re-add all the previous txs
-      final long lowestNonce = reAddTxs.getFirst().getNonce();
-      final int newNonceDistance = (int) Math.max(0, lowestNonce - stateSenderNonce);
-
-      if (newNonceDistance >= poolConfig.getMaxFutureBySender()) {
-        // re-added txs skip the nonce checks done for new ones, so drop them here
-        LOG.atTrace()
-            .setMessage(
-                "Drop {} reconciled transaction(s) of sender {}, too much in the future since current sender nonce is {}")
-            .addArgument(reAddTxs::size)
-            .addArgument(sender)
-            .addArgument(stateSenderNonce)
-            .log();
-      } else {
-        reAddTxs.forEach(ptx -> prioritizedTransactions.add(ptx, newNonceDistance, NEW_RECONCILED));
-      }
+      reAddTxs.forEach(
+          ptx -> {
+            final int newNonceDistance = (int) Math.max(0, ptx.getNonce() - stateSenderNonce);
+            final TransactionAddedResult nonceChecksResult =
+                nonceChecks(ptx, stateSenderNonce, newNonceDistance);
+            if (nonceChecksResult != null) {
+              // re-added txs skip the nonce checks done for new ones, so drop them here
+              LOG.atTrace()
+                  .setMessage(
+                      "Drop reconciled transaction {} of sender {}, too much in the future since current sender nonce is {}")
+                  .addArgument(ptx::toTraceLog)
+                  .addArgument(sender)
+                  .addArgument(stateSenderNonce)
+                  .log();
+            } else {
+              prioritizedTransactions.add(ptx, newNonceDistance, NEW_RECONCILED);
+            }
+          });
     }
 
     LOG.atDebug()
