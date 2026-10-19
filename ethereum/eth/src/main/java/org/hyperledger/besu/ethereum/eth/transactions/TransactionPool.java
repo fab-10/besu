@@ -125,7 +125,7 @@ public class TransactionPool implements BlockAddedObserver {
   private volatile OptionalLong subscribeConnectId = OptionalLong.empty();
   private final SaveRestoreManager saveRestoreManager = new SaveRestoreManager();
   private final Set<Address> localSenders = ConcurrentHashMap.newKeySet();
-  private final EthScheduler.OrderedProcessor<BlockAddedEvent> blockAddedEventOrderedProcessor;
+  private final EthScheduler.OrderedProcessor<Runnable> blockAddedEventOrderedProcessor;
   private final ListMultimap<VersionedHash, BlobProofBundle> mapOfBlobsInTransactionPool =
       Multimaps.synchronizedListMultimap(
           Multimaps.newListMultimap(new HashMap<>(), () -> new ArrayList<>(1)));
@@ -150,7 +150,7 @@ public class TransactionPool implements BlockAddedObserver {
     this.metrics = metrics;
     this.configuration = configuration;
     this.blockAddedEventOrderedProcessor =
-        ethContext.getScheduler().createOrderedProcessor(this::processBlockAddedEvent);
+        ethContext.getScheduler().createOrderedProcessor(Runnable::run);
     this.cacheForBlobsOfTransactionsAddedToABlock = blobCache;
     this.transactionLimbo =
         new TransactionsLimbo(
@@ -197,17 +197,7 @@ public class TransactionPool implements BlockAddedObserver {
     LOG.trace("Adding {} remote transactions", initialCount);
 
     // recover and cache tx sender:
-    var txStream =
-        transactions.stream()
-            .filter(
-                tx -> {
-                  try {
-                    tx.getSender();
-                    return true;
-                  } catch (IllegalArgumentException | IllegalStateException ex) {
-                    return false;
-                  }
-                });
+    var txStream = transactions.stream().filter(TransactionPool::hasRecoverableSender);
 
     final Map<Hash, AdditionOutcome> addOutcomes =
         sortedBySenderAndNonce(txStream)
@@ -371,8 +361,19 @@ public class TransactionPool implements BlockAddedObserver {
       // unless no-local-priority option is specified, senders of local sent txs are prioritized
       return true;
     }
-    // otherwise check if the sender belongs to the priority list
-    return configuration.getPrioritySenders().contains(transaction.getSender());
+    // otherwise check if the sender belongs to the priority list, an unrecoverable sender is left
+    // to the transaction validator to reject
+    return hasRecoverableSender(transaction)
+        && configuration.getPrioritySenders().contains(transaction.getSender());
+  }
+
+  private static boolean hasRecoverableSender(final Transaction transaction) {
+    try {
+      transaction.getSender();
+      return true;
+    } catch (final IllegalArgumentException | IllegalStateException e) {
+      return false;
+    }
   }
 
   public long subscribePendingTransactions(final PendingTransactionAddedListener listener) {
@@ -397,11 +398,29 @@ public class TransactionPool implements BlockAddedObserver {
       if (event.getEventType().equals(EventType.HEAD_ADVANCED)
           || event.getEventType().equals(EventType.CHAIN_REORG)) {
 
-        blockAddedEventOrderedProcessor.submit(event);
+        blockAddedEventOrderedProcessor.submit(() -> processBlockAddedEvent(event));
 
         ethContext.getScheduler().scheduleServiceTask(() -> transactionLimbo.onBlockAdded(event));
       }
     }
+  }
+
+  /**
+   * Block added events are applied to the pool asynchronously, so right after a block is imported
+   * the pool can still contain the transactions it confirmed. The action runs once every block
+   * added event received so far has been applied, so pool reads inside it reflect those blocks.
+   *
+   * @param action the action to run after the pending block added events
+   */
+  public void runAfterBlockAddedEventsProcessed(final Runnable action) {
+    blockAddedEventOrderedProcessor.submit(
+        () -> {
+          try {
+            action.run();
+          } catch (final Throwable t) {
+            LOG.warn("Failed to run post-block-added action", t);
+          }
+        });
   }
 
   private void processBlockAddedEvent(final BlockAddedEvent e) {

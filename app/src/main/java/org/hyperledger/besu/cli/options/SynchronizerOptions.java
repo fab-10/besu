@@ -243,7 +243,7 @@ public class SynchronizerOptions implements CLIOptions<SynchronizerConfiguration
       hidden = true,
       paramLabel = "<INTEGER>",
       description =
-          "Number of concurrent requests to use when downloading fast sync world state (default: ${DEFAULT-VALUE})")
+          "Number of concurrent requests per snap/1 world state download pipeline (default: ${DEFAULT-VALUE})")
   private int worldStateRequestParallelism =
       SynchronizerConfiguration.DEFAULT_WORLD_STATE_REQUEST_PARALLELISM;
 

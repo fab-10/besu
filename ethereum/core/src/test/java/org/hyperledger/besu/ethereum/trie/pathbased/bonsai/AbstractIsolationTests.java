@@ -62,6 +62,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.layered.GasPricePrioritize
 import org.hyperledger.besu.ethereum.eth.transactions.layered.LayeredPendingTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.layered.SenderBalanceChecker;
 import org.hyperledger.besu.ethereum.mainnet.BalConfiguration;
+import org.hyperledger.besu.ethereum.mainnet.BlockExecutionContext;
 import org.hyperledger.besu.ethereum.mainnet.MainnetProtocolSchedule;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSchedule;
 import org.hyperledger.besu.ethereum.storage.StorageProvider;
@@ -369,7 +370,13 @@ public abstract class AbstractIsolationTests {
         protocolSchedule
             .getByBlockHeader(blockHeader(0))
             .getBlockProcessor()
-            .processBlock(protocolContext, blockchain, ws, block);
+            .processBlock(
+                BlockExecutionContext.builder()
+                    .protocolContext(protocolContext)
+                    .worldState(ws)
+                    .block(block)
+                    .blockAccessList(Optional.empty())
+                    .build());
     blockchain.appendBlock(block, res.getReceipts());
     return res;
   }
