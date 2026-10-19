@@ -24,6 +24,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyByte;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -35,6 +36,7 @@ import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
 import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
+import org.hyperledger.besu.ethereum.core.kzg.KZGProof;
 import org.hyperledger.besu.ethereum.eth.EthProtocolVersion;
 import org.hyperledger.besu.ethereum.eth.manager.EthContext;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
@@ -312,6 +314,49 @@ class TransactionsLimboTest extends TrustedSetupClassLoaderExtension {
     assertThat(resubmitted.hasBlobData()).isTrue();
     assertThat(resubmitted.getBlobs()).isEqualTo(fullSidecar.getBlobs());
     assertThat(CKZG4844Helper.verify4844Kzg(resubmitted)).isTrue();
+  }
+
+  @Test
+  void discardsATransactionWhoseBlobsDoNotRecover() {
+    // Fetching verifies only the cells it asked for, so a proof for a cell no round asks for goes
+    // unchecked until recovery, which refuses it. No peer can supply anything that would make the
+    // transaction valid, so the round ends it rather than leaving it to be retried for ever.
+    limbo =
+        new TransactionsLimbo(
+            ethContext,
+            () -> range(0, CELLS_TO_RECOVER_BLOB),
+            resubmitter,
+            _ -> false,
+            new Random(1));
+
+    // A well formed proof, but of another blob, at an index outside what is ever fetched. The
+    // fixture's first blob is all zeros, so every proof of it is the same one: a proof that differs
+    // has to come from a second blob.
+    final BlobsWithCommitments otherSidecar =
+        CKZG4844Helper.convertToVersion1(blobTestFixture.createBlobsWithCommitments(1));
+    final List<KZGProof> proofs = new ArrayList<>(fullSidecar.getKzgProofs());
+    proofs.set(CKZG4844Helper.CELLS_PER_EXT_BLOB - 1, otherSidecar.getKzgProofs().getFirst());
+    assertThat(proofs).isNotEqualTo(fullSidecar.getKzgProofs());
+
+    blobTx =
+        new CellsOnlyBlobTransactionFixture()
+            .create(
+                BlobsWithCommitments.createFromBlobCells(
+                    fullSidecar.getKzgCommitments(),
+                    List.of(CellsWithMask.EMPTY),
+                    proofs,
+                    fullSidecar.getVersionedHashes()));
+
+    announce(announcingPeer(range(0, CELLS_TO_RECOVER_BLOB), range(0, CELLS_TO_RECOVER_BLOB)));
+    limbo.addIncompleteBlob(blobTx, false, false, SCORE);
+
+    // not handed back to the pool, and the round ended cleanly rather than throwing: see
+    // roundsEndCleanly
+    verify(resubmitter, never()).submit(any(), anyBoolean(), anyBoolean(), anyByte());
+
+    // tracking stopped with it, so a later announcement does not start fetching its cells again
+    announce(announcingPeer(CellMask.FULL, CellMask.FULL));
+    verify(peerTaskExecutor, times(1)).executeAgainstPeer(any(), any());
   }
 
   @Test

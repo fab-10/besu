@@ -44,6 +44,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Random;
 import java.util.SequencedMap;
 import java.util.concurrent.CompletableFuture;
@@ -492,14 +493,22 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
                 } while (!missingMask.isEmpty());
 
                 if (missingMask.isEmpty()) {
-                  // blob tx has all the requested cells, resubmit it to the pool
-                  final Transaction cellsAddedTx =
-                      recoverBlobsIfEnoughCells(addCellsToBlobs(blobTx, mergedReceivedCells));
-                  final TxMetadata txMetadata = trackedBlob.txMetadata;
-                  transactionResubmitter.submit(
-                      cellsAddedTx, txMetadata.isLocal, txMetadata.hasPriority, txMetadata.score);
+                  // Either way this round is the end of the road for the transaction: it goes back
+                  // to the pool, or its blobs do not recover and no node would accept it. Both stop
+                  // the tracking, so a later announcement does not start fetching its cells again.
+                  recoverBlobsIfEnoughCells(addCellsToBlobs(blobTx, mergedReceivedCells))
+                      .ifPresentOrElse(
+                          cellsAddedTx -> {
+                            final TxMetadata txMetadata = trackedBlob.txMetadata;
+                            transactionResubmitter.submit(
+                                cellsAddedTx,
+                                txMetadata.isLocal,
+                                txMetadata.hasPriority,
+                                txMetadata.score);
+                            LOG.debug("Received all requested cells for tx {}", trackedBlob);
+                          },
+                          () -> LOG.debug("Discarding unrecoverable blob tx {}", trackedBlob));
                   removeTrackingFor(blobTx.getHash());
-                  LOG.debug("Received all requested cells for tx {}", trackedBlob);
                 } else {
                   // keep what did arrive, so a later announcement only has to cover the gap
                   final IncompleteBlob updatedIncompleteBlob =
@@ -614,10 +623,15 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
    * sampling rather than a gap: a node that wants to build with a blob transaction has to fetch at
    * least {@link CKZG4844Helper#CELLS_TO_RECOVER_BLOB} of its cells.
    *
+   * <p>Recovery refuses a transaction whose cell proofs are not the proofs of the blobs its cells
+   * recover to, which is a transaction no node will accept. There is nothing to be gained by
+   * holding it or by asking for its cells again, so it is dropped.
+   *
    * @param sampledTx a transaction holding the cells a round retrieved
-   * @return the same transaction with its blobs recovered, or unchanged if too few cells are held
+   * @return the same transaction with its blobs recovered, unchanged if too few cells are held, or
+   *     empty if its blobs cannot be recovered at all
    */
-  private Transaction recoverBlobsIfEnoughCells(final Transaction sampledTx) {
+  private Optional<Transaction> recoverBlobsIfEnoughCells(final Transaction sampledTx) {
     final BlobsWithCommitments sampledBwc = sampledTx.getBlobsWithCommitments().orElseThrow();
     final int heldCells = sampledBwc.getCellMask().cardinality();
     if (heldCells < CELLS_TO_RECOVER_BLOB) {
@@ -625,11 +639,17 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
           "Holding {} cells of tx {}, too few to recover its blobs",
           heldCells,
           sampledTx.getHash());
-      return sampledTx;
+      return Optional.of(sampledTx);
     }
 
     final long started = System.nanoTime();
-    final BlobsWithCommitments recoveredBwc = CKZG4844Helper.recoverBlobs(sampledBwc);
+    final BlobsWithCommitments recoveredBwc;
+    try {
+      recoveredBwc = CKZG4844Helper.recoverBlobs(sampledBwc);
+    } catch (final IllegalArgumentException e) {
+      LOG.debug("Blobs of tx {} do not recover: {}", sampledTx.getHash(), e.getMessage());
+      return Optional.empty();
+    }
     LOG.atTrace()
         .setMessage("Recovered {} blobs of tx {} from sampled cells took {}")
         .addArgument(() -> sampledBwc.getVersionedHashes().size())
@@ -637,7 +657,8 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
         .addArgument(() -> Duration.ofNanos(System.nanoTime() - started))
         .log();
 
-    return Transaction.builder().copiedFrom(sampledTx).blobsWithCommitments(recoveredBwc).build();
+    return Optional.of(
+        Transaction.builder().copiedFrom(sampledTx).blobsWithCommitments(recoveredBwc).build());
   }
 
   /** Peers and their masks, rendered compactly: {@link EthPeer#toString} runs to several lines. */
