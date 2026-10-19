@@ -137,22 +137,18 @@ public class CKZG4844Helper {
    * @return the same commitments, proofs and versioned hashes, with the blobs recovered
    */
   public static BlobsWithCommitments recoverBlobs(final BlobsWithCommitments sparse) {
-    final List<BlobProofBundle> bundles = sparse.getBlobProofBundles();
-    return BlobsWithCommitments.createFromBlobsType1(
-        sparse.getKzgCommitments(),
-        bundles.stream().map(CKZG4844Helper::recoverBlob).toList(),
-        // the proofs the sender committed to, which recovery would only recompute
-        bundles.stream().map(BlobProofBundle::getKzgProof).toList(),
-        sparse.getVersionedHashes());
+    return BlobsWithCommitments.createFromBundles(
+        sparse.getBlobProofBundles().stream().map(CKZG4844Helper::recoverBundle).toList());
   }
 
   /**
-   * Recovers the blob of a bundle holding enough of its cells.
+   * Recovers the blob of a bundle holding enough of its cells, keeping everything the transaction
+   * arrived with.
    *
    * @param bundle the bundle to recover the blob of
-   * @return the recovered blob
+   * @return a bundle holding the recovered blob and every cell of it
    */
-  private static Blob recoverBlob(final BlobProofBundle bundle) {
+  private static BlobProofBundle recoverBundle(final BlobProofBundle bundle) {
     final CellsWithMask cellsWithMask =
         bundle
             .getCellsWithMask()
@@ -169,10 +165,51 @@ public class CKZG4844Helper {
         CKZG4844JNI.recoverCellsAndKzgProofs(
             heldCells.streamIndexes().asLongStream().toArray(),
             bundle.getBlobCellsBytes().orElseThrow().toArrayUnsafe());
+    final Bytes extendedCells = Bytes.wrap(recovered.getCells());
 
-    // The extension is systematic: it doubles the data, leaving the blob itself as the first half
-    // of the extended cells.
-    return new Blob(Bytes.wrap(recovered.getCells()).slice(0, BLOB_SIZE));
+    checkProofsAreTheRecoveredOnes(bundle, recovered);
+
+    // The recovered cells are handed over rather than left to be computed from the blob: recovery
+    // has just produced them, and they are the whole set, so the bundle can serve every cell.
+    return new BlobProofBundle(
+        bundle.getBlobType(),
+        // The extension is systematic: it doubles the data, leaving the blob itself as the first
+        // half of the extended cells.
+        new Blob(extendedCells.slice(0, BLOB_SIZE)),
+        extendedCells,
+        bundle.getKzgCommitment(),
+        // the proofs the transaction arrived with, now known to be the blob's own
+        bundle.getKzgProof(),
+        bundle.getVersionedHash());
+  }
+
+  /**
+   * Checks the cell proofs the transaction arrived with against the ones recovery computed.
+   *
+   * <p>A partially sampled bundle can only have been verified over the cells it holds, so the
+   * proofs for every other cell arrived unchecked, and the recovered bundle presents all of them as
+   * the blob's. Recovery computes them anyway on its way to the cells, so comparing costs nothing
+   * beyond the comparison itself, and a cell proof is determined by the blob and the cell index:
+   * the recovered ones are therefore the only proofs the blob can have.
+   *
+   * <p>A mismatch means the transaction is not valid and no node will accept it. It is refused here
+   * rather than repaired with the recovered proofs, which would leave this node the only one
+   * holding a version of the transaction that verifies.
+   *
+   * @param bundle the bundle being recovered
+   * @param recovered what recovery returned for it
+   */
+  private static void checkProofsAreTheRecoveredOnes(
+      final BlobProofBundle bundle, final CellsAndProofs recovered) {
+    final List<KZGProof> sentProofs = bundle.getKzgProof();
+    final List<KZGProof> recoveredProofs = extractKZGProofs(recovered.getProofs());
+    for (int cellIndex = 0; cellIndex < recoveredProofs.size(); cellIndex++) {
+      checkArgument(
+          recoveredProofs.get(cellIndex).equals(sentProofs.get(cellIndex)),
+          "Proof for cell %s of blob %s is not the proof of the cell it recovers to",
+          cellIndex,
+          bundle.getVersionedHash());
+    }
   }
 
   /**

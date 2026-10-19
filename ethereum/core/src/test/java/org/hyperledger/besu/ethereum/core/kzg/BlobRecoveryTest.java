@@ -18,6 +18,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELLS_PER_EXT_BLOB;
 import static org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper.CELLS_TO_RECOVER_BLOB;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.mockStatic;
+import static org.mockito.Mockito.never;
 
 import org.hyperledger.besu.ethereum.core.BlobTestFixture;
 import org.hyperledger.besu.ethereum.util.TrustedSetupClassLoaderExtension;
@@ -28,6 +32,7 @@ import java.util.List;
 
 import org.apache.tuweni.bytes.Bytes;
 import org.junit.jupiter.api.Test;
+import org.mockito.MockedStatic;
 
 /**
  * Rebuilding a blob from the cells a node sampled, which is how a transaction received over eth/72
@@ -46,6 +51,12 @@ class BlobRecoveryTest extends TrustedSetupClassLoaderExtension {
   /** The same sidecar reduced to the cells {@code mask} names, as a sampling node holds it. */
   private static BlobsWithCommitments narrowTo(
       final BlobsWithCommitments full, final CellMask mask) {
+    return narrowTo(full, mask, full.getKzgProofs());
+  }
+
+  /** As {@link #narrowTo(BlobsWithCommitments, CellMask)}, with the proofs the sender sent. */
+  private static BlobsWithCommitments narrowTo(
+      final BlobsWithCommitments full, final CellMask mask, final List<KZGProof> kzgProofs) {
     final List<CellsWithMask> narrowed = new ArrayList<>(full.getBlobProofBundles().size());
     for (final BlobProofBundle bundle : full.getBlobProofBundles()) {
       final CellsWithMask allCells = bundle.getCellsWithMask().orElseThrow();
@@ -53,7 +64,17 @@ class BlobRecoveryTest extends TrustedSetupClassLoaderExtension {
           new CellsWithMask(mask.streamIndexes().mapToObj(allCells::getCell).toList(), mask));
     }
     return BlobsWithCommitments.createFromBlobCells(
-        full.getKzgCommitments(), narrowed, full.getKzgProofs(), full.getVersionedHashes());
+        full.getKzgCommitments(), narrowed, kzgProofs, full.getVersionedHashes());
+  }
+
+  /** The flat proof list with the two blobs' groups exchanged, so each blob has the other's. */
+  private static List<KZGProof> proofsOfTheWrongBlob(final BlobsWithCommitments full) {
+    final List<KZGProof> proofs = full.getKzgProofs();
+    final int perBlob = CKZG4844Helper.CELL_PROOFS_PER_BLOB;
+    final List<KZGProof> swapped = new ArrayList<>(proofs.size());
+    swapped.addAll(proofs.subList(perBlob, 2 * perBlob));
+    swapped.addAll(proofs.subList(0, perBlob));
+    return swapped;
   }
 
   private static CellMask maskOf(final int... indexes) {
@@ -98,11 +119,69 @@ class BlobRecoveryTest extends TrustedSetupClassLoaderExtension {
         CKZG4844Helper.recoverBlobs(narrowTo(fullBlobs(), everyOtherCell()));
 
     // The commitments and versioned hashes are the ones the sender signed over, and the proofs are
-    // the ones it sent: recovery must not quietly substitute its own.
+    // the ones it sent. For a valid transaction those are also the proofs recovery computes, so
+    // what makes the distinction observable is the refusal below, not this.
     final BlobsWithCommitments full = fullBlobs();
     assertThat(recovered.getKzgCommitments()).isEqualTo(full.getKzgCommitments());
     assertThat(recovered.getVersionedHashes()).isEqualTo(full.getVersionedHashes());
     assertThat(recovered.getKzgProofs()).isEqualTo(full.getKzgProofs());
+  }
+
+  @Test
+  void handsOverTheRecoveredCellsRatherThanExtendingTheBlobAgain() {
+    // Recovery produces the whole cell set, so extending the recovered blob to compute the cells
+    // would repeat work already done, once per blob, and leave the bundle holding two copies of
+    // the same 256 KiB.
+    final BlobsWithCommitments sampled = narrowTo(fullBlobs(), everyOtherCell());
+
+    final BlobsWithCommitments recovered;
+    try (MockedStatic<CKZG4844Helper> helper =
+        mockStatic(CKZG4844Helper.class, CALLS_REAL_METHODS)) {
+      recovered = CKZG4844Helper.recoverBlobs(sampled);
+      helper.verify(() -> CKZG4844Helper.computeCells(any()), never());
+    }
+
+    assertThat(recovered.hasBlobData()).isTrue();
+    assertThat(recovered.getCellMask()).isEqualTo(CellMask.FULL);
+  }
+
+  @Test
+  void rejectsAProofForACellThatWasNeverSampled() {
+    // The case partial verification cannot see: a sidecar is verified over the cells it holds, so a
+    // proof for any other cell arrives unchecked, and the recovered bundle would present all of
+    // them as the blob's.
+    final BlobsWithCommitments full = fullBlobs();
+    final CellMask sampled = everyOtherCell();
+    final int neverSampled = 1;
+    assertThat(sampled.contains(neverSampled)).isFalse();
+
+    // a well formed proof, of the same blob, at an index it does not belong to
+    final List<KZGProof> sentProofs = new ArrayList<>(full.getKzgProofs());
+    final int secondBlob = CKZG4844Helper.CELL_PROOFS_PER_BLOB;
+    sentProofs.set(secondBlob + neverSampled, sentProofs.get(secondBlob));
+    assertThat(sentProofs).isNotEqualTo(full.getKzgProofs());
+
+    final BlobsWithCommitments sampledBwc = narrowTo(full, sampled, sentProofs);
+    // what the node holds still verifies, which is why nothing before recovery rejects this
+    assertThat(CKZG4844Helper.verify4844Kzg(sampledBwc)).isTrue();
+
+    assertThatExceptionOfType(IllegalArgumentException.class)
+        .isThrownBy(() -> CKZG4844Helper.recoverBlobs(sampledBwc))
+        .withMessageContaining("Proof for cell " + neverSampled);
+  }
+
+  @Test
+  void refusesRatherThanSubstitutingItsOwnProofs() {
+    // Recovery computes proofs of its own, and they are only ever compared. Using them would leave
+    // this node the only one holding a version of the transaction that verifies, while every other
+    // node rejects the one that was actually signed and broadcast.
+    final BlobsWithCommitments full = fullBlobs();
+    final List<KZGProof> sentProofs = proofsOfTheWrongBlob(full);
+    assertThat(sentProofs).isNotEqualTo(full.getKzgProofs());
+
+    assertThatExceptionOfType(IllegalArgumentException.class)
+        .isThrownBy(
+            () -> CKZG4844Helper.recoverBlobs(narrowTo(full, everyOtherCell(), sentProofs)));
   }
 
   @Test
