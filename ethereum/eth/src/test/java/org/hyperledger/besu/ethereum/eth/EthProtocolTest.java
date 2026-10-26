@@ -92,8 +92,34 @@ public class EthProtocolTest {
   }
 
   @Test
-  void latestIsTheLastVersion() {
+  void latestIsTheLastAdvertisedVersion() {
     assertThat(EthProtocol.LATEST).isEqualTo(EthProtocolVersion.V72.getCapability());
+  }
+
+  @Test
+  void ethSeventyTwoIsAdvertised() {
+    // The counterpart of the check on main, where eth/72 is known but withheld: this branch has
+    // the whole sparse blobpool, so the version it registers is one it also offers.
+    assertThat(EthProtocolVersion.V72.isAdvertised()).isTrue();
+    assertThat(EthProtocolVersion.latest()).isEqualTo(EthProtocolVersion.V72);
+    assertThat(EthProtocol.get().isValidMessageCode(72, EthProtocolMessages.GET_CELLS)).isTrue();
+  }
+
+  @Test
+  void theCellMessagesAreFramedWithARequestId() {
+    // GetCells and Cells are a request and its response, so they are framed with a request id like
+    // every other such pair. Without it EthProtocolManager hands the server the id as part of the
+    // request body and sends the response back with none, which no requester can match to its
+    // request.
+    assertThat(EthProtocol.requestIdCompatible(EthProtocolMessages.GET_CELLS)).isTrue();
+    assertThat(EthProtocol.requestIdCompatible(EthProtocolMessages.CELLS)).isTrue();
+  }
+
+  @Test
+  void theCellMessagesAreNamed() {
+    assertThat(EthProtocol.get().messageName(72, EthProtocolMessages.GET_CELLS))
+        .isEqualTo("GetCells");
+    assertThat(EthProtocol.get().messageName(72, EthProtocolMessages.CELLS)).isEqualTo("Cells");
   }
 
   @Test

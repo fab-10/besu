@@ -29,6 +29,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolCo
 import org.hyperledger.besu.ethereum.eth.transactions.PeerTransactionTracker;
 import org.hyperledger.besu.ethereum.eth.transactions.PendingTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionEventNotifier;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
@@ -39,6 +40,7 @@ import org.hyperledger.besu.ethereum.mainnet.ProtocolScheduleBuilder;
 import org.hyperledger.besu.ethereum.mainnet.ProtocolSpecAdapters;
 import org.hyperledger.besu.evm.internal.EvmConfiguration;
 import org.hyperledger.besu.metrics.noop.NoOpMetricsSystem;
+import org.hyperledger.besu.testutil.DeterministicEthScheduler;
 import org.hyperledger.besu.testutil.TestClock;
 import org.hyperledger.besu.util.number.Fraction;
 
@@ -82,12 +84,15 @@ public class LegacyFeeMarketBlockTransactionSelectorTest
             .minGasPrice(Wei.ONE)
             .build();
 
+    final TransactionEventNotifier transactionEventNotifier =
+        new TransactionEventNotifier(new DeterministicEthScheduler());
     final PendingTransactions pendingTransactions =
         new GasPricePendingTransactionsSorter(
             poolConf,
             TestClock.system(ZoneId.systemDefault()),
             metricsSystem,
-            blockchain::getChainHeadHeader);
+            blockchain::getChainHeadHeader,
+            transactionEventNotifier.newEmitter());
 
     final EthContext ethContext = mock(EthContext.class, RETURNS_DEEP_STUBS);
     when(ethContext.getEthPeers().subscribeConnect(any())).thenReturn(1L);
@@ -102,7 +107,8 @@ public class LegacyFeeMarketBlockTransactionSelectorTest
             ethContext,
             new TransactionPoolMetrics(metricsSystem),
             poolConf,
-            new BlobCache());
+            new BlobCache(),
+            transactionEventNotifier);
     transactionPool.setEnabled();
     return transactionPool;
   }

@@ -461,12 +461,10 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
                         new InProgressGetCellsTask(
                             entry.getKey(),
                             entry.getValue(),
-                            ethContext
-                                .getScheduler()
-                                .scheduleTxWorkerTask(
-                                    () ->
-                                        retrieveCellsFromPeer(
-                                            entry.getKey(), blobTx, entry.getValue()))));
+                            onTxWorker(
+                                () ->
+                                    retrieveCellsFromPeer(
+                                        entry.getKey(), blobTx, entry.getValue()))));
                   }
 
                   for (final InProgressGetCellsTask inProgressTask : getCellsTasks) {
@@ -659,6 +657,33 @@ public class TransactionsLimbo implements TransactionsAnnouncedListener, BlockAd
 
     return Optional.of(
         Transaction.builder().copiedFrom(sampledTx).blobsWithCommitments(recoveredBwc).build());
+  }
+
+  /**
+   * Runs one peer's cell request on the transaction worker pool, and gives back a future for its
+   * result.
+   *
+   * <p>{@link org.hyperledger.besu.ethereum.eth.manager.EthScheduler#scheduleTxWorkerTask} is fire
+   * and forget, and a round has to wait on each peer's answer with a timeout, so the task completes
+   * the future itself. The worker pool is still the right one: this is transaction pool work that
+   * blocks on a peer.
+   *
+   * @param task the request to run
+   * @return a future for what it returns
+   */
+  private <T> CompletableFuture<T> onTxWorker(final Supplier<T> task) {
+    final CompletableFuture<T> future = new CompletableFuture<>();
+    ethContext
+        .getScheduler()
+        .scheduleTxWorkerTask(
+            () -> {
+              try {
+                future.complete(task.get());
+              } catch (final RuntimeException e) {
+                future.completeExceptionally(e);
+              }
+            });
+    return future;
   }
 
   /** Peers and their masks, rendered compactly: {@link EthPeer#toString} runs to several lines. */

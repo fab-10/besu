@@ -46,6 +46,7 @@ import org.hyperledger.besu.ethereum.eth.transactions.BlobCache;
 import org.hyperledger.besu.ethereum.eth.transactions.ImmutableTransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.PeerTransactionTracker;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionBroadcaster;
+import org.hyperledger.besu.ethereum.eth.transactions.TransactionEventNotifier;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPool;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolConfiguration;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionPoolMetrics;
@@ -221,12 +222,15 @@ class TestingCommitBlockV1IntegrationTest {
 
     final TransactionPoolConfiguration poolConf =
         ImmutableTransactionPoolConfiguration.builder().txPoolMaxSize(100).build();
+    final TransactionEventNotifier transactionEventNotifier =
+        new TransactionEventNotifier(new DeterministicEthScheduler());
     final GasPricePendingTransactionsSorter sorter =
         new GasPricePendingTransactionsSorter(
             poolConf,
             Clock.systemUTC(),
             new NoOpMetricsSystem(),
-            Suppliers.ofInstance(fixture.getBlockchain().getChainHeadHeader()));
+            Suppliers.ofInstance(fixture.getBlockchain().getChainHeadHeader()),
+            transactionEventNotifier.newEmitter());
 
     final EthContext ethContext = mock(EthContext.class, RETURNS_DEEP_STUBS);
     when(ethContext.getEthPeers().subscribeConnect(any())).thenReturn(1L);
@@ -241,7 +245,8 @@ class TestingCommitBlockV1IntegrationTest {
             ethContext,
             new TransactionPoolMetrics(new NoOpMetricsSystem()),
             poolConf,
-            new BlobCache());
+            new BlobCache(),
+            transactionEventNotifier);
     txPool.setEnabled();
 
     final MiningConfiguration miningConfig =

@@ -136,12 +136,8 @@ public class EthScheduler {
     return syncFuture;
   }
 
-  public CompletableFuture<Void> scheduleTxWorkerTask(final Runnable command) {
-    return CompletableFuture.runAsync(command, txWorkerExecutor);
-  }
-
-  public <T> CompletableFuture<T> scheduleTxWorkerTask(final Supplier<T> task) {
-    return CompletableFuture.supplyAsync(task, txWorkerExecutor);
+  public void scheduleTxWorkerTask(final Runnable command) {
+    txWorkerExecutor.execute(command);
   }
 
   public void executeServiceTask(final Runnable command) {
@@ -341,42 +337,61 @@ public class EthScheduler {
   }
 
   /**
-   * This class is a way to execute a set of tasks, one by one, in a strict order, without blocking
-   * the caller in case there are still previous tasks queued
+   * This class is a way to process a set of items, one by one, in a strict order, without blocking
+   * the caller in case there are still previous items queued. To run tasks in order, create it with
+   * {@code Runnable::run} as processor.
    *
    * @param <ITEM> the class of item to be processed
    */
   public class OrderedProcessor<ITEM> {
-    private final Queue<ITEM> taskQueue = new ConcurrentLinkedQueue<>();
-    private final ReentrantLock taskLock = new ReentrantLock();
+    private final Queue<ITEM> queue = new ConcurrentLinkedQueue<>();
+    private final ReentrantLock lock = new ReentrantLock();
     private final Consumer<ITEM> processor;
 
     private OrderedProcessor(final Consumer<ITEM> processor) {
       this.processor = processor;
     }
 
+    /**
+     * Submits an item for processing. If no thread is already processing or waiting to process the
+     * queue, a new thread is scheduled to handle the queued items. Processing errors for individual
+     * items are logged and do not halt the processing of the following items.
+     *
+     * @param item the item to be processed
+     */
     public void submit(final ITEM item) {
       // add the item to the processing queue
-      taskQueue.add(item);
+      queue.add(item);
 
-      if (taskLock.hasQueuedThreads()) {
+      if (lock.hasQueuedThreads()) {
         // another thread is already waiting to process the queue with our item, there is no need to
         // schedule another thread
         LOG.trace(
-            "Task queue is already being processed and an already queued thread is present, nothing to do");
+            "Item queue is already being processed and an already queued thread is present, nothing to do");
       } else {
         servicesExecutor.submit(
             () -> {
-              taskLock.lock();
+              lock.lock();
               try {
-                // now that we have the lock, process as many items as possible
-                for (ITEM i = taskQueue.poll(); i != null; i = taskQueue.poll()) {
-                  processor.accept(i);
-                }
+                processQueuedItems();
               } finally {
-                taskLock.unlock();
+                lock.unlock();
               }
             });
+      }
+    }
+
+    private void processQueuedItems() {
+      // now that we have the lock, process as many items as possible
+      for (ITEM i = queue.poll(); i != null; i = queue.poll()) {
+        try {
+          processor.accept(i);
+        } catch (final VirtualMachineError e) {
+          throw e;
+        } catch (final Throwable t) {
+          // a failing item must not prevent the following ones from being processed
+          LOG.warn("Error processing ordered item {}", i, t);
+        }
       }
     }
   }
