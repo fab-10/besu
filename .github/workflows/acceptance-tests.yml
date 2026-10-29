@@ -46,14 +46,18 @@ jobs:
                   "repos/$candidate_repo/actions/workflows/acceptance-tests-timing-reports-update.yml/runs?branch=main&event=push&status=success&per_page=100" \
                   --jq ".workflow_runs[] | select(.head_repository.full_name == \"$candidate_repo\") | .id"); then
               # this repository's own runs must be readable; another's only may be
-              [ "$candidate_repo" != "$GH_REPO" ] || exit 1
+              if [ "$candidate_repo" = "$GH_REPO" ]; then echo "::error::cannot read the timing baselines of $GH_REPO"; exit 1; fi
               echo "::warning::cannot read the timing baselines of $candidate_repo"
               continue
             fi
             for candidate in $candidates; do
-              artifact=$(gh api "repos/$candidate_repo/actions/runs/$candidate/artifacts" \
-                --jq '[.artifacts[] | select(.name == "acceptance-tests-timing-reports" and .expired == false)] | first | .id // empty') \
-                || artifact=""
+              if ! artifact=$(gh api "repos/$candidate_repo/actions/runs/$candidate/artifacts" \
+                    --jq '[.artifacts[] | select(.name == "acceptance-tests-timing-reports" and .expired == false)] | first | .id // empty'); then
+                # as for the runs: an error, not a run without the baseline
+                if [ "$candidate_repo" = "$GH_REPO" ]; then echo "::error::cannot read the artifacts of run $candidate of $GH_REPO"; exit 1; fi
+                echo "::warning::cannot read the timing baselines of $candidate_repo"
+                break
+              fi
               [ -n "$artifact" ] || continue
               # the token of another repository may list its artifacts but not download them: check
               # it here, once, rather than in every leg. The API answers a download it allows with a
