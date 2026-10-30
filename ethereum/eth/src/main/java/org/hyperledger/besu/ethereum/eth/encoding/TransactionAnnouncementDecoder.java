@@ -30,7 +30,7 @@ public class TransactionAnnouncementDecoder {
 
   @FunctionalInterface
   public interface Decoder {
-    List<TransactionAnnouncement> decode(RLPInput input);
+    List<TransactionAnnouncement> decode(RLPInput input, int maxAnnouncementsPerMessage);
   }
 
   /**
@@ -54,11 +54,14 @@ public class TransactionAnnouncementDecoder {
    * @param input input used to decode the NewPooledTransactionHashesMessage after Eth/72
    *     <p>format: [txtypes: B, [txsize₁: P, txsize₂: P, ...], [txhash₁: B_32, txhash₂: B_32, ...],
    *     cells: B_16]
+   * @param maxAnnouncementsPerMessage the maximum number of announcements allowed in a single
+   *     message.
    * @return the TransactionsAnnouncement decoded from the message with size, type, hash and cell
    *     mask
    */
-  private static List<TransactionAnnouncement> decodeForEth72(final RLPInput input) {
-    return decode(input, true);
+  private static List<TransactionAnnouncement> decodeForEth72(
+      final RLPInput input, final int maxAnnouncementsPerMessage) {
+    return decode(input, true, maxAnnouncementsPerMessage);
   }
 
   /**
@@ -68,18 +71,28 @@ public class TransactionAnnouncementDecoder {
    * <p>format: {@code [txtypes: B, [txsize1: P, ...], [txhash1: B_32, ...]]}
    *
    * @param input input used to decode the NewPooledTransactionHashesMessage
+   * @param maxAnnouncementsPerMessage the maximum number of announcements allowed in a single
+   *     message.
    * @return the decoded announcements
    */
-  private static List<TransactionAnnouncement> decodeForEth68(final RLPInput input) {
-    return decode(input, false);
+  private static List<TransactionAnnouncement> decodeForEth68(
+      final RLPInput input, final int maxAnnouncementsPerMessage) {
+    return decode(input, false, maxAnnouncementsPerMessage);
   }
 
   private static List<TransactionAnnouncement> decode(
-      final RLPInput input, final boolean hasCellMask) {
-    input.enterList();
+      final RLPInput input, final boolean hasCellMask, final int maxAnnouncementsPerMessage) {
+    // types, sizes and hashes, and from eth/72 the cell mask as well
+    input.enterList(hasCellMask ? 4 : 3);
 
-    final List<TransactionType> types = new ArrayList<>();
     final byte[] bytes = input.readBytes().toArray();
+    if (bytes.length > maxAnnouncementsPerMessage) {
+      throw new RLPException(
+          "Too many transaction announcements: received %d, while max is %d"
+              .formatted(bytes.length, maxAnnouncementsPerMessage));
+    }
+
+    final List<TransactionType> types = new ArrayList<>(bytes.length);
     for (final byte b : bytes) {
       final var transactionType =
           TransactionType.fromEthSerializedType(b)
@@ -90,10 +103,11 @@ public class TransactionAnnouncementDecoder {
       types.add(transactionType);
     }
 
-    final List<Long> sizes = input.readList(RLPInput::readUnsignedIntScalar);
+    final List<Long> sizes = input.readList(RLPInput::readUnsignedIntScalar, bytes.length);
 
     // use Bytes32::copy to avoid keeping reference to underlying RLP byte array
-    final List<Hash> hashes = input.readList(rlp -> Hash.wrap(rlp.readBytes32().copy()));
+    final List<Hash> hashes =
+        input.readList(rlp -> Hash.wrap(rlp.readBytes32().copy()), bytes.length);
 
     // Before eth/72 a peer that announces a blob transaction serves its full payload on
     // GetPooledTransactions, so it implicitly holds every cell.

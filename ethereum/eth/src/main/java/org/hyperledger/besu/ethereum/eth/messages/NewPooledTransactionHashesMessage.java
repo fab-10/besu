@@ -23,6 +23,7 @@ import org.hyperledger.besu.ethereum.p2p.rlpx.wire.AbstractMessageData;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.MessageData;
 import org.hyperledger.besu.ethereum.rlp.RLP;
+import org.hyperledger.besu.ethereum.rlp.RLPException;
 
 import java.util.List;
 
@@ -31,7 +32,7 @@ import org.apache.tuweni.bytes.Bytes;
 
 public class NewPooledTransactionHashesMessage extends AbstractMessageData {
   private static final int MESSAGE_CODE = EthProtocolMessages.NEW_POOLED_TRANSACTION_HASHES;
-  private List<TransactionAnnouncement> txAnnouncements;
+  private List<TransactionAnnouncement> pendingTransactions;
   private final Capability capability;
 
   @VisibleForTesting
@@ -66,10 +67,17 @@ public class NewPooledTransactionHashesMessage extends AbstractMessageData {
     return new NewPooledTransactionHashesMessage(message.getData(), capability);
   }
 
-  public List<TransactionAnnouncement> pendingTransactionAnnouncements() {
-    if (txAnnouncements == null) {
-      txAnnouncements = getDecoder(capability).decode(RLP.input(data));
+  public List<TransactionAnnouncement> pendingTransactionAnnouncements(
+      final int maxAnnouncementsPerMessage) {
+    if (pendingTransactions == null) {
+      pendingTransactions =
+          getDecoder(capability).decode(RLP.input(data), maxAnnouncementsPerMessage);
+    } else if (pendingTransactions.size() > maxAnnouncementsPerMessage) {
+      throw new RLPException(
+          String.format(
+              "List of %d elements exceeds the maximum permitted size of %d",
+              pendingTransactions.size(), maxAnnouncementsPerMessage));
     }
-    return txAnnouncements;
+    return pendingTransactions;
   }
 }

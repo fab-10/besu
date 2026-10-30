@@ -94,14 +94,11 @@ public class GetPooledTransactionsFromPeerTask implements PeerTask<List<Transact
         PooledTransactionsMessage.readFrom(messageData);
     final List<Transaction> responseTransactions;
     try {
-      responseTransactions = pooledTransactionsMessage.transactions();
+      responseTransactions = pooledTransactionsMessage.transactions(hashes.size());
     } catch (RLPException e) {
       throw new MalformedRlpFromPeerException(e, messageData.getData());
     }
-    if (responseTransactions.size() > hashes.size()) {
-      throw new InvalidPeerTaskResponseException(
-          "Response transaction count does not match request hash count");
-    }
+
     if (!announcementsByHash.isEmpty()) {
       // An eth/72 peer announces the size of the blob-elided form, which is what it just sent us.
       final boolean eth72 = agreedCapabilities.stream().anyMatch(EthProtocol::isEth72Compatible);

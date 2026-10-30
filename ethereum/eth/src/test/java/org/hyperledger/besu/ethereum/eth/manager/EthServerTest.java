@@ -719,7 +719,9 @@ public class EthServerTest {
             EthProtocolConfiguration.DEFAULT_MAX_MESSAGE_SIZE,
             EthProtocolVersion.V71.getCapability());
 
-    assertThat(PooledTransactionsMessage.readFrom(eth71).transactions())
+    assertThat(
+            PooledTransactionsMessage.readFrom(eth71)
+                .transactions(EthProtocolConfiguration.DEFAULT_MAX_GET_POOLED_TRANSACTIONS))
         .containsExactlyElementsOf(plainTxs);
 
     // eth/72 elides the payloads, so the same transaction is servable there.
@@ -732,7 +734,10 @@ public class EthServerTest {
             EthProtocolConfiguration.DEFAULT_MAX_MESSAGE_SIZE,
             EthProtocolVersion.V72.getCapability());
 
-    assertThat(Transaction.toHashList(PooledTransactionsMessage.readFrom(eth72).transactions()))
+    assertThat(
+            Transaction.toHashList(
+                PooledTransactionsMessage.readFrom(eth72)
+                    .transactions(EthProtocolConfiguration.DEFAULT_MAX_GET_POOLED_TRANSACTIONS)))
         .containsExactlyElementsOf(Transaction.toHashList(requested));
   }
 

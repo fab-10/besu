@@ -20,6 +20,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.TransactionType;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
+import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
 import org.hyperledger.besu.ethereum.eth.EthProtocolVersion;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAnnouncement;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
@@ -34,6 +35,9 @@ import org.junit.jupiter.api.Test;
 
 /** Covers the eth/72 {@code NewPooledTransactionHashes} format, which adds the cells bitmap. */
 class TransactionAnnouncementEth72Test {
+
+  private static final int MAX_ANNOUNCEMENTS =
+      EthProtocolConfiguration.DEFAULT_MAX_ANNOUNCEMENTS_PER_MESSAGE;
 
   private static final CellMask MASK =
       CellMask.fromBytes(Bytes.fromHexString("0x05" + "00".repeat(15)));
@@ -83,7 +87,7 @@ class TransactionAnnouncementEth72Test {
   void roundTripsCellMaskOnEth72() {
     final List<TransactionAnnouncement> announcements =
         TransactionAnnouncementDecoder.getDecoder(EthProtocolVersion.V72.getCapability())
-            .decode(RLP.input(encodeEth72(MASK)));
+            .decode(RLP.input(encodeEth72(MASK)), MAX_ANNOUNCEMENTS);
 
     assertThat(announcements).hasSize(2);
     // The mask applies to blob transactions only; others carry none.
@@ -112,7 +116,7 @@ class TransactionAnnouncementEth72Test {
 
     assertThat(
             TransactionAnnouncementDecoder.getDecoder(EthProtocolVersion.V72.getCapability())
-                .decode(RLP.input(encoded)))
+                .decode(RLP.input(encoded), MAX_ANNOUNCEMENTS))
         .hasSize(1);
   }
 
@@ -128,7 +132,7 @@ class TransactionAnnouncementEth72Test {
 
     final List<TransactionAnnouncement> announcements =
         TransactionAnnouncementDecoder.getDecoder(EthProtocolVersion.V71.getCapability())
-            .decode(RLP.input(encoded));
+            .decode(RLP.input(encoded), MAX_ANNOUNCEMENTS);
 
     assertThat(announcements).hasSize(1);
     assertThat(announcements.getFirst().cellMask()).isEqualTo(CellMask.FULL);
@@ -147,11 +151,11 @@ class TransactionAnnouncementEth72Test {
         .isThrownBy(
             () ->
                 TransactionAnnouncementDecoder.getDecoder(EthProtocolVersion.V72.getCapability())
-                    .decode(RLP.input(eth68)));
+                    .decode(RLP.input(eth68), MAX_ANNOUNCEMENTS));
 
     assertThat(
             TransactionAnnouncementDecoder.getDecoder(EthProtocolVersion.V71.getCapability())
-                .decode(RLP.input(eth68)))
+                .decode(RLP.input(eth68), MAX_ANNOUNCEMENTS))
         .hasSize(1);
   }
 }

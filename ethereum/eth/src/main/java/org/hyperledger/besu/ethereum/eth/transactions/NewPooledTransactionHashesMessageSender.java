@@ -34,19 +34,20 @@ import org.slf4j.LoggerFactory;
 class NewPooledTransactionHashesMessageSender {
   private static final Logger LOG =
       LoggerFactory.getLogger(NewPooledTransactionHashesMessageSender.class);
-  private static final int MAX_TRANSACTIONS_HASHES = 4096;
-
   private final PeerTransactionTracker transactionTracker;
+  private final int maxAnnouncementsPerMessage;
 
-  public NewPooledTransactionHashesMessageSender(final PeerTransactionTracker transactionTracker) {
+  public NewPooledTransactionHashesMessageSender(
+      final PeerTransactionTracker transactionTracker, final int maxAnnouncementsPerMessage) {
     this.transactionTracker = transactionTracker;
+    this.maxAnnouncementsPerMessage = maxAnnouncementsPerMessage;
   }
 
   public void sendTransactionAnnouncementsToPeer(final EthPeer peer) {
     final Capability capability = peer.getConnection().capability(EthProtocol.NAME);
     final EncodingContext encodingContext =
         EncodingContext.pooledTransactionByCapability(capability);
-    final List<Transaction> txBatch = new ArrayList<>(MAX_TRANSACTIONS_HASHES);
+    final List<Transaction> txBatch = new ArrayList<>(maxAnnouncementsPerMessage);
     Transaction announcementToSend;
 
     // An eth/72 announcement carries one cell mask for every blob tx in it, so a batch may only
@@ -72,7 +73,7 @@ class NewPooledTransactionHashesMessageSender {
       final boolean cellMaskChanged =
           txCellMask != null && batchCellMask != null && !batchCellMask.equals(txCellMask);
 
-      if (cellMaskChanged || txBatch.size() == MAX_TRANSACTIONS_HASHES) {
+      if (cellMaskChanged || txBatch.size() == maxAnnouncementsPerMessage) {
         // send the current batch, and stop if the peer is no longer connected
         if (!send(peer, txBatch, capability)) {
           return;

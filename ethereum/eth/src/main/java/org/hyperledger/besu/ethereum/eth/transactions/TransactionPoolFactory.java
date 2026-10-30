@@ -67,10 +67,13 @@ public class TransactionPoolFactory {
             transactionPoolConfiguration, ethContext.getEthPeers(), ethContext.getScheduler());
     final TransactionsMessageSender transactionsMessageSender =
         new TransactionsMessageSender(
-            transactionTracker, ethProtocolConfiguration.getMaxTransactionsMessageSize());
+            transactionTracker,
+            ethProtocolConfiguration.getMaxTransactionsMessageSize(),
+            ethProtocolConfiguration.getMaxTransactionsPerMessage());
 
     final NewPooledTransactionHashesMessageSender newPooledTransactionHashesMessageSender =
-        new NewPooledTransactionHashesMessageSender(transactionTracker);
+        new NewPooledTransactionHashesMessageSender(
+            transactionTracker, ethProtocolConfiguration.getMaxAnnouncementsPerMessage());
 
     final TransactionEventNotifier transactionEventNotifier =
         new TransactionEventNotifier(ethContext.getScheduler());
@@ -144,7 +147,7 @@ public class TransactionPoolFactory {
                 metrics,
                 ethProtocolConfiguration.getMaxTransactionsPerMessage()),
             transactionPoolConfiguration.getUnstable().getTxMessageKeepAliveSeconds(),
-            ethProtocolConfiguration.getMaxMessageSize());
+            ethProtocolConfiguration.getMaxTransactionsMessageSize());
 
     final NewPooledTransactionHashesMessageHandler pooledTransactionsMessageHandler =
         new NewPooledTransactionHashesMessageHandler(
@@ -155,8 +158,10 @@ public class TransactionPoolFactory {
                 transactionPoolConfiguration,
                 ethContext,
                 metrics,
-                ethProtocolConfiguration.getMaxTransactionsMessageSize()),
-            transactionPoolConfiguration.getUnstable().getTxMessageKeepAliveSeconds());
+                ethProtocolConfiguration.getMaxTransactionsMessageSize(),
+                ethProtocolConfiguration.getMaxAnnouncementsPerMessage()),
+            transactionPoolConfiguration.getUnstable().getTxMessageKeepAliveSeconds(),
+            ethProtocolConfiguration.getMaxNewPooledTransactionHashesMessageSize());
 
     subscribeTransactionHandlers(
         protocolContext,
