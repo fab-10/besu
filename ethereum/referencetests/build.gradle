@@ -108,10 +108,11 @@ def fixturesDirFor = { String buildDirName, String tarConfigurationName, String 
 }
 
 // -Pbesu.referenceTests.fixtureSubset=<file> unpacks only the stable fixtures listed in <file>, one
-// path per line relative to the fixtures root (fixtures/state_tests/...). CI gives each reference
-// test runner only the fixtures of its share of the test classes, as the whole set no longer fits
-// on a standard GitHub runner. The test classes are generated from the tarball, not the unpacked
-// tree, so they can be listed and split before anything is unpacked.
+// path per line relative to the fixtures root (fixtures/state_tests/...). A path ending with / takes
+// the whole directory. CI gives each reference test runner only the fixtures of its share of the
+// test classes, and each evmtool hive-equivalent job only the directory it replays, as the whole
+// set no longer fits on a standard GitHub runner. The test classes are generated from the tarball,
+// not the unpacked tree, so they can be listed and split before anything is unpacked.
 def stableFixtureSubset = providers.gradleProperty('besu.referenceTests.fixtureSubset')
 
 def registerFixtureExtraction = { String taskName, Provider<Directory> fixturesDir, Closure<File> tarball, String cacheCleanTask, Provider<String> subset = null ->
@@ -124,12 +125,16 @@ def registerFixtureExtraction = { String taskName, Provider<Directory> fixturesD
       if (subset?.isPresent()) {
         def subsetFile = rootProject.file(subset.get())
         inputs.file(subsetFile).withPropertyName('fixtureSubset')
-        Set<String> wanted = null
+        Set<String> wantedFiles = null
+        List<String> wantedDirs = null
         include { FileTreeElement element ->
-          if (wanted == null) {
-            wanted = subsetFile.readLines()*.trim().findAll() as Set
+          if (wantedFiles == null) {
+            def wanted = subsetFile.readLines()*.trim().findAll()
+            wantedDirs = wanted.findAll { it.endsWith('/') }
+            wantedFiles = (wanted - wantedDirs) as Set
           }
-          element.directory || wanted.contains(element.relativePath.pathString)
+          def path = element.relativePath.pathString
+          element.directory || wantedFiles.contains(path) || wantedDirs.any { path.startsWith(it) }
         }
         includeEmptyDirs = false
       }

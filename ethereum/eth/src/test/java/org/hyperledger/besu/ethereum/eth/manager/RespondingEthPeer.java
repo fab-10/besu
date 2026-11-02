@@ -123,6 +123,7 @@ public class RespondingEthPeer {
       final EthProtocolManager ethProtocolManager,
       final Optional<SnapProtocolManager> snapProtocolManager,
       final Capability capability,
+      final Set<Capability> extraCapabilities,
       final Hash chainHeadHash,
       final Difficulty totalDifficulty,
       final OptionalLong estimatedHeight,
@@ -132,6 +133,7 @@ public class RespondingEthPeer {
     final EthPeers ethPeers = ethProtocolManager.ethContext().getEthPeers();
 
     final Set<Capability> caps = new HashSet<>(Collections.singletonList(capability));
+    caps.addAll(extraCapabilities);
     final BlockingQueue<OutgoingMessage> outgoingMessages = new ArrayBlockingQueue<>(1000);
     final MockPeerConnection peerConnection =
         new MockPeerConnection(
@@ -448,6 +450,7 @@ public class RespondingEthPeer {
     private boolean isServingSnap = false;
     private boolean addToEthPeers = true;
     private Capability capability = EthProtocol.LATEST;
+    private final Set<Capability> extraCapabilities = new HashSet<>();
 
     public RespondingEthPeer build() {
       checkNotNull(ethProtocolManager, "Must configure EthProtocolManager");
@@ -457,6 +460,7 @@ public class RespondingEthPeer {
           ethProtocolManager,
           snapProtocolManager,
           capability,
+          extraCapabilities,
           chainHeadHash,
           totalDifficulty,
           estimatedHeight,
@@ -523,6 +527,12 @@ public class RespondingEthPeer {
 
     public Builder capability(final Capability capability) {
       this.capability = capability;
+      return this;
+    }
+
+    /** Adds a capability agreed with the peer besides its eth one, a snap version for instance. */
+    public Builder extraCapability(final Capability capability) {
+      this.extraCapabilities.add(capability);
       return this;
     }
   }
