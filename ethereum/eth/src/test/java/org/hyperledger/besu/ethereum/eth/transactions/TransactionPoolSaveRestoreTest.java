@@ -22,7 +22,9 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
 
+import org.hyperledger.besu.datatypes.BlobType;
 import org.hyperledger.besu.datatypes.Wei;
+import org.hyperledger.besu.ethereum.core.BlobTestFixture;
 import org.hyperledger.besu.ethereum.core.Block;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Difficulty;
@@ -32,6 +34,12 @@ import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionTestFixture;
 import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
 import org.hyperledger.besu.ethereum.core.encoding.TransactionEncoder;
+import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
+import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
+import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
+import org.hyperledger.besu.ethereum.core.kzg.Cell;
+import org.hyperledger.besu.ethereum.core.kzg.CellMask;
+import org.hyperledger.besu.ethereum.core.kzg.CellsWithMask;
 import org.hyperledger.besu.ethereum.eth.transactions.layered.BaseFeePrioritizedTransactions;
 import org.hyperledger.besu.ethereum.eth.transactions.layered.EndLayer;
 import org.hyperledger.besu.ethereum.eth.transactions.layered.LayeredPendingTransactions;
@@ -47,6 +55,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.BitSet;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -56,6 +66,8 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
 
+import org.apache.tuweni.bytes.Bytes;
+import org.assertj.core.api.Condition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -166,6 +178,62 @@ public class TransactionPoolSaveRestoreTest extends AbstractTransactionPoolTestB
   public void blobTransactionIsSavedAndRestored()
       throws ExecutionException, InterruptedException, TimeoutException, IOException {
     transactionIsSavedAndRestored(createBlobTransaction(0), false, true);
+  }
+
+  @Test
+  public void sampledBlobTransactionIsSavedAndRestoredWithItsCells()
+      throws ExecutionException, InterruptedException, TimeoutException, IOException {
+    this.transactionPool =
+        createTransactionPool(b -> b.enableSaveRestore(true).saveFile(saveFilePath.toFile()));
+
+    final Transaction withBlobs = createBlobTransaction(0);
+    final Transaction sampled = sampledBlobTransaction(1, maskOf(0, 7, 70, 127));
+    givenAllTransactionsAreValid();
+    addAndAssertRemoteTransactionsValid(withBlobs, sampled);
+
+    transactionPool.setDisabled().get(10, TimeUnit.SECONDS);
+
+    // One transaction that cannot be saved used to abort the whole dump, so the blob carrying one
+    // is here to be lost with the sampled one.
+    final var savedLines = Files.readAllLines(saveFilePath, StandardCharsets.US_ASCII);
+    assertThat(savedLines).hasSize(2);
+    assertThat(savedLines).areExactly(1, new Condition<>(line -> line.contains("."), "with cells"));
+
+    transactionPool.setEnabled().get(10, TimeUnit.SECONDS);
+
+    assertThat(transactionPool.getPendingTransactions()).hasSize(2);
+    final Transaction restoredSampled =
+        transactionPool.getTransactionByHash(sampled.getHash()).orElseThrow();
+    // The cells are what fetching them from peers cost, so a restart must not throw them away.
+    assertThat(restoredSampled.getBlobsWithCommitments())
+        .isEqualTo(sampled.getBlobsWithCommitments());
+    assertThat(transactionPool.getTransactionByHash(withBlobs.getHash())).isPresent();
+  }
+
+  /** A transaction carrying one blob of which it holds only the cells of {@code mask}. */
+  private Transaction sampledBlobTransaction(final int nonce, final CellMask mask) {
+    final BlobProofBundle full =
+        new BlobTestFixture().createBlobProofBundle(BlobType.KZG_CELL_PROOFS);
+    final CellsWithMask allCells = full.getCellsWithMask().orElseThrow();
+    final List<Cell> held = mask.streamIndexes().mapToObj(allCells::getCell).toList();
+    return createBlobTransactionWithSameBlobs(
+        nonce,
+        BlobsWithCommitments.createFromBlobCells(
+            List.of(full.getKzgCommitment()),
+            List.of(new CellsWithMask(held, mask)),
+            full.getKzgProof(),
+            List.of(full.getVersionedHash())));
+  }
+
+  private static CellMask maskOf(final int... indexes) {
+    final BitSet bits = new BitSet(CKZG4844Helper.CELLS_PER_EXT_BLOB);
+    for (final int index : indexes) {
+      bits.set(index);
+    }
+    final byte[] bytes = new byte[CellMask.BYTE_LENGTH];
+    final byte[] set = bits.toByteArray();
+    System.arraycopy(set, 0, bytes, 0, set.length);
+    return CellMask.fromBytes(Bytes.wrap(bytes));
   }
 
   private void transactionIsSavedAndRestored(

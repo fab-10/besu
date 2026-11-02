@@ -36,7 +36,6 @@ import org.hyperledger.besu.ethereum.chain.BlockAddedObserver;
 import org.hyperledger.besu.ethereum.chain.MutableBlockchain;
 import org.hyperledger.besu.ethereum.core.BlockHeader;
 import org.hyperledger.besu.ethereum.core.Transaction;
-import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
 import org.hyperledger.besu.ethereum.core.kzg.BlobProofBundle;
 import org.hyperledger.besu.ethereum.core.kzg.CKZG4844Helper;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
@@ -51,8 +50,6 @@ import org.hyperledger.besu.ethereum.mainnet.TransactionValidator;
 import org.hyperledger.besu.ethereum.mainnet.ValidationResult;
 import org.hyperledger.besu.ethereum.mainnet.feemarket.FeeMarket;
 import org.hyperledger.besu.ethereum.mainnet.transactionpool.TransactionPoolPreProcessor;
-import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
-import org.hyperledger.besu.ethereum.rlp.RLP;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.ethereum.trie.MerkleTrieException;
 import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.worldview.BonsaiWorldState;
@@ -96,7 +93,6 @@ import java.util.stream.Stream;
 import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Multimaps;
-import org.apache.tuweni.bytes.Bytes;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -1132,12 +1128,19 @@ public class TransactionPool implements BlockAddedObserver {
                 .takeWhile(unused -> !isCancelled.get())
                 .map(
                     ptx -> {
-                      final BytesValueRLPOutput rlp = new BytesValueRLPOutput();
-                      ptx.getTransaction().writeTo(rlp, EncodingContext.POOLED_TRANSACTION);
-                      return ptx.getScore()
-                          + (ptx.isReceivedFromLocalSource() ? "l" : "r")
-                          + rlp.encoded().toBase64String();
+                      try {
+                        return ptx.getScore()
+                            + (ptx.isReceivedFromLocalSource() ? "l" : "r")
+                            + SavedTransactionCodec.encode(ptx.getTransaction());
+                      } catch (final RuntimeException e) {
+                        // One transaction that does not encode must not take the rest of the pool
+                        // with it: the exception would otherwise escape this stream and leave the
+                        // file truncated wherever the writer had got to.
+                        LOG.warn("Not saving transaction {}: {}", ptx.getHash(), e.getMessage());
+                        return null;
+                      }
                     })
+                .filter(Objects::nonNull)
                 .mapToInt(
                     line -> {
                       synchronized (bw) {
@@ -1187,11 +1190,7 @@ public class TransactionPool implements BlockAddedObserver {
                               scoreStr.isEmpty() ? MAX_SCORE : Byte.parseByte(scoreStr);
                           final boolean isLocal = line.charAt(scoreStr.length()) == 'l';
                           final Transaction tx =
-                              Transaction.readFrom(
-                                  RLP.input(
-                                      Bytes.fromBase64String(
-                                          line.substring(scoreStr.length() + 1))),
-                                  EncodingContext.POOLED_TRANSACTION);
+                              SavedTransactionCodec.decode(line.substring(scoreStr.length() + 1));
                           final boolean hasPriority = isPriorityTransaction(tx, isLocal);
                           final ValidationResult<TransactionInvalidReason> result =
                               addTransaction(tx, isLocal, hasPriority, score).result();
