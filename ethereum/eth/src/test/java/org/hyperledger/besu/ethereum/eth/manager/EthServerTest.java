@@ -37,6 +37,7 @@ import org.hyperledger.besu.ethereum.core.CellsOnlyBlobTransactionFixture;
 import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.TransactionReceipt;
 import org.hyperledger.besu.ethereum.core.encoding.BlockAccessListEncoder;
+import org.hyperledger.besu.ethereum.core.encoding.EncodingContext;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncoder;
 import org.hyperledger.besu.ethereum.core.encoding.receipt.TransactionReceiptEncodingConfiguration;
 import org.hyperledger.besu.ethereum.core.kzg.BlobsWithCommitments;
@@ -740,7 +741,11 @@ public class EthServerTest {
     assertThat(
             Transaction.toHashList(
                 PooledTransactionsMessage.readFrom(eth72)
-                    .transactions(EthProtocolConfiguration.DEFAULT_MAX_GET_POOLED_TRANSACTIONS)))
+                    .transactions(
+                        EthProtocolConfiguration.DEFAULT_MAX_GET_POOLED_TRANSACTIONS,
+                        // the elided form only decodes in a context that elides, which is the
+                        // point: reading this response as pre-eth/72 is an error
+                        EncodingContext.POOLED_TRANSACTION_ETH_72)))
         .containsExactlyElementsOf(Transaction.toHashList(requested));
   }
 

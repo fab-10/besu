@@ -45,8 +45,7 @@ class NewPooledTransactionHashesMessageSender {
 
   public void sendTransactionAnnouncementsToPeer(final EthPeer peer) {
     final Capability capability = peer.getConnection().capability(EthProtocol.NAME);
-    final EncodingContext encodingContext =
-        EncodingContext.pooledTransactionByCapability(capability);
+    final EncodingContext encodingContext = EthProtocol.pooledTransactionContext(capability);
     final List<Transaction> txBatch = new ArrayList<>(maxAnnouncementsPerMessage);
     Transaction announcementToSend;
 

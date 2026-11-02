@@ -433,8 +433,7 @@ class EthServer {
     final GetPooledTransactionsMessage getPooledTransactions =
         GetPooledTransactionsMessage.readFrom(message);
     final Iterable<Hash> hashes = getPooledTransactions.pooledTransactions();
-    final EncodingContext encodingContext =
-        EncodingContext.pooledTransactionByCapability(capability);
+    final EncodingContext encodingContext = EthProtocol.pooledTransactionContext(capability);
 
     final boolean traceEnabled = LOG.isTraceEnabled();
     final Iterable<Hash> hashesToProcess;
