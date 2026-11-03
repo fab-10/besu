@@ -165,7 +165,9 @@ public class DelegatedSenderTransactionPoolTest extends AbstractTransactionPoolT
       assertThat(pendingNoncesOf(delegatedAccount)).isEmpty();
       for (int nonce = 0; nonce < ATTACK_TXS_PER_ACCOUNT; nonce++) {
         final var result =
-            transactionPool.addTransactionViaApi(attackTransaction(nonce, delegatedAccount));
+            transactionPool
+                .addTransactionViaApi(attackTransaction(nonce, delegatedAccount))
+                .result();
         if (nonce == 0) {
           assertThat(result.isValid()).describedAs("nonce %s", nonce).isTrue();
         } else {
@@ -207,7 +209,8 @@ public class DelegatedSenderTransactionPoolTest extends AbstractTransactionPoolT
     // rejected and so it is not kept or propagated
     assertThat(pendingNoncesOf(sender)).hasSize(2).containsExactly(0L, 2L);
     assertTransactionNotPending(followingTxs.get(0));
-    assertThat(transactionPool.addTransactionViaApi(followingTxs.get(0)).getInvalidReason())
+    assertThat(
+            transactionPool.addTransactionViaApi(followingTxs.get(0)).result().getInvalidReason())
         .isEqualTo(TransactionInvalidReason.NONCE_ALREADY_CONSUMED_FOR_SENDER);
     assertTransactionPending(followingTxs.get(1));
     assertThat(followingTxs.subList(2, followingTxs.size()))
@@ -411,7 +414,7 @@ public class DelegatedSenderTransactionPoolTest extends AbstractTransactionPoolT
                   ? List.of(fullQueueDelegation, cleanDelegation)
                   : List.of(cleanDelegation, fullQueueDelegation));
 
-      assertThat(transactionPool.addTransactionViaApi(delegationTx).getInvalidReason())
+      assertThat(transactionPool.addTransactionViaApi(delegationTx).result().getInvalidReason())
           .describedAs("disallowedFirst %s", disallowedFirst)
           .isEqualTo(TransactionInvalidReason.DELEGATION_AUTHORITY_HAS_PENDING_TRANSACTIONS);
       assertTransactionNotPending(delegationTx);
@@ -480,7 +483,7 @@ public class DelegatedSenderTransactionPoolTest extends AbstractTransactionPoolT
               0,
               sender,
               List.of(signedDelegation(sender, 1L), signedDelegation(otherAuthority, 0L)));
-      final var result = transactionPool.addTransactionViaApi(delegationTx);
+      final var result = transactionPool.addTransactionViaApi(delegationTx).result();
 
       if (otherAuthorityHasFullQueue) {
         assertThat(result.isValid()).isFalse();
@@ -795,18 +798,21 @@ public class DelegatedSenderTransactionPoolTest extends AbstractTransactionPoolT
             transactionPool
                 .addTransactionViaApi(
                     delegationTransaction(0, beyondLimit, signedDelegation(beyondLimit, 1L)))
+                .result()
                 .getInvalidReason())
         .isEqualTo(TransactionInvalidReason.DELEGATION_AUTHORITY_HAS_PENDING_TRANSACTIONS);
     assertThat(
             transactionPool
                 .addTransactionViaApi(
                     delegationTransaction(0, consumed, signedDelegation(consumed, 1L)))
+                .result()
                 .getInvalidReason())
         .isEqualTo(TransactionInvalidReason.DELEGATION_AUTHORITY_HAS_PENDING_TRANSACTIONS);
     assertThat(
             transactionPool
                 .addTransactionViaApi(
                     delegationTransaction(0, allowed, signedDelegation(allowed, 1L)))
+                .result()
                 .isValid())
         .isTrue();
   }
