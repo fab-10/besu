@@ -46,7 +46,7 @@ class NewPooledTransactionHashesMessageSender {
   public void sendTransactionAnnouncementsToPeer(final EthPeer peer) {
     final Capability capability = peer.getConnection().capability(EthProtocol.NAME);
     final EncodingContext encodingContext = EthProtocol.pooledTransactionContext(capability);
-    final List<Transaction> txBatch = new ArrayList<>(maxAnnouncementsPerMessage);
+    final List<Transaction> txBatch = new ArrayList<>();
     Transaction announcementToSend;
 
     // An eth/72 announcement carries one cell mask for every blob tx in it, so a batch may only
