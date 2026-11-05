@@ -23,32 +23,36 @@ import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public record TransactionAnnouncement(
     Hash hash, TransactionType type, Long size, CellMask cellMask) {
-  public TransactionAnnouncement(final Transaction transaction) {
-    final Transaction tx = checkNotNull(transaction, "Transaction cannot be null");
-    final TransactionType type = tx.getType();
-    final CellMask cellMask;
-    if (type.supportsBlob()) {
-      cellMask = tx.getBlobsWithCommitments().orElseThrow().getCellMask();
-    } else {
-      cellMask = null;
-    }
-    this(tx.getHash(), type, (long) transaction.getSizeForAnnouncement(), cellMask);
-  }
 
   /**
-   * Announces a transaction with no cell mask. Valid only for non blob types; a blob announcement
-   * must carry the announcer's availability, so the canonical constructor rejects a null mask for
-   * those. Mirrors the pre eth/72 {@link #create(List, List, List)} overload.
+   * The cell mask a transaction is announced with: for a blob transaction the availability of its
+   * blobs, and nothing at all for any other type. Every place that has to work this out goes
+   * through here, so that the mask a message is batched by and the one it is encoded with cannot
+   * disagree.
    *
-   * @param hash the transaction hash
-   * @param type the transaction type, which must not support blobs
-   * @param size the announced size
+   * @param transaction the transaction being announced
+   * @return the mask, or empty for a transaction type that carries no blobs
+   * @throws IllegalArgumentException if a blob transaction has no sidecar, and so nothing to
+   *     announce the availability of
    */
-  public TransactionAnnouncement(final Hash hash, final TransactionType type, final Long size) {
-    this(hash, type, size, null);
+  public static Optional<CellMask> announcedCellMask(final Transaction transaction) {
+    if (!transaction.getType().supportsBlob()) {
+      return Optional.empty();
+    }
+    return Optional.of(
+        transaction
+            .getBlobsWithCommitments()
+            .orElseThrow(
+                () ->
+                    new IllegalArgumentException(
+                        "Blob transaction "
+                            + transaction.getHash()
+                            + " has no sidecar, so no cell availability to announce"))
+            .getCellMask());
   }
 
   public TransactionAnnouncement(
@@ -57,11 +61,6 @@ public record TransactionAnnouncement(
     this.type = checkNotNull(type, "Type cannot be null");
     this.size = checkNotNull(size, "Size cannot be null");
     this.cellMask = type.supportsBlob() ? checkNotNull(cellMask, "Cell mask cannot be null") : null;
-  }
-
-  public static List<TransactionAnnouncement> create(
-      final List<TransactionType> types, final List<Long> sizes, final List<Hash> hashes) {
-    return create(types, sizes, hashes, null);
   }
 
   public static List<TransactionAnnouncement> create(
@@ -80,14 +79,5 @@ public record TransactionAnnouncement(
           new TransactionAnnouncement(hashes.get(i), types.get(i), sizes.get(i), cellMask));
     }
     return transactions;
-  }
-
-  public static List<TransactionAnnouncement> create(final List<Transaction> transactions) {
-    List<TransactionAnnouncement> list = new ArrayList<>(transactions.size());
-    for (Transaction transaction : transactions) {
-      TransactionAnnouncement announcement = new TransactionAnnouncement(transaction);
-      list.add(announcement);
-    }
-    return list;
   }
 }

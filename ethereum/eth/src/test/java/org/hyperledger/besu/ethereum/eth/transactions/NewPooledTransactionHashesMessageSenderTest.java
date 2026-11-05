@@ -33,6 +33,7 @@ import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocol;
 import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
 import org.hyperledger.besu.ethereum.eth.EthProtocolVersion;
+import org.hyperledger.besu.ethereum.eth.core.transactions.TransactionAnnouncements;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeer;
 import org.hyperledger.besu.ethereum.eth.manager.EthPeers;
 import org.hyperledger.besu.ethereum.eth.manager.EthScheduler;
@@ -153,7 +154,7 @@ public class NewPooledTransactionHashesMessageSenderTest {
 
     assertThat(Sets.union(firstBatch, secondBatch))
         .containsExactlyInAnyOrderElementsOf(
-            transactions.stream().map(TransactionAnnouncement::new).toList());
+            transactions.stream().map(TransactionAnnouncements::create).toList());
   }
 
   @Test
@@ -282,6 +283,38 @@ public class NewPooledTransactionHashesMessageSenderTest {
             eth72AnnouncementOf(partiallyHeld, partialMask));
   }
 
+  @Test
+  public void shouldNotMixCellMasksWhenANonBlobTransactionComesBetweenThem() throws Exception {
+    when(peer2.getConnection())
+        .thenReturn(
+            new MockPeerConnection(
+                Set.of(EthProtocolVersion.V72.getCapability()), (cap, msg, conn) -> {}));
+    final CellMask partialMask =
+        CellMask.fromBytes(Bytes.concatenate(Bytes.of((byte) 0x0f), Bytes.repeat((byte) 0, 15)));
+    final Transaction fullyHeld = cellsOnlyFixture.create(1, CellMask.FULL);
+    final Transaction partiallyHeld = cellsOnlyFixture.create(1, partialMask);
+
+    // An order the send queue can produce: it interleaves broadcasts, and being access ordered it
+    // moves a re-queued transaction to the tail. A sender that tracked a single current mask would
+    // lose the mask at the non-blob transaction and let the last one into the same message.
+    transactionTracker.addToPeerAnnouncementsSendQueue(
+        peer2, List.of(fullyHeld, transaction1, partiallyHeld));
+
+    messageSender.sendTransactionAnnouncementsToPeer(peer2);
+
+    // One message per availability, and nothing lost: handing the encoder two masks would have
+    // thrown with all three already marked as seen by the peer, so they would never be announced.
+    final ArgumentCaptor<MessageData> captor = ArgumentCaptor.forClass(MessageData.class);
+    verify(peer2, times(3)).send(captor.capture());
+    assertThat(captor.getAllValues())
+        .map(this::getAnnouncementsFromMessage)
+        .map(announcements -> announcements.iterator().next())
+        .containsExactlyInAnyOrder(
+            eth72AnnouncementOf(fullyHeld, CellMask.FULL),
+            eth72AnnouncementOf(transaction1, null),
+            eth72AnnouncementOf(partiallyHeld, partialMask));
+  }
+
   private TransactionAnnouncement eth72AnnouncementOf(
       final Transaction transaction, final CellMask cellMask) {
     // Not TransactionAnnouncement(Transaction), which sizes the transaction by the pre eth/72
@@ -300,7 +333,7 @@ public class NewPooledTransactionHashesMessageSenderTest {
               getAnnouncementsFromMessage(message);
           final Set<TransactionAnnouncement> expectedAnnouncements =
               Arrays.stream(transactions)
-                  .map(TransactionAnnouncement::new)
+                  .map(TransactionAnnouncements::create)
                   .collect(Collectors.toSet());
           return message.getCode() == EthProtocolMessages.NEW_POOLED_TRANSACTION_HASHES
               && actualSentAnnouncements.equals(expectedAnnouncements);

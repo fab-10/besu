@@ -109,9 +109,7 @@ public class TransactionAnnouncementDecoder {
     final List<Hash> hashes =
         input.readList(rlp -> Hash.wrap(rlp.readBytes32().copy()), bytes.length);
 
-    // Before eth/72 a peer that announces a blob transaction serves its full payload on
-    // GetPooledTransactions, so it implicitly holds every cell.
-    final CellMask cellMask = hasCellMask ? CellMask.fromBytes(input.readBytes()) : CellMask.FULL;
+    final CellMask cellMask = hasCellMask ? input.readBytes(CellMask::fromBytes) : CellMask.FULL;
 
     input.leaveList();
     if (!(types.size() == hashes.size() && hashes.size() == sizes.size())) {

@@ -19,12 +19,16 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 
 import org.hyperledger.besu.datatypes.Hash;
 import org.hyperledger.besu.datatypes.TransactionType;
+import org.hyperledger.besu.ethereum.core.CellsOnlyBlobTransactionFixture;
+import org.hyperledger.besu.ethereum.core.Transaction;
 import org.hyperledger.besu.ethereum.core.kzg.CellMask;
 import org.hyperledger.besu.ethereum.eth.EthProtocolConfiguration;
 import org.hyperledger.besu.ethereum.eth.EthProtocolVersion;
 import org.hyperledger.besu.ethereum.eth.transactions.TransactionAnnouncement;
 import org.hyperledger.besu.ethereum.rlp.BytesValueRLPInput;
+import org.hyperledger.besu.ethereum.rlp.BytesValueRLPOutput;
 import org.hyperledger.besu.ethereum.rlp.RLP;
+import org.hyperledger.besu.ethereum.rlp.RLPException;
 import org.hyperledger.besu.ethereum.rlp.RLPInput;
 
 import java.util.List;
@@ -136,6 +140,55 @@ class TransactionAnnouncementEth72Test {
 
     assertThat(announcements).hasSize(1);
     assertThat(announcements.getFirst().cellMask()).isEqualTo(CellMask.FULL);
+  }
+
+  @Test
+  void refusesToAnnounceTwoAvailabilitiesInOneMessage() {
+    // The format has room for one mask per message, so a message mixing two is us telling a peer
+    // we hold cells of a blob transaction that we do not. The sender groups announcements to keep
+    // that from happening; this is the backstop, and it fails rather than picking a mask.
+    final CellsOnlyBlobTransactionFixture fixture = new CellsOnlyBlobTransactionFixture();
+    final List<Transaction> differingAvailability =
+        List.of(fixture.create(1, CellMask.FULL), fixture.create(1, MASK));
+
+    assertThatExceptionOfType(IllegalArgumentException.class)
+        .isThrownBy(
+            () ->
+                TransactionAnnouncementEncoder.getEncoder(EthProtocolVersion.V72.getCapability())
+                    .encode(differingAvailability))
+        .withMessageContaining("must share a cell mask");
+  }
+
+  @Test
+  void aBlobAnnouncementWithoutAMaskIsRejected() {
+    // Every blob announcement states an availability, so a null mask is only for the types that
+    // carry none.
+    assertThatExceptionOfType(NullPointerException.class)
+        .isThrownBy(() -> new TransactionAnnouncement(hash(1), TransactionType.BLOB, 1000L, null))
+        .withMessageContaining("Cell mask cannot be null");
+  }
+
+  @Test
+  void aCellsBitmapOfTheWrongWidthIsAnRlpException() {
+    // The processor charges a peer for an RLPException and lets anything else through as an
+    // internal error, and decoding happens on a worker thread away from the handler, so a
+    // malformed bitmap has to arrive as an RLPException or the peer is never disconnected for it.
+    for (final int width : new int[] {0, CellMask.BYTE_LENGTH - 1, CellMask.BYTE_LENGTH + 1}) {
+      final BytesValueRLPOutput out = new BytesValueRLPOutput();
+      out.startList();
+      out.writeBytes(Bytes.of(TransactionType.BLOB.getEthSerializedType()));
+      out.writeList(List.of(1000), (size, rlp) -> rlp.writeUnsignedInt(size));
+      out.writeList(List.of(hash(1)), (h, rlp) -> rlp.writeBytes(h.getBytes()));
+      out.writeBytes(Bytes.repeat((byte) 0xff, width));
+      out.endList();
+
+      assertThatExceptionOfType(RLPException.class)
+          .as("a %d byte cells bitmap", width)
+          .isThrownBy(
+              () ->
+                  TransactionAnnouncementDecoder.getDecoder(EthProtocolVersion.V72.getCapability())
+                      .decode(RLP.input(out.encoded()), MAX_ANNOUNCEMENTS));
+    }
   }
 
   @Test

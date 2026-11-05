@@ -26,7 +26,10 @@ import org.hyperledger.besu.ethereum.p2p.rlpx.connections.PeerConnection.PeerNot
 import org.hyperledger.besu.ethereum.p2p.rlpx.wire.Capability;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,60 +49,47 @@ class NewPooledTransactionHashesMessageSender {
   public void sendTransactionAnnouncementsToPeer(final EthPeer peer) {
     final Capability capability = peer.getConnection().capability(EthProtocol.NAME);
     final EncodingContext encodingContext = EthProtocol.pooledTransactionContext(capability);
-    final List<Transaction> txBatch = new ArrayList<>();
+
+    // An eth/72 announcement carries one cell mask covering every blob tx in the message, so a
+    // message may only hold blob txs that agree on it.
+    final boolean oneBatchPerCellMask = EthProtocol.isEth72Compatible(capability);
+    // Keyed by the mask the batch will announce, empty for the batch of txs that carry none.
+    // Insertion ordered, so batches are sent in the order their first tx was queued.
+    final Map<Optional<CellMask>, List<Transaction>> openBatches = new LinkedHashMap<>();
+
     Transaction announcementToSend;
-
-    // An eth/72 announcement carries one cell mask for every blob tx in it, so a batch may only
-    // hold blob txs that agree on it. Transactions arrive grouped by mask, see
-    // TransactionBroadcaster#orderTransactions, so a change of mask closes the current batch.
-    // Non-blob txs carry no mask and can ride in any batch.
-    CellMask batchCellMask = null;
-
     while ((announcementToSend = transactionTracker.claimAnnouncementToSendToPeer(peer)) != null) {
       if (transactionTracker.hasPeerSeenTransactionOrAnnouncement(
           peer, announcementToSend.getHash())) {
         continue;
       }
 
-      // Announcing to a peer whose protocol version we could not then serve claims an
-      // availability we do not have, and computing the announced size would itself fail on a
-      // transaction held only as cells.
       if (!encodingContext.canEncode(announcementToSend)) {
         continue;
       }
 
-      final CellMask txCellMask = cellMaskOf(announcementToSend);
-      final boolean cellMaskChanged =
-          txCellMask != null && batchCellMask != null && !batchCellMask.equals(txCellMask);
+      final Optional<CellMask> batchKey =
+          oneBatchPerCellMask
+              ? TransactionAnnouncement.announcedCellMask(announcementToSend)
+              : Optional.empty();
+      final List<Transaction> batch = openBatches.computeIfAbsent(batchKey, _ -> new ArrayList<>());
+      batch.add(announcementToSend);
 
-      if (cellMaskChanged || txBatch.size() == maxAnnouncementsPerMessage) {
-        // send the current batch, and stop if the peer is no longer connected
-        if (!send(peer, txBatch, capability)) {
+      if (batch.size() == maxAnnouncementsPerMessage) {
+        openBatches.remove(batchKey);
+        // send the full batch, and stop if the peer is no longer connected
+        if (!send(peer, batch, capability)) {
           return;
         }
-        txBatch.clear();
       }
-
-      txBatch.add(announcementToSend);
-      batchCellMask = txCellMask;
     }
 
-    // send the last partial batch
-    if (!txBatch.isEmpty()) {
-      send(peer, txBatch, capability);
+    // send the partial batches left open
+    for (final List<Transaction> batch : openBatches.values()) {
+      if (!send(peer, batch, capability)) {
+        return;
+      }
     }
-  }
-
-  /**
-   * The cell mask a transaction would be announced with, or null when it carries none.
-   *
-   * @param transaction the transaction about to be announced
-   * @return the mask, or null for non-blob transactions
-   */
-  private static CellMask cellMaskOf(final Transaction transaction) {
-    return transaction.getType().supportsBlob()
-        ? transaction.getBlobsWithCommitments().orElseThrow().getCellMask()
-        : null;
   }
 
   private boolean send(

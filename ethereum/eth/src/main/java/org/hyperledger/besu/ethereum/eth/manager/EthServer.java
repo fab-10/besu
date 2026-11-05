@@ -441,7 +441,8 @@ class EthServer {
       final List<Hash> requested = new ArrayList<>();
       hashes.forEach(requested::add);
       LOG.atTrace()
-          .setMessage("Requested transactions: peer={}, requested hashes={}, encoding context={}")
+          .setMessage(
+              "Requested pooled transactions: peer={}, requested hashes={}, encoding context={}")
           .addArgument(peer)
           .addArgument(requested)
           .addArgument(encodingContext)
@@ -468,10 +469,10 @@ class EthServer {
       }
 
       if (!encodingContext.canEncode(maybeTx.get())) {
-        // Typically a blob tx this node holds only as cells, which the pre-eth/72 wire form
-        // cannot express. Omit it rather than fail: the peer can source it elsewhere.
+        // Typically a blob transaction this node holds only as cells, which the pre-eth/72 wire
+        // form cannot express. Omit it rather than fail: the peer can source it elsewhere.
         LOG.atTrace()
-            .setMessage("Skipping tx {} not encodable for {}")
+            .setMessage("Skipping pooled transaction {}, not encodable for {}")
             .addArgument(hash)
             .addArgument(encodingContext)
             .log();
@@ -494,14 +495,16 @@ class EthServer {
     }
     rlp.endList();
 
-    LOG.atTrace()
-        .setMessage(
-            "Sending pooled transactions: peer={}, returned hashes={}, notFoundCount={}, encodingContext={}")
-        .addArgument(peer)
-        .addArgument(returnedHashes)
-        .addArgument(requestedCount - returnedCount)
-        .addArgument(encodingContext)
-        .log();
+    if (traceEnabled) {
+      LOG.atTrace()
+          .setMessage(
+              "Sending pooled transactions: peer={}, returned hashes={}, notFoundCount={}, encoding context={}")
+          .addArgument(peer)
+          .addArgument(returnedHashes)
+          .addArgument(requestedCount - returnedCount)
+          .addArgument(encodingContext)
+          .log();
+    }
 
     return PooledTransactionsMessage.createUnsafe(rlp.encoded());
   }
