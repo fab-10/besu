@@ -108,6 +108,23 @@ public class EthProtocolTest {
   }
 
   @Test
+  void theCellMessagesAreFramedWithARequestId() {
+    // GetCells and Cells are a request and its response, so they are framed with a request id like
+    // every other such pair. Without it EthProtocolManager hands the server the id as part of the
+    // request body and sends the response back with none, which no requester can match to its
+    // request.
+    assertThat(EthProtocol.requestIdCompatible(EthProtocolMessages.GET_CELLS)).isTrue();
+    assertThat(EthProtocol.requestIdCompatible(EthProtocolMessages.CELLS)).isTrue();
+  }
+
+  @Test
+  void theCellMessagesAreNamed() {
+    assertThat(EthProtocol.get().messageName(72, EthProtocolMessages.GET_CELLS))
+        .isEqualTo("GetCells");
+    assertThat(EthProtocol.get().messageName(72, EthProtocolMessages.CELLS)).isEqualTo("Cells");
+  }
+
+  @Test
   void theEth72ContextIsUsedOnlyForAnEth72Peer() {
     assertThat(EthProtocol.pooledTransactionContext(EthProtocolVersion.V72.getCapability()))
         .isEqualTo(EncodingContext.POOLED_TRANSACTION_ETH_72);
@@ -123,23 +140,6 @@ public class EthProtocolTest {
     // pooled transactions are encoded.
     assertThat(EthProtocol.pooledTransactionContext(Capability.create("snap", 72)))
         .isEqualTo(EncodingContext.POOLED_TRANSACTION);
-  }
-
-  @Test
-  void theCellMessagesAreFramedWithARequestId() {
-    // GetCells and Cells are a request and its response, so they are framed with a request id like
-    // every other such pair. Without it EthProtocolManager hands the server the id as part of the
-    // request body and sends the response back with none, which no requester can match to its
-    // request.
-    assertThat(EthProtocol.requestIdCompatible(EthProtocolMessages.GET_CELLS)).isTrue();
-    assertThat(EthProtocol.requestIdCompatible(EthProtocolMessages.CELLS)).isTrue();
-  }
-
-  @Test
-  void theCellMessagesAreNamed() {
-    assertThat(EthProtocol.get().messageName(72, EthProtocolMessages.GET_CELLS))
-        .isEqualTo("GetCells");
-    assertThat(EthProtocol.get().messageName(72, EthProtocolMessages.CELLS)).isEqualTo("Cells");
   }
 
   @Test

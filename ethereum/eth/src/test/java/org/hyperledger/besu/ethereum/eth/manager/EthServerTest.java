@@ -291,6 +291,40 @@ public class EthServerTest {
   }
 
   @Test
+  public void shouldServeTheBlobElidedFormToAnEth72Peer() {
+    final Transaction cellsOnly = new CellsOnlyBlobTransactionFixture().create(1, CellMask.FULL);
+    when(transactionPool.getTransactionByHash(cellsOnly.getHash()))
+        .thenReturn(Optional.of(cellsOnly));
+    setupEthServer();
+
+    final EthMessage request =
+        new EthMessage(ethPeer, GetPooledTransactionsMessage.create(List.of(cellsOnly.getHash())));
+
+    // What an eth/72 peer was announced is the size of the blob-elided form, so that is the form
+    // the response has to carry. For this transaction, held only as cells, there is no other.
+    assertThat(ethMessages.dispatch(request, EthProtocolVersion.V72.getCapability()))
+        .contains(
+            createPooledTransactionsMessage(
+                List.of(cellsOnly), EncodingContext.POOLED_TRANSACTION_ETH_72));
+  }
+
+  @Test
+  public void shouldOmitATransactionAPreEth72PeerCannotBeServed() {
+    final Transaction cellsOnly = new CellsOnlyBlobTransactionFixture().create(1, CellMask.FULL);
+    when(transactionPool.getTransactionByHash(cellsOnly.getHash()))
+        .thenReturn(Optional.of(cellsOnly));
+    setupEthServer();
+
+    final EthMessage request =
+        new EthMessage(ethPeer, GetPooledTransactionsMessage.create(List.of(cellsOnly.getHash())));
+
+    // The pre-eth/72 pooled form needs the blob payloads this node does not hold. Answering
+    // without the transaction is a legitimate response; failing to encode one is not.
+    assertThat(ethMessages.dispatch(request, EthProtocolVersion.V71.getCapability()))
+        .contains(createPooledTransactionsMessage(List.of()));
+  }
+
+  @Test
   public void shouldReturnAllPaginatedReceiptsForKnownBlocks() {
     // Use explicit receipts to guarantee each block has at least 1 receipt: blocks with 0
     // receipts from blockSequence would trigger skipBefore(0) >= size(0) → ProtocolViolation.
