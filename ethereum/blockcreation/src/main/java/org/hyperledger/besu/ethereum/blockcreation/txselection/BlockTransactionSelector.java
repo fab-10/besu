@@ -56,6 +56,8 @@ import org.hyperledger.besu.ethereum.mainnet.block.access.list.BlockAccessList;
 import org.hyperledger.besu.ethereum.mainnet.block.access.list.BlockAccessList.BlockAccessListBuilder;
 import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.evm.blockhash.BlockHashLookup;
+import org.hyperledger.besu.evm.internal.EvmInterruptedException;
+import org.hyperledger.besu.evm.internal.EvmKillSwitch;
 import org.hyperledger.besu.evm.tracing.OperationTracer;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
@@ -184,8 +186,13 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
         createTransactionSelectors(
             blockSelectionContext, selectorsStateManager, maybeBlockAccessListBuilder);
     this.pluginTransactionSelector = pluginTransactionSelector;
+    // Interruption is handled by the EvmKillSwitch polls inside the EVM loops, so no tracer is
+    // needed for it: with no plugin tracer the selection runs the fast untraced loop. The
+    // canonical NO_TRACING keeps the tracer call sites monomorphic, see the assert in
+    // EVM.runToHalt.
+    final var pluginOperationTracer = pluginTransactionSelector.getOperationTracer();
     this.operationTracer =
-        new InterruptibleOperationTracer(pluginTransactionSelector.getOperationTracer());
+        pluginOperationTracer.isEnabled() ? pluginOperationTracer : OperationTracer.NO_TRACING;
     this.blockWorldStateUpdater = worldState.updater();
     this.txWorldStateUpdater = blockWorldStateUpdater.updater();
     final var blockTxsSelectionMaxTime =
@@ -353,6 +360,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
   public void cancel() {
     isCancelled.set(true);
     if (currTxSelectionTask != null) {
+      EvmKillSwitch.arm();
       currTxSelectionTask.cancel(true);
       LOG.debug("Cancelled transaction selection task");
     }
@@ -534,6 +542,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
       }
 
       // cancelling the task and interrupting the thread running it
+      EvmKillSwitch.arm();
       currTxSelectionTask.cancel(true);
       LOG.warn(
           "Interrupting the plugin selection of transactions for block inclusion after {}ms,"
@@ -661,6 +670,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
                       "No transaction context when grace time expired, cancelling task anyway")
                   .log();
             }
+            EvmKillSwitch.arm();
             txSelectionTask.cancel(true);
           }
         },
@@ -695,6 +705,12 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     TransactionSelectionResult evaluationResult;
     try {
       evaluationResult = evaluatePendingTransaction(pendingTransaction);
+    } catch (final EvmInterruptedException e) {
+      LOG.atDebug()
+          .setMessage("Transaction {} evaluation interrupted by a cancellation")
+          .addArgument(pendingTransaction::toTraceLog)
+          .log();
+      evaluationResult = INTERNAL_ERROR;
     } catch (Throwable t) {
       LOG.error("Unhandled exception evaluating transaction {}", pendingTransaction, t);
       evaluationResult = INTERNAL_ERROR;
