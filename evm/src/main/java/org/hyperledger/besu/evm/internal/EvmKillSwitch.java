@@ -49,13 +49,21 @@ import com.google.common.annotations.VisibleForTesting;
  * before the interrupt. Like the {@code Thread.interrupted()} checks it replaces, a poll that
  * throws clears the interrupt flag.
  *
- * <p>The switch disarms itself once the armed period, default one second, has elapsed with no
- * further {@code arm} calls, so call sites need no disarm bookkeeping; while armed, every polling
- * EVM thread also reads its own interrupt status. A thread that never reaches a poll while the
- * switch is armed, because it is blocked in a precompile, native code or storage I/O, is not
- * stopped by this class; its interrupt flag stays set and the next interruptible blocking call it
- * makes will throw. That matches the guarantees of the tracer-based interrupt checks this class
- * replaces.
+ * <p>Only the <em>disarmed</em> poll is free: while armed, every polling EVM thread reads its own
+ * interrupt status on every poll, which is a real per-JUMPDEST cost on every EVM thread in the
+ * process. The armed duty cycle must therefore stay low. Callers that can observe the interrupted
+ * task exiting use {@link #armScoped()} and {@link #release()}, which keep the switch armed only
+ * for the actual stop latency of the kill, typically a few milliseconds. Callers that cannot
+ * observe the stop use {@link #arm()}, and the switch disarms itself once the armed period, default
+ * one second, has elapsed with no further arms, so those call sites need no disarm bookkeeping. A
+ * scoped arm whose {@code release} never arrives is treated as stale after the default armed
+ * period, so a missed release degrades to timer behavior instead of leaving the switch armed
+ * forever.
+ *
+ * <p>A thread that never reaches a poll while the switch is armed, because it is blocked in a
+ * precompile, native code or storage I/O, is not stopped by this class; its interrupt flag stays
+ * set and the next interruptible blocking call it makes will throw. That matches the guarantees of
+ * the tracer-based interrupt checks this class replaces.
  */
 public final class EvmKillSwitch {
 
@@ -80,6 +88,14 @@ public final class EvmKillSwitch {
 
   // Guarded by the EvmKillSwitch.class lock; poll() never takes the lock.
   private static long armedUntilNanos = Long.MIN_VALUE;
+
+  // Scoped arms not yet released: interrupted tasks whose exit has not been observed yet.
+  // Guarded by the EvmKillSwitch.class lock.
+  private static int pendingKills;
+
+  // When every current pending kill is considered stale: the safety net for a missed release.
+  // Guarded by the EvmKillSwitch.class lock.
+  private static long pendingKillsStaleNanos = Long.MIN_VALUE;
 
   private EvmKillSwitch() {}
 
@@ -113,6 +129,10 @@ public final class EvmKillSwitch {
    * Arm the switch, keeping it armed for at least the given period. Arming is a field write: arming
    * an already armed switch only extends the period, and any number of arm/disarm cycles is fine.
    *
+   * <p>Prefer {@link #armScoped()} when the caller can observe the interrupted task exiting: a
+   * timer arm keeps every EVM thread paying the armed poll cost for the whole period, orders of
+   * magnitude longer than the stop itself.
+   *
    * @param armedPeriod how long the switch must stay armed; use at least the time the caller is
    *     prepared to wait for the interrupted thread to stop
    */
@@ -124,14 +144,55 @@ public final class EvmKillSwitch {
     ARMED.set(true);
     // Every arm schedules its own disarm check just after its period lapses. A check that fires
     // while a later arm keeps the switch armed is a no-op: that arm's own check is still pending.
+    scheduleDisarmCheck(armedPeriod);
+  }
+
+  /**
+   * Arm the switch until the matching {@link #release()}. Call right before interrupting a thread
+   * whose exit the caller can observe; call {@code release} exactly once when the interrupted task
+   * has stopped (or finished on its own). The switch stays armed only while kills are in flight,
+   * typically a few milliseconds, instead of a fixed period.
+   *
+   * <p>If a release is missed, the pending kill is treated as stale after the default armed period
+   * and the switch disarms anyway, so a pairing bug costs at most timer-arm behavior.
+   */
+  public static synchronized void armScoped() {
+    pendingKills++;
+    pendingKillsStaleNanos = System.nanoTime() + DEFAULT_ARMED_PERIOD.toNanos();
+    ARMED.set(true);
+    // The safety-net check, in case the release never arrives.
+    scheduleDisarmCheck(DEFAULT_ARMED_PERIOD);
+  }
+
+  /**
+   * Release one {@link #armScoped()} arm, because its interrupted task has been observed to exit.
+   * Disarms the switch immediately when no other arm, scoped or timed, is keeping it armed.
+   */
+  public static synchronized void release() {
+    if (pendingKills > 0) {
+      pendingKills--;
+    }
+    maybeDisarm();
+  }
+
+  private static void scheduleDisarmCheck(final Duration delay) {
     DISARM_SCHEDULER.schedule(
-        EvmKillSwitch::maybeDisarm,
-        armedPeriod.toNanos() + DISARM_SLACK_NANOS,
+        EvmKillSwitch::maybeDisarmScheduled,
+        delay.toNanos() + DISARM_SLACK_NANOS,
         TimeUnit.NANOSECONDS);
   }
 
-  private static synchronized void maybeDisarm() {
-    if (System.nanoTime() < armedUntilNanos) {
+  private static synchronized void maybeDisarmScheduled() {
+    maybeDisarm();
+  }
+
+  // Caller must hold the EvmKillSwitch.class lock.
+  private static void maybeDisarm() {
+    final long now = System.nanoTime();
+    if (now < armedUntilNanos) {
+      return;
+    }
+    if (pendingKills > 0 && now < pendingKillsStaleNanos) {
       return;
     }
     ARMED.set(false);
@@ -145,6 +206,8 @@ public final class EvmKillSwitch {
   @VisibleForTesting
   static synchronized void disarmForTesting() {
     armedUntilNanos = Long.MIN_VALUE;
+    pendingKills = 0;
+    pendingKillsStaleNanos = Long.MIN_VALUE;
     ARMED.set(false);
   }
 }
