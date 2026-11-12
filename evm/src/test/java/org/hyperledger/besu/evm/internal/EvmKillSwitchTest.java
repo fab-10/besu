@@ -78,6 +78,60 @@ class EvmKillSwitchTest {
   }
 
   @Test
+  void scopedArmDisarmsOnRelease() {
+    EvmKillSwitch.armScoped();
+    assertThat(EvmKillSwitch.isArmed()).isTrue();
+
+    EvmKillSwitch.release();
+    assertThat(EvmKillSwitch.isArmed()).isFalse();
+  }
+
+  @Test
+  void scopedArmsDisarmOnlyWhenAllAreReleased() {
+    EvmKillSwitch.armScoped();
+    EvmKillSwitch.armScoped();
+
+    EvmKillSwitch.release();
+    assertThat(EvmKillSwitch.isArmed()).isTrue();
+
+    EvmKillSwitch.release();
+    assertThat(EvmKillSwitch.isArmed()).isFalse();
+  }
+
+  @Test
+  void releaseDoesNotCutShortAnActiveTimerArm() {
+    EvmKillSwitch.arm(Duration.ofMinutes(1));
+    EvmKillSwitch.armScoped();
+
+    EvmKillSwitch.release();
+    assertThat(EvmKillSwitch.isArmed()).isTrue();
+  }
+
+  @Test
+  void pendingScopedArmOutlivesALapsedTimerArm() throws Exception {
+    EvmKillSwitch.arm(Duration.ofMillis(50));
+    EvmKillSwitch.armScoped();
+    Thread.sleep(300); // the timer arm lapses and its disarm check fires
+
+    assertThat(EvmKillSwitch.isArmed()).isTrue();
+
+    EvmKillSwitch.release();
+    assertThat(EvmKillSwitch.isArmed()).isFalse();
+  }
+
+  @Test
+  void missedReleaseGoesStaleAfterTheDefaultArmedPeriod() throws Exception {
+    EvmKillSwitch.armScoped();
+    assertThat(EvmKillSwitch.isArmed()).isTrue();
+
+    final long deadline = System.currentTimeMillis() + 10_000;
+    while (EvmKillSwitch.isArmed() && System.currentTimeMillis() < deadline) {
+      Thread.sleep(10);
+    }
+    assertThat(EvmKillSwitch.isArmed()).isFalse();
+  }
+
+  @Test
   void reArmingExtendsTheArmedPeriod() throws Exception {
     EvmKillSwitch.arm(Duration.ofMillis(50));
     EvmKillSwitch.arm(Duration.ofMinutes(1));

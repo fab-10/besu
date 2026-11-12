@@ -24,7 +24,7 @@ import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.worldview.BonsaiWorldState;
 import org.hyperledger.besu.ethereum.worldstate.WorldStateQueryParams;
 import org.hyperledger.besu.evm.blockhash.BlockHashLookup;
-import org.hyperledger.besu.evm.internal.EvmKillSwitch;
+import org.hyperledger.besu.evm.internal.InterruptibleExecution;
 import org.hyperledger.besu.plugin.services.metrics.Counter;
 import org.hyperledger.besu.plugin.services.worldstate.MutableWorldState;
 
@@ -32,20 +32,18 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executor;
-import java.util.function.Supplier;
 
 public abstract class ParallelBlockTransactionProcessor {
 
   protected CompletableFuture<ParallelizedTransactionContext>[] futures;
 
-  // Per-slot record of the thread currently executing the speculative transaction, so a slot
-  // whose result is no longer needed can be interrupted. CompletableFuture.cancel(true) never
-  // interrupts the running task, so without this the speculative execution would run to its end.
-  // Writes to a slot's entry happen under its lock, so an interrupt can only land while the task
-  // is still running, and the task clears a late interrupt under the same lock before the pool
-  // thread moves on to other work.
-  private Thread[] runningThreads;
-  private Object[] slotLocks;
+  // Per-slot cancellation handle for the speculative execution, so a slot whose result is no
+  // longer needed can be interrupted. CompletableFuture.cancel(true) never interrupts the running
+  // task, so without this the speculative execution would run to its end. The scoped arm keeps the
+  // kill switch armed only for the few milliseconds the kill takes: while armed, every EVM thread
+  // in the process pays an interrupt-status read per poll, so a fixed armed period would tax the
+  // whole remainder of the block's execution.
+  private InterruptibleExecution[] executionSlots;
 
   protected CompletableFuture<ParallelizedTransactionContext> removeFuture(final int txIndex) {
     final CompletableFuture<ParallelizedTransactionContext> future = futures[txIndex];
@@ -61,32 +59,7 @@ public abstract class ParallelBlockTransactionProcessor {
    * @param txIndex the slot of the transaction whose execution is no longer needed
    */
   protected void interruptSlot(final int txIndex) {
-    final Object lock = slotLocks[txIndex];
-    synchronized (lock) {
-      final Thread runningThread = runningThreads[txIndex];
-      if (runningThread != null) {
-        EvmKillSwitch.arm();
-        runningThread.interrupt();
-      }
-    }
-  }
-
-  private ParallelizedTransactionContext runSlot(
-      final int txIndex, final Supplier<ParallelizedTransactionContext> task) {
-    final Object lock = slotLocks[txIndex];
-    synchronized (lock) {
-      runningThreads[txIndex] = Thread.currentThread();
-    }
-    try {
-      return task.get();
-    } finally {
-      synchronized (lock) {
-        runningThreads[txIndex] = null;
-        // clear an interrupt that landed after the task finished its work, so it cannot leak
-        // into an unrelated task scheduled next on this pool thread
-        Thread.interrupted();
-      }
-    }
+    executionSlots[txIndex].interrupt();
   }
 
   @SuppressWarnings({"unchecked", "rawtypes"})
@@ -102,19 +75,18 @@ public abstract class ParallelBlockTransactionProcessor {
       final Optional<BlockHeader> maybeParentHeader) {
 
     futures = new CompletableFuture[transactions.size()];
-    runningThreads = new Thread[transactions.size()];
-    slotLocks = new Object[transactions.size()];
+    executionSlots = new InterruptibleExecution[transactions.size()];
 
     for (int i = 0; i < transactions.size(); i++) {
       final int txIndex = i;
       final Transaction transaction = transactions.get(i);
-      slotLocks[i] = new Object();
+      final InterruptibleExecution executionSlot = new InterruptibleExecution();
+      executionSlots[i] = executionSlot;
 
       futures[i] =
           CompletableFuture.supplyAsync(
               () ->
-                  runSlot(
-                      txIndex,
+                  executionSlot.run(
                       () ->
                           precomputeLogsBloom(
                               runTransaction(
