@@ -38,7 +38,7 @@ import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.ethereum.transaction.TransactionSimulator;
 import org.hyperledger.besu.ethereum.trie.pathbased.bonsai.worldview.BonsaiWorldState;
 import org.hyperledger.besu.evm.blockhash.BlockHashLookup;
-import org.hyperledger.besu.evm.frame.MessageFrame;
+import org.hyperledger.besu.evm.internal.InterruptibleExecution;
 import org.hyperledger.besu.evm.tracing.OperationTracer;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.metrics.BesuMetricCategory;
@@ -72,7 +72,6 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import com.google.common.annotations.VisibleForTesting;
-import org.apache.tuweni.bytes.Bytes;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -122,6 +121,8 @@ public class MempoolPrewarmer implements AutoCloseable {
   @Nullable private volatile Warming warming;
   // the last prewarming a payload stopped, which its block counts against once the block is known
   private final AtomicReference<Warming> stoppedForPayload = new AtomicReference<>();
+  // the executions running right now, so a stop can interrupt those whose warming it ended
+  private final Set<RunningExecution> interruptibleExecutions = ConcurrentHashMap.newKeySet();
 
   private final Counter executedTransactions;
   private final Counter invalidTransactions;
@@ -288,6 +289,7 @@ public class MempoolPrewarmer implements AutoCloseable {
                   : gasLimit * gasLimitMultiplier);
     }
     warming = next;
+    interruptStaleExecutions();
     try {
       coordinator.execute(() -> warm(next));
     } catch (final RejectedExecutionException e) {
@@ -297,34 +299,36 @@ public class MempoolPrewarmer implements AutoCloseable {
 
   /**
    * Stops prewarming, as a payload arrived and is about to be checked. Executions already running
-   * stop when their transaction next enters or leaves a call.
+   * are interrupted and stop at the EVM's next kill-switch poll.
    */
   public void stopForPayload() {
     final Warming stopped = warming;
-    final long running = generation.getAndIncrement();
-    if (stopped != null && stopped.generation() == running) {
+    final long stoppedGeneration = generation.getAndIncrement();
+    if (stopped != null && stopped.generation() == stoppedGeneration) {
       stoppedForPayload.set(stopped);
     }
+    interruptStaleExecutions();
   }
 
   /**
-   * Stops prewarming, as a block arrived or mining stops. Executions already running stop when
-   * their transaction next enters or leaves a call.
+   * Stops prewarming, as a block arrived or mining stops. Executions already running are
+   * interrupted and stop at the EVM's next kill-switch poll.
    *
    * @param arrivingBlock the block that arrived, if one did
    */
   public void stop(final Optional<Block> arrivingBlock) {
     final Warming current = warming;
-    final long running = generation.getAndIncrement();
+    final long stoppedGeneration = generation.getAndIncrement();
     final Warming stoppedEarlier = stoppedForPayload.getAndSet(null);
     // the block's execution starts now, so these executions run alongside it
     if (arrivingBlock.isPresent()) {
       blockStartedNanos = System.nanoTime();
       executionsRunningAtBlock.inc(runningExecutions.get());
     }
+    interruptStaleExecutions();
     // a block counts once, and only against prewarming that ran until it or its payload arrived
     final Warming stopped =
-        current != null && current.generation() == running ? current : stoppedEarlier;
+        current != null && current.generation() == stoppedGeneration ? current : stoppedEarlier;
     if (stopped == null) {
       return;
     }
@@ -343,16 +347,19 @@ public class MempoolPrewarmer implements AutoCloseable {
       current.building().set(true);
     }
     generation.incrementAndGet();
+    interruptStaleExecutions();
   }
 
   /**
    * Stops prewarming for good and waits for the running pass and executions to end, so that none of
-   * them reads the chain or the state after its storage is closed. An execution that makes no calls
-   * runs until its gas runs out, so its gas limit bounds the wait.
+   * them reads the chain or the state after its storage is closed. Running executions are
+   * interrupted; one blocked in a precompile or a storage read stops at its first kill-switch poll
+   * after returning to the EVM, so in the worst case its gas limit still bounds the wait.
    */
   @Override
   public void close() {
     generation.incrementAndGet();
+    interruptStaleExecutions();
     transactionPool.unsubscribePendingTransactions(poolSubscription);
     coordinator.shutdownNow();
     executors.shutdown();
@@ -479,8 +486,9 @@ public class MempoolPrewarmer implements AutoCloseable {
   }
 
   /**
-   * Waits for an execution while its warming is current. An execution that makes no calls runs on
-   * after a stop, and would otherwise hold up the warming for the next head.
+   * Waits for an execution while its warming is current. An execution outlives a stop until its
+   * next kill-switch poll, or longer if it was blocked outside the EVM when the armed window
+   * lapsed, and would otherwise hold up the warming for the next head.
    *
    * @return whether the warming is still current
    */
@@ -599,6 +607,18 @@ public class MempoolPrewarmer implements AutoCloseable {
     if (!isWarming(warming)) {
       return;
     }
+    final RunningExecution runningExecution =
+        new RunningExecution(warming, new InterruptibleExecution());
+    interruptibleExecutions.add(runningExecution);
+    try {
+      runningExecution.interruptible().run(() -> executeSender(warming, execution, transactions));
+    } finally {
+      interruptibleExecutions.remove(runningExecution);
+    }
+  }
+
+  private void executeSender(
+      final Warming warming, final Execution execution, final List<Transaction> transactions) {
     // a sender that fails is not tried again until it has new transactions
     transactions.forEach(transaction -> warming.attempted().add(transaction.getHash()));
     try (final MutableWorldState worldState = headWorldState(warming.head())) {
@@ -612,7 +632,6 @@ public class MempoolPrewarmer implements AutoCloseable {
       // the senders share the hashes found, each walking the chain on its own
       final BlockHashLookup blockHashLookup = execution.blockHashLookup().forkForParallelWorker();
       final WorldUpdater updater = worldState.updater();
-      final OperationTracer tracer = new StoppingTracer(warming);
       for (final Transaction transaction : transactions) {
         // runs for a sender's new transactions are charged again, so the budget caps the work
         if (!isWarming(warming) || !reserve(warming, transaction.getGasLimit())) {
@@ -629,7 +648,7 @@ public class MempoolPrewarmer implements AutoCloseable {
                   execution.header(),
                   transaction,
                   execution.header().getCoinbase(),
-                  tracer,
+                  OperationTracer.NO_TRACING,
                   blockHashLookup,
                   VALIDATION_PARAMS,
                   execution.blobGasPrice());
@@ -641,7 +660,7 @@ public class MempoolPrewarmer implements AutoCloseable {
           }
         }
         if (!isCurrent(warming)) {
-          // the tracer may have stopped the transaction halfway
+          // the kill switch may have stopped the transaction halfway, as an invalid result
           break;
         }
         if (result.isInvalid()) {
@@ -664,6 +683,18 @@ public class MempoolPrewarmer implements AutoCloseable {
           .addArgument(() -> transactions.getFirst().getSender())
           .setCause(e)
           .log();
+    }
+  }
+
+  /**
+   * Interrupts the running executions of warmings that are no longer current, so they stop at the
+   * EVM's next kill-switch poll instead of at their next call or at their gas limit.
+   */
+  private void interruptStaleExecutions() {
+    for (final RunningExecution runningExecution : interruptibleExecutions) {
+      if (!isCurrent(runningExecution.warming())) {
+        runningExecution.interruptible().interrupt();
+      }
     }
   }
 
@@ -695,51 +726,8 @@ public class MempoolPrewarmer implements AutoCloseable {
     }
   }
 
-  /**
-   * Stops an execution once its warming is over. It looks when a call starts or ends rather than at
-   * every operation, so that EVM v2 leaves out its per-operation tracer calls. EVM v1 makes them
-   * for every tracer but {@link OperationTracer#NO_TRACING}.
-   */
-  private final class StoppingTracer implements OperationTracer {
-    private final Warming warming;
-
-    private StoppingTracer(final Warming warming) {
-      this.warming = warming;
-    }
-
-    @Override
-    public boolean tracesOperations() {
-      return false;
-    }
-
-    @Override
-    public void traceContextEnter(final MessageFrame frame) {
-      stopIfOver();
-    }
-
-    @Override
-    public void traceContextReEnter(final MessageFrame frame) {
-      stopIfOver();
-    }
-
-    @Override
-    public void traceContextExit(final MessageFrame frame) {
-      stopIfOver();
-    }
-
-    @Override
-    public void tracePrecompileCall(
-        final MessageFrame frame, final long gasRequirement, final Bytes output) {
-      stopIfOver();
-    }
-
-    private void stopIfOver() {
-      if (!isCurrent(warming)) {
-        // the transaction processor ends an interrupted transaction as invalid
-        throw new RuntimeException(new InterruptedException("Prewarming stopped"));
-      }
-    }
-  }
+  /** An execution and the warming it runs for, so a stop interrupts only stale warmings. */
+  private record RunningExecution(Warming warming, InterruptibleExecution interruptible) {}
 
   /**
    * Prewarming for one head, for the slot that starts at {@code timestamp}. The transactions of a
@@ -779,8 +767,8 @@ public class MempoolPrewarmer implements AutoCloseable {
 
     /**
      * This prewarming under a new generation, sharing its budget and what ran. The senders that did
-     * not run are tried again, as the stop may have cut them short; executions still running stop
-     * at their next call.
+     * not run are tried again, as the stop may have cut them short; executions still running are
+     * interrupted and stop at the EVM's next kill-switch poll.
      */
     private Warming resumed(final long generation) {
       final Set<Hash> ran = ConcurrentHashMap.newKeySet();
