@@ -55,6 +55,12 @@ public class OptimisticConcurrentTransactionProcessor extends ParallelBlockTrans
   private static final Logger LOG =
       LoggerFactory.getLogger(OptimisticConcurrentTransactionProcessor.class);
 
+  // Experiment knob, see the comment at the call site: -Dbesu.block.interruptSpeculative=false
+  // keeps the pre-kill-switch behavior where a speculative execution whose result the importer
+  // no longer needs still runs to its end, warming caches for the sequential re-execution.
+  private static final boolean INTERRUPT_USELESS_SPECULATIVE_EXECUTIONS =
+      !"false".equals(System.getProperty("besu.block.interruptSpeculative"));
+
   private final MainnetTransactionProcessor transactionProcessor;
 
   private final TransactionCollisionDetector transactionCollisionDetector;
@@ -277,9 +283,16 @@ public class OptimisticConcurrentTransactionProcessor extends ParallelBlockTrans
     }
     if (future != null) {
       // the block importer re-executes this transaction sequentially, so the still-running
-      // speculative execution is useless: cancel its future and stop its thread
+      // speculative execution is useless for its result: cancel its future and stop its thread.
+      // Useless is not free of value, though: the doomed execution reads much of the state the
+      // concurrent sequential re-execution is about to read, warming the caches for it, which is
+      // what the whole run did before the kill switch, when cancel(true) never stopped anything.
+      // The system property keeps that behavior, so canaries can measure the warming against the
+      // freed CPU; abort() on a failed block interrupts regardless.
       future.cancel(true);
-      interruptSlot(transactionLocation);
+      if (INTERRUPT_USELESS_SPECULATIVE_EXECUTIONS) {
+        interruptSlot(transactionLocation);
+      }
     }
     return Optional.empty();
   }
