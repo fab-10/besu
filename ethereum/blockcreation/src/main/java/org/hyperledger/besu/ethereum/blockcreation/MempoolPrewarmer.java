@@ -372,6 +372,11 @@ public class MempoolPrewarmer implements AutoCloseable {
   }
 
   @VisibleForTesting
+  int registeredExecutions() {
+    return interruptibleExecutions.size();
+  }
+
+  @VisibleForTesting
   Set<Hash> prewarmedTransactions() {
     final Warming current = warming;
     return current == null ? Set.of() : Set.copyOf(current.warmed());
@@ -726,8 +731,29 @@ public class MempoolPrewarmer implements AutoCloseable {
     }
   }
 
-  /** An execution and the warming it runs for, so a stop interrupts only stale warmings. */
-  private record RunningExecution(Warming warming, InterruptibleExecution interruptible) {}
+  /**
+   * An execution and the warming it runs for, so a stop interrupts only stale warmings. A class
+   * with identity equality, not a record: Warming's derived hashCode changes as its attempted and
+   * warmed sets fill, and a key whose hash drifts after insertion can never be removed from the
+   * registry again.
+   */
+  private static final class RunningExecution {
+    private final Warming warming;
+    private final InterruptibleExecution interruptible;
+
+    private RunningExecution(final Warming warming, final InterruptibleExecution interruptible) {
+      this.warming = warming;
+      this.interruptible = interruptible;
+    }
+
+    private Warming warming() {
+      return warming;
+    }
+
+    private InterruptibleExecution interruptible() {
+      return interruptible;
+    }
+  }
 
   /**
    * Prewarming for one head, for the slot that starts at {@code timestamp}. The transactions of a

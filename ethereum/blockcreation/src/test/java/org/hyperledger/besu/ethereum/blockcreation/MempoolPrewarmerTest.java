@@ -201,6 +201,21 @@ class MempoolPrewarmerTest {
   }
 
   @Test
+  void deregistersFinishedExecutionsWhoseWarmingSetsGrewSinceRegistration() {
+    // executing a sender mutates the warming's attempted and warmed sets after the execution was
+    // registered, so a registry keyed by content hashing could never remove the entry again
+    addCandidate(transfer(0));
+    addCandidate(transfer(OTHER_SENDER, 0, 21_000, Wei.of(1_000_000_000_000L)));
+
+    prewarmer.start(head());
+
+    awaitExecuted(2);
+    Awaitility.await()
+        .atMost(Duration.ofSeconds(10))
+        .until(() -> prewarmer.registeredExecutions() == 0);
+  }
+
+  @Test
   void leavesTheHeadStateAsItIs() {
     final MutableWorldState headState = fixture.getStateArchive().getWorldState();
     final Hash rootHash = headState.rootHash();
