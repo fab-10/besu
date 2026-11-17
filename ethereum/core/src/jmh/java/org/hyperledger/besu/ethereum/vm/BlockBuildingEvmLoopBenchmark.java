@@ -149,12 +149,33 @@ public class BlockBuildingEvmLoopBenchmark {
      * The same counted loop (25000 iterations) with a KECCAK256 of one word and an MSTORE of its
      * result in the body; the JUMPDEST and the JUMPI destination are pc 3 here.
      */
-    HASH_LOOP("0x6161a85b602060002060005260019003806003575000");
+    HASH_LOOP("0x6161a85b602060002060005260019003806003575000"),
+    /**
+     * Jump-free compute filling the whole EIP-170 code size limit: PUSH1 1, PUSH1 2, ADD, POP
+     * repeated 4096 times (24576 bytes, 16384 operations, stack-neutral), halting by running off
+     * the end of the code. Every operation hits the fast cases of both interpreter loops, so on the
+     * kill-switch branch the body contains no poll at all (polls sit on JUMPDEST and the generic
+     * dispatch); a transaction of this shape is the poll-density opposite of the loop workloads.
+     */
+    STRAIGHT_LINE_COMPUTE(straightLineCompute());
 
     final Bytes code;
 
     Workload(final String hex) {
-      this.code = Bytes.fromHexString(hex);
+      this(Bytes.fromHexString(hex));
+    }
+
+    Workload(final Bytes code) {
+      this.code = code;
+    }
+
+    private static Bytes straightLineCompute() {
+      final byte[] unit = {0x60, 0x01, 0x60, 0x02, 0x01, 0x50}; // PUSH1 1, PUSH1 2, ADD, POP
+      final byte[] code = new byte[24576]; // the EIP-170 limit, a multiple of the unit
+      for (int i = 0; i < code.length; i += unit.length) {
+        System.arraycopy(unit, 0, code, i, unit.length);
+      }
+      return Bytes.wrap(code);
     }
   }
 
