@@ -25,7 +25,6 @@ import org.hyperledger.besu.evm.testutils.TestMessageFrameBuilder;
 import org.hyperledger.besu.evm.tracing.OperationTracer;
 import org.hyperledger.besu.evm.v2.testutils.TestMessageFrameBuilderV2;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
@@ -129,7 +128,7 @@ class EvmKillSwitchWorstCaseLatencyTest {
       started.await();
       Thread.sleep(50); // land the interrupt at an effectively random point of the loop body
       final long armedAt = System.nanoTime();
-      EvmKillSwitch.arm(Duration.ofMinutes(1));
+      EvmKillSwitch.armScoped();
       evmThread.interrupt();
       evmThread.join(10_000);
       assertThat(evmThread.isAlive()).isFalse();

@@ -27,7 +27,6 @@ import org.hyperledger.besu.evm.testutils.TestMessageFrameBuilder;
 import org.hyperledger.besu.evm.tracing.OperationTracer;
 import org.hyperledger.besu.evm.v2.testutils.TestMessageFrameBuilderV2;
 
-import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;
 
 import org.apache.tuweni.bytes.Bytes;
@@ -56,25 +55,13 @@ class EvmKillSwitchTest {
 
   @Test
   void armedPollThrowsOnlyForInterruptedThreadsAndClearsTheFlag() {
-    EvmKillSwitch.arm(Duration.ofMinutes(1));
+    EvmKillSwitch.armScoped();
 
     assertThatCode(EvmKillSwitch::poll).doesNotThrowAnyException();
 
     Thread.currentThread().interrupt();
     assertThatThrownBy(EvmKillSwitch::poll).isInstanceOf(EvmInterruptedException.class);
     assertThat(Thread.currentThread().isInterrupted()).isFalse();
-  }
-
-  @Test
-  void disarmsItselfOnceTheArmedPeriodLapses() throws Exception {
-    EvmKillSwitch.arm(Duration.ofMillis(100));
-    assertThat(EvmKillSwitch.isArmed()).isTrue();
-
-    final long deadline = System.currentTimeMillis() + 10_000;
-    while (EvmKillSwitch.isArmed() && System.currentTimeMillis() < deadline) {
-      Thread.sleep(10);
-    }
-    assertThat(EvmKillSwitch.isArmed()).isFalse();
   }
 
   @Test
@@ -99,27 +86,6 @@ class EvmKillSwitchTest {
   }
 
   @Test
-  void releaseDoesNotCutShortAnActiveTimerArm() {
-    EvmKillSwitch.arm(Duration.ofMinutes(1));
-    EvmKillSwitch.armScoped();
-
-    EvmKillSwitch.release();
-    assertThat(EvmKillSwitch.isArmed()).isTrue();
-  }
-
-  @Test
-  void pendingScopedArmOutlivesALapsedTimerArm() throws Exception {
-    EvmKillSwitch.arm(Duration.ofMillis(50));
-    EvmKillSwitch.armScoped();
-    Thread.sleep(300); // the timer arm lapses and its disarm check fires
-
-    assertThat(EvmKillSwitch.isArmed()).isTrue();
-
-    EvmKillSwitch.release();
-    assertThat(EvmKillSwitch.isArmed()).isFalse();
-  }
-
-  @Test
   void missedReleaseGoesStaleAfterTheDefaultArmedPeriod() throws Exception {
     EvmKillSwitch.armScoped();
     assertThat(EvmKillSwitch.isArmed()).isTrue();
@@ -129,14 +95,6 @@ class EvmKillSwitchTest {
       Thread.sleep(10);
     }
     assertThat(EvmKillSwitch.isArmed()).isFalse();
-  }
-
-  @Test
-  void reArmingExtendsTheArmedPeriod() throws Exception {
-    EvmKillSwitch.arm(Duration.ofMillis(50));
-    EvmKillSwitch.arm(Duration.ofMinutes(1));
-    Thread.sleep(300);
-    assertThat(EvmKillSwitch.isArmed()).isTrue();
   }
 
   @ParameterizedTest(name = "evmV2={0}")
@@ -167,7 +125,7 @@ class EvmKillSwitchTest {
 
     Thread.sleep(200); // let it spin inside the interpreter loop
 
-    EvmKillSwitch.arm(Duration.ofMinutes(1));
+    EvmKillSwitch.armScoped();
     evmThread.interrupt();
     evmThread.join(10_000);
 

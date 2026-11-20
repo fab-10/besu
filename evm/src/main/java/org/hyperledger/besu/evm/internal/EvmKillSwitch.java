@@ -39,26 +39,24 @@ import com.google.common.annotations.VisibleForTesting;
  * cycle recompiles them, spending the method's {@code PerMethodRecompilationCutoff} budget (default
  * 400 decompiles, after which HotSpot leaves the method interpreted for good). A node can be armed
  * an unbounded number of times over its life, so the guard is compiled in once instead: {@link
- * #arm} and disarm are plain field writes, with no deoptimization, no recompilation and no warm-up
- * ever.
+ * #armScoped} and disarm are plain field writes, with no deoptimization, no recompilation and no
+ * warm-up ever.
  *
- * <p>Which thread stops is decided by the Java interrupt status, not by the switch: {@code arm} is
+ * <p>Which thread stops is decided by the Java interrupt status, not by the switch: arming is
  * global, but the armed check throws {@link EvmInterruptedException} only in threads whose
  * interrupt flag is set. Callers keep signalling cancellation exactly as before, with {@code
- * Future.cancel(true)} or {@link Thread#interrupt()}; they only add an {@code arm()} call right
- * before the interrupt. Like the {@code Thread.interrupted()} checks it replaces, a poll that
- * throws clears the interrupt flag.
+ * Future.cancel(true)} or {@link Thread#interrupt()}; they only arm right before the interrupt.
+ * Like the {@code Thread.interrupted()} checks it replaces, a poll that throws clears the interrupt
+ * flag.
  *
  * <p>Only the <em>disarmed</em> poll is free: while armed, every polling EVM thread reads its own
  * interrupt status on every poll, which is a real per-JUMPDEST cost on every EVM thread in the
- * process. The armed duty cycle must therefore stay low. Callers that can observe the interrupted
- * task exiting use {@link #armScoped()} and {@link #release()}, which keep the switch armed only
- * for the actual stop latency of the kill, typically a few milliseconds. Callers that cannot
- * observe the stop use {@link #arm()}, and the switch disarms itself once the armed period, default
- * one second, has elapsed with no further arms, so those call sites need no disarm bookkeeping. A
- * scoped arm whose {@code release} never arrives is treated as stale after the default armed
- * period, so a missed release degrades to timer behavior instead of leaving the switch armed
- * forever.
+ * process. The armed duty cycle must therefore stay low, which is why arming is scoped: {@link
+ * #armScoped()} and {@link #release()} keep the switch armed only for the actual stop latency of
+ * the kill, typically a few milliseconds. Callers normally get the pairing for free by running the
+ * interruptible task inside an {@link InterruptibleExecution}. A scoped arm whose {@code release}
+ * never arrives is treated as stale after {@link #DEFAULT_ARMED_PERIOD}, so a missed release costs
+ * at most one second of armed polls instead of leaving the switch armed forever.
  *
  * <p>A thread that never reaches a poll while the switch is armed, because it is blocked in a
  * precompile, native code or storage I/O, is not stopped by this class; its interrupt flag stays
@@ -67,11 +65,11 @@ import com.google.common.annotations.VisibleForTesting;
  */
 public final class EvmKillSwitch {
 
-  /** How long the switch stays armed after an {@link #arm()} call. */
+  /** How long a scoped arm whose release never arrives keeps the switch armed. */
   @VisibleForTesting static final Duration DEFAULT_ARMED_PERIOD = Duration.ofSeconds(1);
 
   // The delay added to each disarm check, so the check scheduled by the arm call holding the
-  // latest armedUntilNanos always fires after it has lapsed.
+  // latest stale deadline always fires after it has lapsed.
   private static final long DISARM_SLACK_NANOS = Duration.ofMillis(10).toNanos();
 
   // Written with volatile semantics by the rare arm/disarm transitions, read with opaque
@@ -85,9 +83,6 @@ public final class EvmKillSwitch {
             thread.setDaemon(true);
             return thread;
           });
-
-  // Guarded by the EvmKillSwitch.class lock; poll() never takes the lock.
-  private static long armedUntilNanos = Long.MIN_VALUE;
 
   // Scoped arms not yet released: interrupted tasks whose exit has not been observed yet.
   // Guarded by the EvmKillSwitch.class lock.
@@ -117,44 +112,14 @@ public final class EvmKillSwitch {
   }
 
   /**
-   * Arm the switch for the default period. Call right before interrupting a thread that may be
-   * executing EVM code, for example before {@code Future.cancel(true)} on a transaction-processing
-   * task.
-   */
-  public static void arm() {
-    arm(DEFAULT_ARMED_PERIOD);
-  }
-
-  /**
-   * Arm the switch, keeping it armed for at least the given period. Arming is a field write: arming
-   * an already armed switch only extends the period, and any number of arm/disarm cycles is fine.
-   *
-   * <p>Prefer {@link #armScoped()} when the caller can observe the interrupted task exiting: a
-   * timer arm keeps every EVM thread paying the armed poll cost for the whole period, orders of
-   * magnitude longer than the stop itself.
-   *
-   * @param armedPeriod how long the switch must stay armed; use at least the time the caller is
-   *     prepared to wait for the interrupted thread to stop
-   */
-  public static synchronized void arm(final Duration armedPeriod) {
-    final long until = System.nanoTime() + armedPeriod.toNanos();
-    if (until > armedUntilNanos) {
-      armedUntilNanos = until;
-    }
-    ARMED.set(true);
-    // Every arm schedules its own disarm check just after its period lapses. A check that fires
-    // while a later arm keeps the switch armed is a no-op: that arm's own check is still pending.
-    scheduleDisarmCheck(armedPeriod);
-  }
-
-  /**
    * Arm the switch until the matching {@link #release()}. Call right before interrupting a thread
    * whose exit the caller can observe; call {@code release} exactly once when the interrupted task
    * has stopped (or finished on its own). The switch stays armed only while kills are in flight,
-   * typically a few milliseconds, instead of a fixed period.
+   * typically a few milliseconds.
    *
-   * <p>If a release is missed, the pending kill is treated as stale after the default armed period
-   * and the switch disarms anyway, so a pairing bug costs at most timer-arm behavior.
+   * <p>If a release is missed, the pending kill is treated as stale after {@link
+   * #DEFAULT_ARMED_PERIOD} and the switch disarms anyway, so a pairing bug costs at most that
+   * period of armed polls.
    */
   public static synchronized void armScoped() {
     pendingKills++;
@@ -166,7 +131,7 @@ public final class EvmKillSwitch {
 
   /**
    * Release one {@link #armScoped()} arm, because its interrupted task has been observed to exit.
-   * Disarms the switch immediately when no other arm, scoped or timed, is keeping it armed.
+   * Disarms the switch immediately when no other scoped arm is keeping it armed.
    */
   public static synchronized void release() {
     if (pendingKills > 0) {
@@ -188,11 +153,7 @@ public final class EvmKillSwitch {
 
   // Caller must hold the EvmKillSwitch.class lock.
   private static void maybeDisarm() {
-    final long now = System.nanoTime();
-    if (now < armedUntilNanos) {
-      return;
-    }
-    if (pendingKills > 0 && now < pendingKillsStaleNanos) {
+    if (pendingKills > 0 && System.nanoTime() < pendingKillsStaleNanos) {
       return;
     }
     ARMED.set(false);
@@ -205,7 +166,6 @@ public final class EvmKillSwitch {
 
   @VisibleForTesting
   static synchronized void disarmForTesting() {
-    armedUntilNanos = Long.MIN_VALUE;
     pendingKills = 0;
     pendingKillsStaleNanos = Long.MIN_VALUE;
     ARMED.set(false);
