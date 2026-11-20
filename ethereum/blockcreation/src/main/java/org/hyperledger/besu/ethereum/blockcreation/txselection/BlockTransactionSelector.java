@@ -58,7 +58,7 @@ import org.hyperledger.besu.ethereum.processing.TransactionProcessingResult;
 import org.hyperledger.besu.ethereum.transaction.TransactionInvalidReason;
 import org.hyperledger.besu.evm.blockhash.BlockHashLookup;
 import org.hyperledger.besu.evm.internal.EvmInterruptedException;
-import org.hyperledger.besu.evm.internal.EvmKillSwitch;
+import org.hyperledger.besu.evm.internal.InterruptibleExecution;
 import org.hyperledger.besu.evm.tracing.OperationTracer;
 import org.hyperledger.besu.evm.worldstate.WorldUpdater;
 import org.hyperledger.besu.plugin.data.TransactionSelectionResult;
@@ -152,6 +152,10 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
   private volatile @Nullable TransactionSelectionResult validTxSelectionTimeoutResult;
   private volatile @Nullable TransactionSelectionResult invalidTxSelectionTimeoutResult;
   private volatile @Nullable FutureTask<Void> currTxSelectionTask;
+  // Pairs with currTxSelectionTask, wrapping its body: interrupting through it keeps the kill
+  // switch armed only until the interrupted task exits, instead of for a fixed armed period.
+  // Written before currTxSelectionTask, so cancel() never sees the task without its execution.
+  private volatile @Nullable InterruptibleExecution currTxSelectionExecution;
   private final List<CompletableFuture<Void>> scheduledSelectionTasks = new ArrayList<>(2);
   private final List<Transaction> inclusionListTransactions;
 
@@ -363,9 +367,13 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
 
   public void cancel() {
     isCancelled.set(true);
-    if (currTxSelectionTask != null) {
-      EvmKillSwitch.arm();
-      currTxSelectionTask.cancel(true);
+    final var selectionTask = currTxSelectionTask;
+    if (selectionTask != null) {
+      final var selectionExecution = currTxSelectionExecution;
+      if (selectionExecution != null) {
+        selectionExecution.interrupt();
+      }
+      selectionTask.cancel(true);
       LOG.debug("Cancelled transaction selection task");
     }
   }
@@ -412,46 +420,54 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     // guarded by selectionResults
     final var selectionReturned = new AtomicBoolean(false);
 
+    final var selectionExecution = new InterruptibleExecution();
+    currTxSelectionExecution = selectionExecution;
     currTxSelectionTask =
         new FutureTask<>(
-            () -> {
-              try {
-                LOG.atDebug()
-                    .setMessage(
-                        "Starting internal pool transaction selection, run time capped at {}ms, stats {}")
-                    .addArgument(() -> nanosToMillis(remainingSelectionTime))
-                    .addArgument(blockSelectionContext.transactionPool()::logStats)
-                    .log();
+            () ->
+                selectionExecution.run(
+                    () -> {
+                      try {
+                        LOG.atDebug()
+                            .setMessage(
+                                "Starting internal pool transaction selection, run time capped at {}ms, stats {}")
+                            .addArgument(() -> nanosToMillis(remainingSelectionTime))
+                            .addArgument(blockSelectionContext.transactionPool()::logStats)
+                            .log();
 
-                for (PendingTransaction candidateTx : candidateTransactions) {
-                  // the result is returned before the evaluation starts, since in case of a
-                  // timeout or a cancellation the evaluation could still be running when the
-                  // selection returns, and the txpool needs to process the result when it is ready
-                  final var futureResult = new CompletableFuture<TransactionSelectionResult>();
-                  synchronized (selectionResults) {
-                    // the txpool reads the results once the selection returns, so it would never
-                    // see the result of an evaluation started after that
-                    if (selectionReturned.get()) {
-                      break;
-                    }
-                    selectionResults.put(candidateTx, futureResult);
-                  }
-                  final TransactionSelectionResult selectionResult;
-                  try {
-                    selectionResult = evaluateTransaction(candidateTx);
-                  } catch (final Throwable t) {
-                    futureResult.completeExceptionally(t);
-                    throw t;
-                  }
-                  futureResult.complete(selectionResult);
-                  if (selectionResult.stop()) {
-                    break;
-                  }
-                }
-              } finally {
-                internalSelectionDone.countDown();
-              }
-            },
+                        for (PendingTransaction candidateTx : candidateTransactions) {
+                          // the result is returned before the evaluation starts, since in case of a
+                          // timeout or a cancellation the evaluation could still be running when
+                          // the
+                          // selection returns, and the txpool needs to process the result when it
+                          // is ready
+                          final var futureResult =
+                              new CompletableFuture<TransactionSelectionResult>();
+                          synchronized (selectionResults) {
+                            // the txpool reads the results once the selection returns, so it would
+                            // never
+                            // see the result of an evaluation started after that
+                            if (selectionReturned.get()) {
+                              break;
+                            }
+                            selectionResults.put(candidateTx, futureResult);
+                          }
+                          final TransactionSelectionResult selectionResult;
+                          try {
+                            selectionResult = evaluateTransaction(candidateTx);
+                          } catch (final Throwable t) {
+                            futureResult.completeExceptionally(t);
+                            throw t;
+                          }
+                          futureResult.complete(selectionResult);
+                          if (selectionResult.stop()) {
+                            break;
+                          }
+                        }
+                      } finally {
+                        internalSelectionDone.countDown();
+                      }
+                    }),
             null);
 
     scheduledSelectionTasks.add(
@@ -477,7 +493,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
         isTimeout.set(true);
       }
 
-      cancelEvaluatingTxWithGraceTime(currTxSelectionTask);
+      cancelEvaluatingTxWithGraceTime(currTxSelectionTask, selectionExecution);
 
       LOG.warn(
           "Interrupting the internal selection of transactions for block inclusion as it exceeds"
@@ -509,20 +525,27 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
 
     final CountDownLatch pluginSelectionDone = new CountDownLatch(1);
 
+    final var selectionExecution = new InterruptibleExecution();
+    currTxSelectionExecution = selectionExecution;
     currTxSelectionTask =
         new FutureTask<>(
-            () -> {
-              try {
-                LOG.atDebug()
-                    .setMessage("Starting plugin transaction selection, run time capped at {}ms")
-                    .addArgument(() -> nanosToMillis(pluginTxsSelectionMaxTimeNanos))
-                    .log();
-                transactionSelectionService.selectPendingTransactions(
-                    this, blockSelectionContext.pendingBlockHeader(), candidatePendingTransactions);
-              } finally {
-                pluginSelectionDone.countDown();
-              }
-            },
+            () ->
+                selectionExecution.run(
+                    () -> {
+                      try {
+                        LOG.atDebug()
+                            .setMessage(
+                                "Starting plugin transaction selection, run time capped at {}ms")
+                            .addArgument(() -> nanosToMillis(pluginTxsSelectionMaxTimeNanos))
+                            .log();
+                        transactionSelectionService.selectPendingTransactions(
+                            this,
+                            blockSelectionContext.pendingBlockHeader(),
+                            candidatePendingTransactions);
+                      } finally {
+                        pluginSelectionDone.countDown();
+                      }
+                    }),
             null);
 
     scheduledSelectionTasks.add(
@@ -546,7 +569,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
       }
 
       // cancelling the task and interrupting the thread running it
-      EvmKillSwitch.arm();
+      selectionExecution.interrupt();
       currTxSelectionTask.cancel(true);
       LOG.warn(
           "Interrupting the plugin selection of transactions for block inclusion after {}ms,"
@@ -614,7 +637,8 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
     }
   }
 
-  private void cancelEvaluatingTxWithGraceTime(final FutureTask<Void> txSelectionTask) {
+  private void cancelEvaluatingTxWithGraceTime(
+      final FutureTask<Void> txSelectionTask, final InterruptibleExecution selectionExecution) {
     final long txRemainingTime;
     final var evaluationContext = currTxEvaluationContext;
     if (evaluationContext != null) {
@@ -674,7 +698,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
                       "No transaction context when grace time expired, cancelling task anyway")
                   .log();
             }
-            EvmKillSwitch.arm();
+            selectionExecution.interrupt();
             txSelectionTask.cancel(true);
           }
         },
