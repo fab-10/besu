@@ -738,7 +738,7 @@ public class BlockTransactionSelector implements BlockTransactionSelectionServic
           .setMessage("Transaction {} evaluation interrupted by a cancellation")
           .addArgument(pendingTransaction::toTraceLog)
           .log();
-      evaluationResult = INTERNAL_ERROR;
+      evaluationResult = SELECTION_CANCELLED;
     } catch (Throwable t) {
       LOG.error("Unhandled exception evaluating transaction {}", pendingTransaction, t);
       evaluationResult = INTERNAL_ERROR;
